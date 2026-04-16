@@ -1,0 +1,1 @@
+"""Excel line splitter tool."""

@@ -1,0 +1,49 @@
+# macOS / Windows noise
+.DS_Store
+Thumbs.db
+
+# Python cache / bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging / build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Type checker / linter caches
+.mypy_cache/
+.ruff_cache/
+.pyre/
+
+# IDE / editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project-generated Excel outputs
+*_term_pairs.xlsx
+*_glossary_checked.xlsx
+*_split_lines.xlsx
+
+# Sample Excel files
+sample*.xlsx
+*_sample.xlsx
