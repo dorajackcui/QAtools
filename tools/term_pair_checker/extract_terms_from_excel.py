@@ -7,16 +7,27 @@ import argparse
 import re
 import sys
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
+
+from tools.term_matching import (
+    TermMappingEntry,
+    build_matcher,
+    find_row_terms,
+    normalize_text,
+    text_contains_term,
+)
 
 
 SUPPORTED_MARKS = ("【】", "[]", "<>")
 TERM_SHEET_NAME = "术语表"
 PROBLEM_SHEET_NAME = "问题列"
 DEFAULT_MARK_STYLES = ("【】",)
+PAIR_CHECK_MATCH_MODE = "hybrid-boundary"
+PAIR_CHECK_CASE_SENSITIVE = False
 MARK_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
     "【】": (re.compile(r"【([^【】]+)】"),),
     "[]": (
@@ -28,6 +39,22 @@ MARK_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
         re.compile(r"＜([^＜＞]+)＞"),
     ),
 }
+
+
+@dataclass(frozen=True)
+class ExtractedTerm:
+    display_text: str
+    plain_text: str
+    start: int
+    end: int
+
+
+@dataclass(frozen=True)
+class RecordedTermPair:
+    source_display_text: str
+    target_display_text: str
+    source_plain_text: str
+    target_plain_text: str
 
 
 def normalize_mark_styles(
@@ -56,20 +83,42 @@ def extract_terms(
     mark_styles: Iterable[str] | None = None,
     mark_style: str | None = None,
 ) -> list[str]:
+    return [
+        extracted_term.display_text
+        for extracted_term in extract_term_details(
+            text,
+            mark_styles=mark_styles,
+            mark_style=mark_style,
+        )
+    ]
+
+
+def extract_term_details(
+    text: object,
+    mark_styles: Iterable[str] | None = None,
+    mark_style: str | None = None,
+) -> list[ExtractedTerm]:
     if text is None:
         return []
 
     normalized_mark_styles = normalize_mark_styles(mark_styles=mark_styles, mark_style=mark_style)
     text_value = str(text)
-    matches: list[tuple[int, int, str]] = []
+    matches: list[ExtractedTerm] = []
 
     for current_mark_style in normalized_mark_styles:
         for pattern in MARK_PATTERNS[current_mark_style]:
             for match in pattern.finditer(text_value):
-                matches.append((match.start(), match.end(), match.group(0)))
+                matches.append(
+                    ExtractedTerm(
+                        display_text=match.group(0),
+                        plain_text=match.group(1).strip(),
+                        start=match.start(),
+                        end=match.end(),
+                    )
+                )
 
-    matches.sort(key=lambda item: (item[0], item[1]))
-    return [term for _, _, term in matches]
+    matches.sort(key=lambda item: (item.start, item.end))
+    return matches
 
 
 def parse_args() -> argparse.Namespace:
@@ -175,6 +224,61 @@ def format_term_list(terms: list[str]) -> str:
     return "、".join(terms) if terms else "无"
 
 
+def strip_supported_marks(text: object, mark_styles: Iterable[str] | None = None) -> str:
+    text_value = "" if text is None else str(text)
+    if not text_value:
+        return ""
+
+    normalized_mark_styles = normalize_mark_styles(
+        mark_styles=SUPPORTED_MARKS if mark_styles is None else mark_styles
+    )
+    extracted_terms = extract_term_details(text_value, mark_styles=normalized_mark_styles)
+    if not extracted_terms:
+        return text_value
+
+    parts: list[str] = []
+    last_index = 0
+    for extracted_term in extracted_terms:
+        parts.append(text_value[last_index : extracted_term.start])
+        parts.append(extracted_term.plain_text)
+        last_index = extracted_term.end
+    parts.append(text_value[last_index:])
+    return "".join(parts)
+
+
+def build_term_mapping_entries(term_pairs: Iterable[RecordedTermPair]) -> list[TermMappingEntry]:
+    entries = [
+        TermMappingEntry(
+            source_term=term_pair.source_plain_text,
+            target_term=term_pair.target_plain_text,
+            normalized_source=normalize_text(
+                term_pair.source_plain_text,
+                case_sensitive=PAIR_CHECK_CASE_SENSITIVE,
+            ),
+            normalized_target=normalize_text(
+                term_pair.target_plain_text,
+                case_sensitive=PAIR_CHECK_CASE_SENSITIVE,
+            ),
+        )
+        for term_pair in term_pairs
+    ]
+    entries.sort(key=lambda entry: (len(entry.normalized_source), entry.normalized_source), reverse=True)
+    return entries
+
+
+def append_problem(
+    problem_entries: list[tuple[int, str, str]],
+    problem_row_set: set[int],
+    row_index: int,
+    problem_type: str,
+    problem_description: str,
+) -> None:
+    if row_index in problem_row_set:
+        return
+    problem_row_set.add(row_index)
+    problem_entries.append((row_index, problem_type, problem_description))
+
+
 def process_excel(
     input_file: str | Path,
     source_column: str,
@@ -201,16 +305,16 @@ def process_excel(
     workbook = load_workbook(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
 
-    term_mapping: dict[str, str] = {}
+    term_mapping: dict[str, RecordedTermPair] = {}
     problem_entries: list[tuple[int, str, str]] = []
     problem_row_set: set[int] = set()
 
     for row_index in range(start_row, worksheet.max_row + 1):
-        source_terms = extract_terms(
+        source_terms = extract_term_details(
             worksheet[f"{source_column}{row_index}"].value,
             mark_styles=normalized_mark_styles,
         )
-        target_terms = extract_terms(
+        target_terms = extract_term_details(
             worksheet[f"{target_column}{row_index}"].value,
             mark_styles=normalized_mark_styles,
         )
@@ -223,42 +327,103 @@ def process_excel(
         problem_description = ""
 
         if len(source_terms) != len(target_terms):
-            row_has_problem = True
-            problem_type = "术语数量不一致"
-            problem_description = (
-                f"术语数量不一致：source={format_term_list(source_terms)}；"
-                f"target={format_term_list(target_terms)}"
+            append_problem(
+                problem_entries,
+                problem_row_set,
+                row_index,
+                "术语数量不一致",
+                (
+                    "术语数量不一致："
+                    f"source={format_term_list([term.display_text for term in source_terms])}；"
+                    f"target={format_term_list([term.display_text for term in target_terms])}"
+                ),
             )
+            row_has_problem = True
         else:
-            pending_new_mappings: list[tuple[str, str]] = []
+            pending_new_mappings: list[RecordedTermPair] = []
             for source_term, target_term in zip(source_terms, target_terms):
-                existing_target = term_mapping.get(source_term)
-                if existing_target is None:
-                    pending_new_mappings.append((source_term, target_term))
-                elif existing_target != target_term:
+                existing_term_pair = term_mapping.get(source_term.plain_text)
+                if existing_term_pair is None:
+                    pending_new_mappings.append(
+                        RecordedTermPair(
+                            source_display_text=source_term.display_text,
+                            target_display_text=target_term.display_text,
+                            source_plain_text=source_term.plain_text,
+                            target_plain_text=target_term.plain_text,
+                        )
+                    )
+                elif existing_term_pair.target_plain_text != target_term.plain_text:
                     row_has_problem = True
-                    problem_type = "术语未对齐"
-                    problem_description = (
-                        f"术语未对齐：source={source_term}；"
-                        f"预期target={existing_target}；实际target={target_term}"
+                    append_problem(
+                        problem_entries,
+                        problem_row_set,
+                        row_index,
+                        "术语未对齐",
+                        (
+                            f"术语未对齐：source={source_term.plain_text}；"
+                            f"预期target={existing_term_pair.target_plain_text}；"
+                            f"实际target={target_term.plain_text}；"
+                            "术语对示例="
+                            f"{existing_term_pair.source_display_text} -> "
+                            f"{existing_term_pair.target_display_text}"
+                        ),
                     )
                     break
 
             if not row_has_problem:
-                for source_term, target_term in pending_new_mappings:
-                    if source_term not in term_mapping:
-                        term_mapping[source_term] = target_term
+                for term_pair in pending_new_mappings:
+                    term_mapping.setdefault(term_pair.source_plain_text, term_pair)
 
-        if row_has_problem and row_index not in problem_row_set:
-            problem_row_set.add(row_index)
-            problem_entries.append((row_index, problem_type, problem_description))
+    matcher = None
+    if term_mapping:
+        matcher = build_matcher(build_term_mapping_entries(term_mapping.values()))
+
+    for row_index in range(start_row, worksheet.max_row + 1):
+        if matcher is None or row_index in problem_row_set:
+            continue
+
+        source_text = strip_supported_marks(worksheet[f"{source_column}{row_index}"].value)
+        target_text = strip_supported_marks(worksheet[f"{target_column}{row_index}"].value)
+        matched_entries = find_row_terms(
+            source_text,
+            matcher,
+            case_sensitive=PAIR_CHECK_CASE_SENSITIVE,
+            match_mode=PAIR_CHECK_MATCH_MODE,
+        )
+        if not matched_entries:
+            continue
+
+        normalized_target_text = normalize_text(target_text, case_sensitive=PAIR_CHECK_CASE_SENSITIVE)
+        for entry in matched_entries:
+            if text_contains_term(
+                normalized_target_text,
+                entry.normalized_target,
+                match_mode=PAIR_CHECK_MATCH_MODE,
+            ):
+                continue
+
+            example_term_pair = term_mapping[entry.source_term]
+            append_problem(
+                problem_entries,
+                problem_row_set,
+                row_index,
+                "术语未对齐",
+                (
+                    f"术语未对齐：source={entry.source_term}；"
+                    f"预期target={entry.target_term}；"
+                    "术语对示例="
+                    f"{example_term_pair.source_display_text} -> "
+                    f"{example_term_pair.target_display_text}"
+                ),
+            )
+            break
 
     term_sheet = rebuild_output_sheet(workbook, worksheet.title, TERM_SHEET_NAME)
     term_sheet["A1"] = "source术语"
     term_sheet["B1"] = "target术语"
-    for row_index, (source_term, target_term) in enumerate(term_mapping.items(), start=2):
-        term_sheet[f"A{row_index}"] = source_term
-        term_sheet[f"B{row_index}"] = target_term
+    for row_index, term_pair in enumerate(term_mapping.values(), start=2):
+        term_sheet[f"A{row_index}"] = term_pair.source_display_text
+        term_sheet[f"B{row_index}"] = term_pair.target_display_text
 
     problem_sheet = rebuild_output_sheet(workbook, worksheet.title, PROBLEM_SHEET_NAME)
     problem_sheet["A1"] = "问题行号"
