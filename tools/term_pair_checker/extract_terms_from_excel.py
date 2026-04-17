@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from collections.abc import Iterable
@@ -24,8 +25,10 @@ from tools.term_matching import (
 
 SUPPORTED_MARKS = ("【】", "[]", "<>")
 TERM_SHEET_NAME = "术语表"
+PLAIN_TERM_SHEET_NAME = "术语表（无mark）"
 PROBLEM_SHEET_NAME = "问题列"
 DEFAULT_MARK_STYLES = ("【】",)
+DEFAULT_EXCLUSION_CONFIG_NAME = "false_positive_exclusions.json"
 PAIR_CHECK_MATCH_MODE = "hybrid-boundary"
 PAIR_CHECK_CASE_SENSITIVE = False
 MARK_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
@@ -82,6 +85,8 @@ def extract_terms(
     text: object,
     mark_styles: Iterable[str] | None = None,
     mark_style: str | None = None,
+    exclusion_patterns: Iterable[str] | None = None,
+    exclusion_config_file: str | Path | None = None,
 ) -> list[str]:
     return [
         extracted_term.display_text
@@ -89,29 +94,106 @@ def extract_terms(
             text,
             mark_styles=mark_styles,
             mark_style=mark_style,
+            exclusion_patterns=exclusion_patterns,
+            exclusion_config_file=exclusion_config_file,
         )
     ]
+
+
+def build_default_exclusion_config_path() -> Path:
+    return Path(__file__).with_name(DEFAULT_EXCLUSION_CONFIG_NAME)
+
+
+def normalize_exclusion_patterns(exclusion_patterns: Iterable[str] | None) -> tuple[str, ...]:
+    if exclusion_patterns is None:
+        raw_patterns: list[str] = []
+    elif isinstance(exclusion_patterns, str):
+        raw_patterns = [exclusion_patterns]
+    else:
+        raw_patterns = [pattern.strip() for pattern in exclusion_patterns if pattern and pattern.strip()]
+    return tuple(raw_patterns)
+
+
+def load_exclusion_patterns_from_file(config_file: str | Path | None = None) -> tuple[str, ...]:
+    config_path = (
+        Path(config_file).expanduser().resolve()
+        if config_file
+        else build_default_exclusion_config_path().resolve()
+    )
+    if not config_path.exists():
+        raise FileNotFoundError(f"误判排除配置文件不存在: {config_path}")
+
+    try:
+        config_data = json.loads(config_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"误判排除配置文件不是有效 JSON: {config_path} ({exc})") from exc
+
+    patterns = config_data.get("patterns")
+    if not isinstance(patterns, list) or any(not isinstance(pattern, str) for pattern in patterns):
+        raise ValueError(f"误判排除配置格式错误: {config_path}，需要 JSON 对象中的 patterns 字符串数组。")
+    return normalize_exclusion_patterns(patterns)
+
+
+def resolve_exclusion_patterns(
+    exclusion_patterns: Iterable[str] | None,
+    exclusion_config_file: str | Path | None = None,
+) -> tuple[str, ...]:
+    if exclusion_patterns is not None:
+        return normalize_exclusion_patterns(exclusion_patterns)
+    return load_exclusion_patterns_from_file(exclusion_config_file)
+
+
+def compile_exclusion_patterns(
+    exclusion_patterns: Iterable[str] | None,
+    exclusion_config_file: str | Path | None = None,
+) -> tuple[re.Pattern[str], ...]:
+    normalized_patterns = resolve_exclusion_patterns(exclusion_patterns, exclusion_config_file)
+    compiled_patterns: list[re.Pattern[str]] = []
+    for pattern in normalized_patterns:
+        try:
+            compiled_patterns.append(re.compile(pattern, re.IGNORECASE))
+        except re.error as exc:
+            raise ValueError(f"误判排除正则无效: {pattern} ({exc})") from exc
+    return tuple(compiled_patterns)
+
+
+def should_exclude_term(
+    display_text: str,
+    plain_text: str,
+    exclusion_regexes: Iterable[re.Pattern[str]],
+) -> bool:
+    return any(
+        regex.search(plain_text) or regex.search(display_text)
+        for regex in exclusion_regexes
+    )
 
 
 def extract_term_details(
     text: object,
     mark_styles: Iterable[str] | None = None,
     mark_style: str | None = None,
+    exclusion_patterns: Iterable[str] | None = None,
+    exclusion_config_file: str | Path | None = None,
 ) -> list[ExtractedTerm]:
     if text is None:
         return []
 
     normalized_mark_styles = normalize_mark_styles(mark_styles=mark_styles, mark_style=mark_style)
+    exclusion_regexes = compile_exclusion_patterns(exclusion_patterns, exclusion_config_file)
     text_value = str(text)
     matches: list[ExtractedTerm] = []
 
     for current_mark_style in normalized_mark_styles:
         for pattern in MARK_PATTERNS[current_mark_style]:
             for match in pattern.finditer(text_value):
+                display_text = match.group(0)
+                plain_text = match.group(1).strip()
+                if should_exclude_term(display_text, plain_text, exclusion_regexes):
+                    continue
                 matches.append(
                     ExtractedTerm(
-                        display_text=match.group(0),
-                        plain_text=match.group(1).strip(),
+                        display_text=display_text,
+                        plain_text=plain_text,
                         start=match.start(),
                         end=match.end(),
                     )
@@ -153,6 +235,13 @@ def parse_args() -> argparse.Namespace:
         choices=SUPPORTED_MARKS,
         default=None,
         help="术语包裹符号，可重复传入，例如 --mark-style [] --mark-style <>",
+    )
+    parser.add_argument(
+        "--exclusion-config",
+        help=(
+            "误判排除 JSON 配置文件路径；默认读取工具目录下的 "
+            f"{DEFAULT_EXCLUSION_CONFIG_NAME}"
+        ),
     )
     parser.add_argument(
         "-o",
@@ -224,7 +313,12 @@ def format_term_list(terms: list[str]) -> str:
     return "、".join(terms) if terms else "无"
 
 
-def strip_supported_marks(text: object, mark_styles: Iterable[str] | None = None) -> str:
+def strip_supported_marks(
+    text: object,
+    mark_styles: Iterable[str] | None = None,
+    exclusion_patterns: Iterable[str] | None = None,
+    exclusion_config_file: str | Path | None = None,
+) -> str:
     text_value = "" if text is None else str(text)
     if not text_value:
         return ""
@@ -232,7 +326,12 @@ def strip_supported_marks(text: object, mark_styles: Iterable[str] | None = None
     normalized_mark_styles = normalize_mark_styles(
         mark_styles=SUPPORTED_MARKS if mark_styles is None else mark_styles
     )
-    extracted_terms = extract_term_details(text_value, mark_styles=normalized_mark_styles)
+    extracted_terms = extract_term_details(
+        text_value,
+        mark_styles=normalized_mark_styles,
+        exclusion_patterns=exclusion_patterns,
+        exclusion_config_file=exclusion_config_file,
+    )
     if not extracted_terms:
         return text_value
 
@@ -267,16 +366,56 @@ def build_term_mapping_entries(term_pairs: Iterable[RecordedTermPair]) -> list[T
 
 
 def append_problem(
-    problem_entries: list[tuple[int, str, str]],
+    problem_entries: list[tuple[int, str, str, str, str]],
     problem_row_set: set[int],
     row_index: int,
     problem_type: str,
     problem_description: str,
+    source_snapshot: str,
+    target_snapshot: str,
 ) -> None:
     if row_index in problem_row_set:
         return
     problem_row_set.add(row_index)
-    problem_entries.append((row_index, problem_type, problem_description))
+    problem_entries.append((row_index, problem_type, problem_description, source_snapshot, target_snapshot))
+
+
+def build_text_snapshot(value: object) -> str:
+    return "" if value is None else str(value)
+
+
+def row_terms_are_aligned(
+    matched_entries: list[TermMappingEntry],
+    normalized_target_text: str,
+) -> bool:
+    for entry in matched_entries:
+        if not text_contains_term(
+            normalized_target_text,
+            entry.normalized_target,
+            match_mode=PAIR_CHECK_MATCH_MODE,
+        ):
+            return False
+    return True
+
+
+def count_mismatch_is_resolved(
+    source_terms: list[ExtractedTerm],
+    target_terms: list[ExtractedTerm],
+    matched_entries: list[TermMappingEntry],
+    normalized_target_text: str,
+) -> bool:
+    if not matched_entries:
+        return False
+    if not row_terms_are_aligned(matched_entries, normalized_target_text):
+        return False
+
+    matched_source_terms = {entry.source_term for entry in matched_entries}
+    matched_target_terms = {entry.target_term for entry in matched_entries}
+    if any(source_term.plain_text not in matched_source_terms for source_term in source_terms):
+        return False
+    if any(target_term.plain_text not in matched_target_terms for target_term in target_terms):
+        return False
+    return True
 
 
 def process_excel(
@@ -287,6 +426,8 @@ def process_excel(
     start_row: int = 2,
     mark_styles: Iterable[str] | None = None,
     mark_style: str | None = None,
+    exclusion_patterns: Iterable[str] | None = None,
+    exclusion_config_file: str | Path | None = None,
     output_file: str | Path | None = None,
 ) -> tuple[str, str, str, Path, int, int]:
     input_path = Path(input_file).expanduser().resolve()
@@ -296,6 +437,7 @@ def process_excel(
     source_column = normalize_column(source_column)
     target_column = normalize_column(target_column)
     normalized_mark_styles = normalize_mark_styles(mark_styles=mark_styles, mark_style=mark_style)
+    effective_exclusion_patterns = resolve_exclusion_patterns(exclusion_patterns, exclusion_config_file)
     output_path = (
         Path(output_file).expanduser().resolve()
         if output_file
@@ -306,41 +448,35 @@ def process_excel(
     worksheet = workbook[sheet] if sheet else workbook.active
 
     term_mapping: dict[str, RecordedTermPair] = {}
-    problem_entries: list[tuple[int, str, str]] = []
+    count_mismatch_rows: dict[int, tuple[list[ExtractedTerm], list[ExtractedTerm]]] = {}
+    problem_entries: list[tuple[int, str, str, str, str]] = []
     problem_row_set: set[int] = set()
 
     for row_index in range(start_row, worksheet.max_row + 1):
+        raw_source_value = worksheet[f"{source_column}{row_index}"].value
+        raw_target_value = worksheet[f"{target_column}{row_index}"].value
+        source_snapshot = build_text_snapshot(raw_source_value)
+        target_snapshot = build_text_snapshot(raw_target_value)
+
         source_terms = extract_term_details(
-            worksheet[f"{source_column}{row_index}"].value,
+            raw_source_value,
             mark_styles=normalized_mark_styles,
+            exclusion_patterns=effective_exclusion_patterns,
         )
         target_terms = extract_term_details(
-            worksheet[f"{target_column}{row_index}"].value,
+            raw_target_value,
             mark_styles=normalized_mark_styles,
+            exclusion_patterns=effective_exclusion_patterns,
         )
 
         if not source_terms and not target_terms:
             continue
 
-        row_has_problem = False
-        problem_type = ""
-        problem_description = ""
-
         if len(source_terms) != len(target_terms):
-            append_problem(
-                problem_entries,
-                problem_row_set,
-                row_index,
-                "术语数量不一致",
-                (
-                    "术语数量不一致："
-                    f"source={format_term_list([term.display_text for term in source_terms])}；"
-                    f"target={format_term_list([term.display_text for term in target_terms])}"
-                ),
-            )
-            row_has_problem = True
+            count_mismatch_rows[row_index] = (source_terms, target_terms)
         else:
             pending_new_mappings: list[RecordedTermPair] = []
+            row_has_problem = False
             for source_term, target_term in zip(source_terms, target_terms):
                 existing_term_pair = term_mapping.get(source_term.plain_text)
                 if existing_term_pair is None:
@@ -367,6 +503,8 @@ def process_excel(
                             f"{existing_term_pair.source_display_text} -> "
                             f"{existing_term_pair.target_display_text}"
                         ),
+                        source_snapshot,
+                        target_snapshot,
                     )
                     break
 
@@ -380,10 +518,31 @@ def process_excel(
 
     for row_index in range(start_row, worksheet.max_row + 1):
         if matcher is None or row_index in problem_row_set:
+            if row_index in count_mismatch_rows and row_index not in problem_row_set:
+                source_terms, target_terms = count_mismatch_rows[row_index]
+                append_problem(
+                    problem_entries,
+                    problem_row_set,
+                    row_index,
+                    "术语数量不一致",
+                    (
+                        "术语数量不一致："
+                        f"source={format_term_list([term.display_text for term in source_terms])}；"
+                        f"target={format_term_list([term.display_text for term in target_terms])}"
+                    ),
+                    build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
+                    build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
+                )
             continue
 
-        source_text = strip_supported_marks(worksheet[f"{source_column}{row_index}"].value)
-        target_text = strip_supported_marks(worksheet[f"{target_column}{row_index}"].value)
+        source_text = strip_supported_marks(
+            worksheet[f"{source_column}{row_index}"].value,
+            exclusion_patterns=effective_exclusion_patterns,
+        )
+        target_text = strip_supported_marks(
+            worksheet[f"{target_column}{row_index}"].value,
+            exclusion_patterns=effective_exclusion_patterns,
+        )
         matched_entries = find_row_terms(
             source_text,
             matcher,
@@ -391,15 +550,50 @@ def process_excel(
             match_mode=PAIR_CHECK_MATCH_MODE,
         )
         if not matched_entries:
+            if row_index in count_mismatch_rows:
+                source_terms, target_terms = count_mismatch_rows[row_index]
+                append_problem(
+                    problem_entries,
+                    problem_row_set,
+                    row_index,
+                    "术语数量不一致",
+                    (
+                        "术语数量不一致："
+                        f"source={format_term_list([term.display_text for term in source_terms])}；"
+                        f"target={format_term_list([term.display_text for term in target_terms])}"
+                    ),
+                    build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
+                    build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
+                )
             continue
 
         normalized_target_text = normalize_text(target_text, case_sensitive=PAIR_CHECK_CASE_SENSITIVE)
-        for entry in matched_entries:
-            if text_contains_term(
+        if row_index in count_mismatch_rows:
+            source_terms, target_terms = count_mismatch_rows[row_index]
+            if count_mismatch_is_resolved(
+                source_terms,
+                target_terms,
+                matched_entries,
                 normalized_target_text,
-                entry.normalized_target,
-                match_mode=PAIR_CHECK_MATCH_MODE,
             ):
+                continue
+            append_problem(
+                problem_entries,
+                problem_row_set,
+                row_index,
+                "术语数量不一致",
+                (
+                    "术语数量不一致："
+                    f"source={format_term_list([term.display_text for term in source_terms])}；"
+                    f"target={format_term_list([term.display_text for term in target_terms])}"
+                ),
+                build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
+                build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
+            )
+            continue
+
+        for entry in matched_entries:
+            if text_contains_term(normalized_target_text, entry.normalized_target, match_mode=PAIR_CHECK_MATCH_MODE):
                 continue
 
             example_term_pair = term_mapping[entry.source_term]
@@ -415,6 +609,8 @@ def process_excel(
                     f"{example_term_pair.source_display_text} -> "
                     f"{example_term_pair.target_display_text}"
                 ),
+                build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
+                build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
             )
             break
 
@@ -425,14 +621,28 @@ def process_excel(
         term_sheet[f"A{row_index}"] = term_pair.source_display_text
         term_sheet[f"B{row_index}"] = term_pair.target_display_text
 
+    plain_term_sheet = rebuild_output_sheet(workbook, worksheet.title, PLAIN_TERM_SHEET_NAME)
+    plain_term_sheet["A1"] = "source术语"
+    plain_term_sheet["B1"] = "target术语"
+    for row_index, term_pair in enumerate(term_mapping.values(), start=2):
+        plain_term_sheet[f"A{row_index}"] = term_pair.source_plain_text
+        plain_term_sheet[f"B{row_index}"] = term_pair.target_plain_text
+
     problem_sheet = rebuild_output_sheet(workbook, worksheet.title, PROBLEM_SHEET_NAME)
     problem_sheet["A1"] = "问题行号"
     problem_sheet["B1"] = "问题类型"
     problem_sheet["C1"] = "问题简述"
-    for row_index, (excel_row, problem_type, description) in enumerate(problem_entries, start=2):
+    problem_sheet["D1"] = "source原文"
+    problem_sheet["E1"] = "target原文"
+    for row_index, (excel_row, problem_type, description, source_snapshot, target_snapshot) in enumerate(
+        problem_entries,
+        start=2,
+    ):
         problem_sheet[f"A{row_index}"] = excel_row
         problem_sheet[f"B{row_index}"] = problem_type
         problem_sheet[f"C{row_index}"] = description
+        problem_sheet[f"D{row_index}"] = source_snapshot
+        problem_sheet[f"E{row_index}"] = target_snapshot
 
     if "术语汇总" in workbook.sheetnames:
         del workbook["术语汇总"]
@@ -466,6 +676,7 @@ def main() -> None:
         sheet=args.sheet,
         start_row=args.start_row,
         mark_styles=args.mark_style,
+        exclusion_config_file=args.exclusion_config,
         output_file=args.output,
     )
 

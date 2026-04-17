@@ -10,9 +10,9 @@ from tkinter import filedialog, messagebox, ttk
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
 
 try:
-    from .extract_terms_from_excel import build_default_output_path, process_excel
+    from .extract_terms_from_excel import DEFAULT_EXCLUSION_CONFIG_NAME, build_default_output_path, process_excel
 except ImportError:
-    from extract_terms_from_excel import build_default_output_path, process_excel
+    from extract_terms_from_excel import DEFAULT_EXCLUSION_CONFIG_NAME, build_default_output_path, process_excel
 
 
 class ExtractTermsApp(ttk.Frame):
@@ -86,7 +86,10 @@ class ExtractTermsApp(ttk.Frame):
             row=7, column=0, columnspan=3, sticky="ew"
         )
 
-        note = "规则：可同时选择多种 tag 类型，按文本出现顺序检查，并保留术语外层 tag。"
+        note = (
+            "规则：术语表保留 tag，术语检查忽略 tag；"
+            f"伪标签排除规则请维护在 {DEFAULT_EXCLUSION_CONFIG_NAME}。"
+        )
         ttk.Label(self, text=note).grid(row=8, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.columnconfigure(1, weight=1)

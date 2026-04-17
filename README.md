@@ -9,6 +9,9 @@
 - 目录：`tools/term_pair_checker`
 - 用途：从 Excel 的 `source` / `target` 列提取术语并检查是否对齐
 - tag 支持：`【】`、`[]`、`<>`，且可在 GUI 中多选组合检查
+- 检查规则：`术语表` 保留 tag，实际术语检查会忽略 tag，并回溯整表未标注出现
+- 误判排除：默认通过 `tools/term_pair_checker/false_positive_exclusions.json` 排除 `</>`、`<color=...>` 这类伪标签
+- 输出增强：结果会同时给出保留 mark 的 `术语表`、无 mark 的 `术语表（无mark）`，以及带原文上下文的 `问题列`
 - GUI 增强：自动读取工作表列表，并尝试自动识别 `source` / `target` 列
 - 输出方式：生成新的结果 Excel，不覆盖原文件
 - CLI：
