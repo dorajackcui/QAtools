@@ -100,6 +100,47 @@ class TagEngineTests(unittest.TestCase):
         self.assertEqual(result.tags[1].raw, "</>")
         self.assertEqual(result.warnings, ())
 
+    def test_generated_placeholders_skip_reserved_raw_placeholders(self):
+        from phraseloom.tag_engine import TAG_CLOSE, TAG_OPEN, extract_tags, restore_tags
+
+        result = extract_tags("{t1_op}<a>x</a>")
+
+        self.assertEqual(result.text, "{t1_op}{t2_op}x{t2_cl}")
+        self.assertEqual(
+            tuple(astuple(tag) for tag in result.tags),
+            (
+                (2, TAG_OPEN, "{t2_op}", "<a>"),
+                (2, TAG_CLOSE, "{t2_cl}", "</a>"),
+            ),
+        )
+        self.assertIn("reserved_tag_placeholder: {t1_op}", result.warnings)
+        self.assertEqual(restore_tags(result.text, result.tags), "{t1_op}<a>x</a>")
+
+    def test_misnested_named_tags_do_not_cross_pair(self):
+        from phraseloom.tag_engine import extract_tags
+
+        result = extract_tags("<a><b>x</a>y</b>")
+
+        self.assertEqual(result.text, "{t1_op}{t2_op}x</a>y{t2_cl}")
+        self.assertEqual(
+            [tag.placeholder for tag in result.tags],
+            ["{t1_op}", "{t2_op}", "{t2_cl}"],
+        )
+        self.assertTrue(
+            any(
+                "mismatch" in warning or "unpaired close" in warning
+                for warning in result.warnings
+            )
+        )
+
+    def test_unmatched_plain_bbcode_text_stays_raw(self):
+        from phraseloom.tag_engine import extract_tags
+
+        result = extract_tags("Press [OK] to continue")
+
+        self.assertEqual(result.text, "Press [OK] to continue")
+        self.assertEqual(result.tags, ())
+
     def test_suspicious_raw_text_stays_unchanged_and_warns_reserved_namespace(self):
         from phraseloom.tag_engine import extract_tags
 

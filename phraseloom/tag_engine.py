@@ -64,29 +64,36 @@ def is_tag_placeholder(placeholder: str) -> bool:
 
 def extract_tags(text: str) -> TagExtraction:
     source = "" if text is None else str(text)
+    reserved_indexes = {
+        int(found.group(1)) for found in TAG_PLACEHOLDER_RE.finditer(source)
+    }
     warnings = [
         f"reserved_tag_placeholder: {found.group(0)}"
         for found in TAG_PLACEHOLDER_RE.finditer(source)
     ]
+    spans = list(_TAG_SPAN_RE.finditer(source))
+    matched_plain_bbcode_starts = _matched_plain_bbcode_open_starts(spans)
     chunks: list[str] = []
     tags: list[TagToken] = []
     stack: list[tuple[int, str | None]] = []
     next_index = 1
     pos = 0
 
-    for found in _TAG_SPAN_RE.finditer(source):
+    for found in spans:
         raw = found.group(0)
         chunks.append(source[pos : found.start()])
+        if _is_unmatched_plain_bbcode_open(raw, found.start(), matched_plain_bbcode_starts):
+            chunks.append(raw)
+            pos = found.end()
+            continue
         kind, name = _classify_raw_tag(raw)
 
         if kind == TAG_OPEN:
-            index = next_index
-            next_index += 1
+            index, next_index = _take_next_index(next_index, reserved_indexes)
             stack.append((index, name))
             placeholder = make_tag_placeholder(index, TAG_OPEN)
         elif kind == TAG_SELF:
-            index = next_index
-            next_index += 1
+            index, next_index = _take_next_index(next_index, reserved_indexes)
             placeholder = make_tag_placeholder(index, TAG_SELF)
         else:
             matched = _pop_matching_open(stack, name)
@@ -199,12 +206,49 @@ def _pop_matching_open(stack: list[tuple[int, str | None]], name: str | None) ->
         return None
     if name is None:
         return stack.pop()[0]
-    for offset in range(len(stack) - 1, -1, -1):
-        index, open_name = stack[offset]
-        if open_name == name:
-            del stack[offset]
-            return index
+    index, open_name = stack[-1]
+    if open_name == name:
+        stack.pop()
+        return index
     return None
+
+
+def _take_next_index(next_index: int, reserved_indexes: set[int]) -> tuple[int, int]:
+    while next_index in reserved_indexes:
+        next_index += 1
+    return next_index, next_index + 1
+
+
+def _matched_plain_bbcode_open_starts(spans: list[re.Match[str]]) -> set[int]:
+    later_closes_by_name: dict[str, int] = {}
+    matched_starts: set[int] = set()
+
+    for found in reversed(spans):
+        raw = found.group(0)
+        if _is_named_bbcode_close(raw):
+            name = raw[2:-1].strip().lower()
+            later_closes_by_name[name] = later_closes_by_name.get(name, 0) + 1
+        elif _is_plain_bbcode_open(raw):
+            name = _bbcode_tag_name(raw)
+            if later_closes_by_name.get(name, 0) > 0:
+                matched_starts.add(found.start())
+                later_closes_by_name[name] -= 1
+
+    return matched_starts
+
+
+def _is_unmatched_plain_bbcode_open(
+    raw: str, start: int, matched_plain_bbcode_starts: set[int]
+) -> bool:
+    return _is_plain_bbcode_open(raw) and start not in matched_plain_bbcode_starts
+
+
+def _is_plain_bbcode_open(raw: str) -> bool:
+    return re.fullmatch(r"\[[A-Za-z][A-Za-z0-9:._-]*\]", raw) is not None
+
+
+def _is_named_bbcode_close(raw: str) -> bool:
+    return re.fullmatch(r"\[/[A-Za-z][A-Za-z0-9:._-]*\]", raw) is not None
 
 
 def _placeholder_sort_key(key: tuple[str, str]) -> tuple[int, int]:
