@@ -4,42 +4,61 @@ import re
 from collections import defaultdict
 
 from .models import TemplateMatch
-from .tag_engine import is_tag_placeholder
+from .tag_engine import PROTECTED_TOKEN_RE
 
-VAR_RE = re.compile(
-    r"\{[^{}]+\}|#[0-9A-Fa-f]{6}|\d+(?:[./:-]\d+)+|\d+(?:\.\d+)?"
-)
+VAR_RE = re.compile(r"#[0-9A-Fa-f]{6}|\d+(?:[./:-]\d+)+|\d+(?:\.\d+)?")
 PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
-NAMED_PLACEHOLDER_RE = re.compile(r"^\{([A-Za-z_][A-Za-z0-9_]*)\}$")
+
+
+def _iter_protected_aware_spans(source: str):
+    pos = 0
+    for found in PROTECTED_TOKEN_RE.finditer(source):
+        if found.start() > pos:
+            yield source[pos : found.start()], False
+        yield found.group(0), True
+        pos = found.end()
+    if pos < len(source):
+        yield source[pos:], False
+
+
+def _replace_outside_protected_tokens(source: str, old: str, new: str) -> tuple[str, bool]:
+    changed = False
+    chunks: list[str] = []
+    for chunk, protected in _iter_protected_aware_spans(source):
+        if protected:
+            chunks.append(chunk)
+            continue
+        replaced = chunk.replace(old, new)
+        if replaced != chunk:
+            changed = True
+        chunks.append(replaced)
+    return "".join(chunks), changed
 
 
 def parse_template(text: object) -> TemplateMatch:
     source = "" if text is None else str(text)
     chunks: list[str] = []
     values: dict[str, str] = {}
-    pos = 0
     counters: dict[str, int] = defaultdict(int)
 
-    for found in VAR_RE.finditer(source):
-        chunks.append(source[pos : found.start()])
-        value = found.group(0)
-        if is_tag_placeholder(value):
-            chunks.append(value)
-            pos = found.end()
+    for span, protected in _iter_protected_aware_spans(source):
+        if protected:
+            chunks.append(span)
             continue
-        key = _variable_key(value, counters)
-        chunks.append("{" + key + "}")
-        values[key] = value
-        pos = found.end()
+        pos = 0
+        for found in VAR_RE.finditer(span):
+            chunks.append(span[pos : found.start()])
+            value = found.group(0)
+            key = _variable_key(value, counters)
+            chunks.append("{" + key + "}")
+            values[key] = value
+            pos = found.end()
+        chunks.append(span[pos:])
 
-    chunks.append(source[pos:])
     return TemplateMatch(source, "".join(chunks), values)
 
 
 def _variable_key(value: str, counters: dict[str, int]) -> str:
-    named = NAMED_PLACEHOLDER_RE.match(value)
-    if named:
-        return named.group(1)
     if value.startswith("#"):
         prefix = "color"
     elif re.fullmatch(r"\d+-\d+(?:-\d+)*", value):
@@ -63,8 +82,10 @@ def infer_target_template(values: dict[str, str], target_text: object) -> str | 
         if not value:
             continue
         token = "\x00" + _letters_token(index) + "\x00"
-        if value in target_template:
-            target_template = target_template.replace(value, token)
+        target_template, changed = _replace_outside_protected_tokens(
+            target_template, value, token
+        )
+        if changed:
             tokens[token] = "{" + key + "}"
             matched = True
 
@@ -109,7 +130,6 @@ def is_candidate_template(match: TemplateMatch) -> bool:
 
 
 __all__ = [
-    "NAMED_PLACEHOLDER_RE",
     "PLACEHOLDER_RE",
     "VAR_RE",
     "apply_target_template",

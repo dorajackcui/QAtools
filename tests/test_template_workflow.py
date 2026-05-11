@@ -26,25 +26,39 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertEqual(target_template, "VIP{num1}pack")
         self.assertEqual(apply_target_template(target_template, {"num1": "11"}), "VIP11pack")
 
-    def test_preserves_named_placeholders_and_uses_readable_numeric_names(self):
+    def test_template_parser_ignores_raw_brace_placeholders_after_protection(self):
+        from phraseloom.tag_engine import extract_tags
         from phraseloom.template_engine import parse_template
 
-        named = parse_template("Player reaches level {a}")
+        protected = extract_tags("Player reaches level {a}").text
         stage = parse_template("Clear Story 10-20")
 
-        self.assertEqual(named.template, "Player reaches level {a}")
-        self.assertEqual(named.values, {"a": "{a}"})
+        self.assertEqual(protected, "Player reaches level {1}")
+        self.assertEqual(parse_template(protected).template, "Player reaches level {1}")
+        self.assertEqual(parse_template(protected).values, {})
         self.assertEqual(stage.template, "Clear Story {stage1}")
         self.assertEqual(stage.values, {"stage1": "10-20"})
 
-    def test_template_parser_preserves_tag_placeholders_without_values(self):
+    def test_template_parser_preserves_protected_tokens_without_values(self):
         from phraseloom.template_engine import parse_template
 
-        match = parse_template("{t1_op}VIP10 Pack{t1_cl}")
+        match = parse_template("{1>VIP10 Pack<2} {3}")
 
-        self.assertEqual(match.text, "{t1_op}VIP10 Pack{t1_cl}")
-        self.assertEqual(match.template, "{t1_op}VIP{num1} Pack{t1_cl}")
+        self.assertEqual(match.text, "{1>VIP10 Pack<2} {3}")
+        self.assertEqual(match.template, "{1>VIP{num1} Pack<2} {3}")
         self.assertEqual(match.values, {"num1": "10"})
+
+    def test_target_template_inference_does_not_replace_protected_token_digits(self):
+        from phraseloom.template_engine import infer_target_template, parse_template
+
+        match = parse_template("{1>Level 1<2}")
+
+        self.assertEqual(match.template, "{1>Level {num1}<2}")
+        self.assertEqual(match.values, {"num1": "1"})
+        self.assertEqual(
+            infer_target_template(match.values, "{1>Niveau 1<2}"),
+            "{1>Niveau {num1}<2}",
+        )
 
     def test_tag_only_units_autofill_and_template_fill_restores_raw_tags(self):
         from phraseloom.workflow import fill_target_column_workbook, generate_workbook
