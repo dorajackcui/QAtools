@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import re
 from collections import defaultdict
-from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 from statistics import median
@@ -11,6 +10,8 @@ from statistics import median
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+
+from .models import EntityCluster, EntityOccurrence
 
 
 TOKEN_RE = re.compile(
@@ -27,29 +28,6 @@ STOPWORD_RE = re.compile(
 )
 NO_SPACE_BEFORE = set(".,!?;:%)]}。，、！？；：）」》】")
 NO_SPACE_AFTER = set("([{「《【")
-
-
-@dataclass(frozen=True)
-class EntityOccurrence:
-    row_number: int
-    source: str
-    target: str
-    entity: str
-    entity_token_count: int
-
-
-@dataclass(frozen=True)
-class EntityCluster:
-    source_pattern: str
-    coverage_count: int
-    unique_source_count: int
-    unique_entity_count: int
-    entity_values: tuple[str, ...]
-    confidence: float
-    risk: str
-    sample_sources: tuple[str, ...]
-    sample_targets: tuple[str, ...]
-    row_numbers: tuple[int, ...]
 
 
 def find_entity_clusters(
