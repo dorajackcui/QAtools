@@ -37,6 +37,15 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertEqual(stage.template, "Clear Story {stage1}")
         self.assertEqual(stage.values, {"stage1": "10-20"})
 
+    def test_template_parser_preserves_tag_placeholders_without_values(self):
+        from phraseloom.template_engine import parse_template
+
+        match = parse_template("{t1_op}VIP10 Pack{t1_cl}")
+
+        self.assertEqual(match.text, "{t1_op}VIP10 Pack{t1_cl}")
+        self.assertEqual(match.template, "{t1_op}VIP{num1} Pack{t1_cl}")
+        self.assertEqual(match.values, {"num1": "10"})
+
     def test_generated_workbook_prefills_auto_targets_from_cli_example(self):
         from phraseloom.workflow import generate_workbook
 

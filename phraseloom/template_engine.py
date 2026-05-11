@@ -4,6 +4,7 @@ import re
 from collections import defaultdict
 
 from .models import TemplateMatch
+from .tag_engine import is_tag_placeholder
 
 VAR_RE = re.compile(
     r"\{[^{}]+\}|#[0-9A-Fa-f]{6}|\d+(?:[./:-]\d+)+|\d+(?:\.\d+)?"
@@ -22,6 +23,10 @@ def parse_template(text: object) -> TemplateMatch:
     for found in VAR_RE.finditer(source):
         chunks.append(source[pos : found.start()])
         value = found.group(0)
+        if is_tag_placeholder(value):
+            chunks.append(value)
+            pos = found.end()
+            continue
         key = _variable_key(value, counters)
         chunks.append("{" + key + "}")
         values[key] = value
