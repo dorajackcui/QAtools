@@ -67,6 +67,7 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertEqual(rows[0].match.template, "{t1_op}VIP{num1}{t1_cl}")
         self.assertEqual(rows[0].match.values, {"num1": "10"})
         self.assertEqual(rows[0].tag_warnings, ())
+        self.assertEqual(rows[0].target_tag_warnings, ())
 
     def test_row_item_carries_optional_tag_metadata(self):
         from phraseloom.models import RowFillResult, RowItem
