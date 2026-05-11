@@ -37,13 +37,28 @@ class TagEngineTests(unittest.TestCase):
         self.assertIsNone(parse_protected_token("{t1_op}"))
 
     def test_protected_token_scans_accept_all_token_shapes(self):
-        from phraseloom.tag_engine import extract_tags, validate_tag_placeholders
+        from phraseloom.tag_engine import (
+            RAW_PLACEHOLDER,
+            extract_tags,
+            validate_tag_placeholders,
+        )
 
-        extraction = extract_tags("{1><2}{3}")
-        validation = validate_tag_placeholders("{1>", ())
+        extraction = extract_tags("Keep {3} literal")
+        validation = validate_tag_placeholders("{1><2}{3}", ())
 
-        self.assertEqual(extraction.text, "{1><2}{1}")
-        self.assertEqual(validation.warnings, ("tag_mismatch: extra {1>",))
+        self.assertEqual(extraction.text, "Keep {1} literal")
+        self.assertEqual(
+            tuple((tag.index, tag.kind, tag.placeholder, tag.raw) for tag in extraction.tags),
+            ((1, RAW_PLACEHOLDER, "{1}", "{3}"),),
+        )
+        self.assertEqual(
+            validation.warnings,
+            (
+                "tag_mismatch: extra {1>",
+                "tag_mismatch: extra <2}",
+                "tag_mismatch: extra {3}",
+            ),
+        )
 
     def test_extracts_angle_tags_and_preserves_token_fields(self):
         from phraseloom.tag_engine import TAG_CLOSE, TAG_OPEN, TAG_SELF, extract_tags
