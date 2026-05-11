@@ -343,7 +343,10 @@ def _write_output_workbook(
                 unit.unit_id if unit else None,
                 unit.unit_type if unit else None,
                 unit.source_unit if unit else None,
-                json.dumps(row.match.values if unit and unit.unit_type == "template" else {}, ensure_ascii=False),
+                json.dumps(
+                    row.match.values if unit and unit.unit_type == "template" else {},
+                    ensure_ascii=False,
+                ),
                 unit.target_unit if unit else None,
                 auto_target,
                 row.existing_target or None,
@@ -390,7 +393,12 @@ def _write_output_workbook(
 
     qa = wb.create_sheet("qa_report")
     qa.append(["check", "count"])
-    qa.append(["missing_target_unit", sum(1 for _, unit, auto in result_rows if unit and not unit.target_unit)])
+    qa.append(
+        [
+            "missing_target_unit",
+            sum(1 for _, unit, auto in result_rows if unit and not unit.target_unit),
+        ]
+    )
     qa.append(["filled", sum(1 for _, _, auto in result_rows if auto)])
     qa.append(["warning_units", sum(1 for unit in units if unit.warning)])
     qa.append(["template_units", len(template_units)])

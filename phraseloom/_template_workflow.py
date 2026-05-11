@@ -13,7 +13,6 @@ from .excel_io import (
     _default_legacy_output_path,
     _default_tm_output_path,
     _default_to_translate_output_path,
-    _default_work_dir,
     _load_translated_units,
     _read_source_rows,
     _write_output_workbook,
