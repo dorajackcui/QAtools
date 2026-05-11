@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from phraseloom.entity_cluster import (
+from ._entity_cluster_probe import (
     EntityCluster,
     EntityOccurrence,
     find_entity_clusters,
@@ -15,7 +15,3 @@ __all__ = [
     "generate_entity_cluster_workbook",
     "main",
 ]
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
