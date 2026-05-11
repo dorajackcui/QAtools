@@ -18,6 +18,7 @@ _TAG_SPAN_RE = re.compile(
     r"|<[A-Za-z][A-Za-z0-9:._-]*(?:\s+[^<>]*)?/\s*>"
     r"|<[A-Za-z][A-Za-z0-9:._-]*(?:\s+[^<>]*)?>"
     r"|\[/\]"
+    r"|\[/[A-Za-z][A-Za-z0-9:._-]*\]"
     r"|\[[A-Za-z][A-Za-z0-9:._-]*(?:=[^\[\]]+)?\]"
 )
 
@@ -157,9 +158,9 @@ def serialize_known_tags(text: str, tags: tuple[TagToken, ...]) -> TagExtraction
     found_tags: list[TagToken] = []
     warnings: list[str] = []
 
-    for tag in sorted(tags, key=lambda item: len(item.raw), reverse=True):
+    for tag in tags:
         if tag.raw in result:
-            result = result.replace(tag.raw, tag.placeholder)
+            result = result.replace(tag.raw, tag.placeholder, 1)
             found_tags.append(tag)
         else:
             warnings.append(f"source_tag_not_found: {tag.raw}")
@@ -172,6 +173,8 @@ def _classify_raw_tag(raw: str) -> tuple[str, str | None]:
         return TAG_CLOSE, None if raw == "</>" else raw[2:-1].strip().lower()
     if raw == "[/]":
         return TAG_CLOSE, None
+    if raw.startswith("[/"):
+        return TAG_CLOSE, raw[2:-1].strip().lower()
     if raw.startswith("<") and re.search(r"/\s*>$", raw):
         return TAG_SELF, _angle_tag_name(raw)
     if raw.startswith("<"):

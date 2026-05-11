@@ -54,6 +54,21 @@ class TagEngineTests(unittest.TestCase):
         self.assertEqual(result.tags[1].raw, "[/]")
         self.assertEqual(result.warnings, ())
 
+    def test_extracts_named_bbcode_close_tags(self):
+        from phraseloom.tag_engine import TAG_CLOSE, TAG_OPEN, extract_tags
+
+        result = extract_tags("[b]Bold[/b]")
+
+        self.assertEqual(result.text, "{t1_op}Bold{t1_cl}")
+        self.assertEqual(
+            tuple(astuple(tag) for tag in result.tags),
+            (
+                (1, TAG_OPEN, "{t1_op}", "[b]"),
+                (1, TAG_CLOSE, "{t1_cl}", "[/b]"),
+            ),
+        )
+        self.assertEqual(result.warnings, ())
+
     def test_suspicious_raw_text_stays_unchanged_and_warns_reserved_namespace(self):
         from phraseloom.tag_engine import extract_tags
 
@@ -91,6 +106,20 @@ class TagEngineTests(unittest.TestCase):
         )
 
         self.assertEqual(validation.warnings, ("tag_mismatch: extra {t2_sf}",))
+
+    def test_serialize_known_tags_preserves_repeated_raw_tags_in_order(self):
+        from phraseloom.tag_engine import TAG_SELF, TagToken, serialize_known_tags
+
+        tags = (
+            TagToken(1, TAG_SELF, "{t1_sf}", "<br/>"),
+            TagToken(2, TAG_SELF, "{t2_sf}", "<br/>"),
+        )
+
+        result = serialize_known_tags("<br/> A <br/>", tags)
+
+        self.assertEqual(result.text, "{t1_sf} A {t2_sf}")
+        self.assertEqual(result.tags, tags)
+        self.assertEqual(result.warnings, ())
 
 
 if __name__ == "__main__":
