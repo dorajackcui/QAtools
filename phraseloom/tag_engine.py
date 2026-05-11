@@ -92,7 +92,7 @@ def extract_tags(text: str) -> TagExtraction:
             matched = _pop_matching_open(stack, name)
             if matched is None:
                 chunks.append(raw)
-                warnings.append(f"unpaired_close_tag: {raw}")
+                warnings.append(f"unpaired close tag: {raw}")
                 pos = found.end()
                 continue
             index = matched
@@ -105,7 +105,9 @@ def extract_tags(text: str) -> TagExtraction:
     chunks.append(source[pos:])
 
     for index, _name in stack:
-        warnings.append(f"unclosed_open_tag: {make_tag_placeholder(index, TAG_OPEN)}")
+        warnings.append(
+            f"open tag has no close partner: {make_tag_placeholder(index, TAG_OPEN)}"
+        )
 
     return TagExtraction("".join(chunks), tuple(tags), tuple(warnings))
 

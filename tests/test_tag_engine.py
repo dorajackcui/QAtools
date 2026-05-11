@@ -69,6 +69,37 @@ class TagEngineTests(unittest.TestCase):
         )
         self.assertEqual(result.warnings, ())
 
+    def test_unpaired_close_stays_raw_and_warns(self):
+        from phraseloom.tag_engine import extract_tags
+
+        result = extract_tags("</a>Text")
+
+        self.assertEqual(result.text, "</a>Text")
+        self.assertEqual(result.tags, ())
+        self.assertTrue(any("unpaired close" in warning for warning in result.warnings))
+
+    def test_unclosed_open_serializes_and_warns(self):
+        from phraseloom.tag_engine import TAG_OPEN, extract_tags
+
+        result = extract_tags('<a href="x">Text')
+
+        self.assertEqual(result.text, "{t1_op}Text")
+        self.assertEqual(len(result.tags), 1)
+        self.assertEqual(result.tags[0].kind, TAG_OPEN)
+        self.assertEqual(result.tags[0].raw, '<a href="x">')
+        self.assertTrue(
+            any("open tag has no close partner" in warning for warning in result.warnings)
+        )
+
+    def test_shorthand_angle_close_pairs_with_nearest_open(self):
+        from phraseloom.tag_engine import extract_tags
+
+        result = extract_tags("<a>Text</>")
+
+        self.assertEqual(result.text, "{t1_op}Text{t1_cl}")
+        self.assertEqual(result.tags[1].raw, "</>")
+        self.assertEqual(result.warnings, ())
+
     def test_suspicious_raw_text_stays_unchanged_and_warns_reserved_namespace(self):
         from phraseloom.tag_engine import extract_tags
 
@@ -107,6 +138,15 @@ class TagEngineTests(unittest.TestCase):
 
         self.assertEqual(validation.warnings, ("tag_mismatch: extra {t2_sf}",))
 
+    def test_validate_tag_placeholders_reports_missing_counts(self):
+        from phraseloom.tag_engine import extract_tags, validate_tag_placeholders
+
+        extraction = extract_tags("<a>x</a>")
+
+        validation = validate_tag_placeholders("{t1_op}x", extraction.tags)
+
+        self.assertEqual(validation.warnings, ("tag_mismatch: missing {t1_cl}",))
+
     def test_serialize_known_tags_preserves_repeated_raw_tags_in_order(self):
         from phraseloom.tag_engine import TAG_SELF, TagToken, serialize_known_tags
 
@@ -120,6 +160,15 @@ class TagEngineTests(unittest.TestCase):
         self.assertEqual(result.text, "{t1_sf} A {t2_sf}")
         self.assertEqual(result.tags, tags)
         self.assertEqual(result.warnings, ())
+
+    def test_serialize_known_tags_returns_empty_extraction_for_empty_target(self):
+        from phraseloom.tag_engine import TagExtraction, extract_tags, serialize_known_tags
+
+        extraction = extract_tags("<a>x</a>")
+
+        result = serialize_known_tags("", extraction.tags)
+
+        self.assertEqual(result, TagExtraction("", (), ()))
 
 
 if __name__ == "__main__":
