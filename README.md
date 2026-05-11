@@ -6,7 +6,7 @@
 
 ```text
 历史完成稿 -> tm_pairs
-本轮源文件 + tm_pairs -> template_pack + to_translate
+本轮源文件 + tm_pairs -> tm_prefill_pack + translator_todo
 译者翻译 to_translate
 to_translate -> 回填源文件
 ```
@@ -77,7 +77,7 @@ phraseloom tm-extract '/path/to/tm.xlsx' \
 默认输出到：
 
 ```text
-/path/to/tm_l10n/tm_tm_pairs.xlsx
+/path/to/tm_l10n/tm_reusable_units.xlsx
 ```
 
 `tm_pairs.xlsx` 后续可以反复复用，不需要每次重新生成。
@@ -90,21 +90,21 @@ phraseloom tm-extract '/path/to/tm.xlsx' \
 phraseloom extract '/path/to/source.xlsx' \
   --source-col '英語' \
   --target-col - \
-  --tm '/path/to/tm_l10n/tm_tm_pairs.xlsx' \
+  --tm '/path/to/tm_l10n/tm_reusable_units.xlsx' \
   --no-existing-targets
 ```
 
 默认输出到源文件旁边的工作目录：
 
 ```text
-/path/to/source_l10n/source_template_pack.xlsx
-/path/to/source_l10n/source_to_translate.xlsx
+/path/to/source_l10n/source_tm_prefill_pack.xlsx
+/path/to/source_l10n/source_translator_todo.xlsx
 ```
 
 译者只需要处理：
 
 ```text
-source_to_translate.xlsx
+source_translator_todo.xlsx
 ```
 
 只填写 `to_translate` sheet 里的 `target_unit` 列即可。
@@ -117,7 +117,7 @@ source_to_translate.xlsx
 
 ```bash
 phraseloom fill '/path/to/source.xlsx' \
-  --templates '/path/to/source_l10n/source_to_translate.xlsx' \
+  --templates '/path/to/source_l10n/source_translator_todo.xlsx' \
   --source-col '英語' \
   --target-col '法语' \
   --mode report
@@ -129,7 +129,7 @@ phraseloom fill '/path/to/source.xlsx' \
 
 ```bash
 phraseloom fill '/path/to/source.xlsx' \
-  --templates '/path/to/source_l10n/source_to_translate.xlsx' \
+  --templates '/path/to/source_l10n/source_translator_todo.xlsx' \
   --source-col '英語' \
   --target-col '法语' \
   --mode target-column
@@ -138,26 +138,26 @@ phraseloom fill '/path/to/source.xlsx' \
 默认输出：
 
 ```text
-/path/to/source_l10n/source_filled.xlsx
+/path/to/source_l10n/source_filled_result.xlsx
 ```
 
 不会覆盖原始源文件。
 
 ## 输出说明
 
-`*_tm_pairs.xlsx`
+`*_reusable_units.xlsx`
 
 历史 TM 的可复用翻译单元。
 
-`*_template_pack.xlsx`
+`*_tm_prefill_pack.xlsx`
 
 过程包，包含 summary、translation_units、source_map、filled_workbook、qa_report 等详细信息。
 
-`*_to_translate.xlsx`
+`*_translator_todo.xlsx`
 
 给译者的独立文件。只需要翻译 `target_unit` 为空的行。
 
-`*_filled.xlsx`
+`*_filled_result.xlsx`
 
 回填后的交付文件，`target-column` 模式会把译文写进指定 target 列。
 
@@ -222,8 +222,8 @@ TM: /path/to/completed_tm.xlsx
 生成：
 
 ```text
-/path/to/completed_tm_l10n/completed_tm_tm_pairs.xlsx
-/path/to/source_l10n/source_to_translate.xlsx
+/path/to/completed_tm_l10n/completed_tm_reusable_units.xlsx
+/path/to/source_l10n/source_translator_todo.xlsx
 ```
 
 结果摘要：

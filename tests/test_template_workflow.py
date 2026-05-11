@@ -294,7 +294,7 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(filled_rows[1]["auto_target"], "登录失败")
             self.assertEqual(filled_rows[2]["fill_status"], "missing_target_unit")
 
-            standalone_todo = source_input.parent / "source_l10n" / "source_to_translate.xlsx"
+            standalone_todo = source_input.parent / "source_l10n" / "source_translator_todo.xlsx"
             self.assertTrue(standalone_todo.exists())
             todo_book = load_workbook(standalone_todo, data_only=True)
             self.assertEqual(
@@ -402,7 +402,7 @@ class TemplateDemoTests(unittest.TestCase):
                 use_existing_targets=False,
             )
 
-            standalone_todo = source_input.parent / "source_l10n" / "source_to_translate.xlsx"
+            standalone_todo = source_input.parent / "source_l10n" / "source_translator_todo.xlsx"
             todo_book = load_workbook(standalone_todo)
             ws = todo_book["to_translate"]
             headers = [cell.value for cell in ws[1]]
@@ -445,19 +445,19 @@ class TemplateDemoTests(unittest.TestCase):
         )
         self.assertEqual(
             _default_extract_output_path(input_path),
-            Path("/tmp/project/source_l10n/source_template_pack.xlsx"),
+            Path("/tmp/project/source_l10n/source_tm_prefill_pack.xlsx"),
         )
         self.assertEqual(
             _default_to_translate_output_path(input_path),
-            Path("/tmp/project/source_l10n/source_to_translate.xlsx"),
+            Path("/tmp/project/source_l10n/source_translator_todo.xlsx"),
         )
         self.assertEqual(
             _default_fill_output_path(input_path),
-            Path("/tmp/project/source_l10n/source_filled.xlsx"),
+            Path("/tmp/project/source_l10n/source_filled_result.xlsx"),
         )
         self.assertEqual(
             _default_tm_output_path(input_path),
-            Path("/tmp/project/source_l10n/source_tm_pairs.xlsx"),
+            Path("/tmp/project/source_l10n/source_reusable_units.xlsx"),
         )
 
     def test_missing_source_column_reports_available_headers(self):
@@ -562,7 +562,7 @@ class TemplateDemoTests(unittest.TestCase):
             }
             self.assertEqual(pack_summary[SCHEMA_VERSION_KEY], SCHEMA_VERSION)
 
-            standalone_todo = source_input.parent / "source_l10n" / "source_to_translate.xlsx"
+            standalone_todo = source_input.parent / "source_l10n" / "source_translator_todo.xlsx"
             todo = load_workbook(standalone_todo, data_only=True)
             self.assertIn(METADATA_SHEET, todo.sheetnames)
             self.assertEqual(todo[METADATA_SHEET].sheet_state, "hidden")

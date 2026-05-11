@@ -228,23 +228,23 @@ def _default_work_dir(input_path: Path) -> Path:
 
 
 def _default_extract_output_path(input_path: Path) -> Path:
-    return _default_work_dir(input_path) / f"{input_path.stem}_template_pack.xlsx"
+    return _default_work_dir(input_path) / f"{input_path.stem}_tm_prefill_pack.xlsx"
 
 
 def _default_tm_output_path(input_path: Path) -> Path:
-    return _default_work_dir(input_path) / f"{input_path.stem}_tm_pairs.xlsx"
+    return _default_work_dir(input_path) / f"{input_path.stem}_reusable_units.xlsx"
 
 
 def _default_to_translate_output_path(input_path: Path) -> Path:
-    return _default_work_dir(input_path) / f"{input_path.stem}_to_translate.xlsx"
+    return _default_work_dir(input_path) / f"{input_path.stem}_translator_todo.xlsx"
 
 
 def _default_fill_output_path(input_path: Path) -> Path:
-    return _default_work_dir(input_path) / f"{input_path.stem}_filled.xlsx"
+    return _default_work_dir(input_path) / f"{input_path.stem}_filled_result.xlsx"
 
 
 def _default_legacy_output_path(input_path: Path) -> Path:
-    return _default_work_dir(input_path) / f"{input_path.stem}_template_demo.xlsx"
+    return _default_work_dir(input_path) / f"{input_path.stem}_phraseloom_result.xlsx"
 
 
 def _write_output_workbook(
