@@ -16,9 +16,11 @@ from .excel_io import (
 )
 from .models import RowFillResult, RowItem, TranslationUnit
 from .tag_engine import (
+    extract_tags,
     is_tag_only_segment,
     is_tag_placeholder,
     restore_tags,
+    serialize_known_tags,
     validate_tag_placeholders,
 )
 from .template_engine import (
@@ -363,16 +365,27 @@ def _build_provided_units(
             sources[key] = "translation_units"
 
     for source, target in examples:
-        match = parse_template(source)
-        target_template = infer_target_template(match.values, target)
+        source_extraction = extract_tags(source)
+        serialized_source = source_extraction.text
+        serialized_target = serialize_known_tags(target, source_extraction.tags).text
+        match = parse_template(serialized_source)
+        target_template = infer_target_template(match.values, serialized_target)
         if target_template:
             key = ("template", match.template)
             provided[key] = target_template
-            sources[key] = f"example: {source} => {target}"
+            sources[key] = (
+                f"example: {source} => {target}"
+                if serialized_source == source and serialized_target == target
+                else f"example: {source} => {target} ({serialized_source} => {serialized_target})"
+            )
         else:
-            key = ("segment", source)
-            provided[key] = target
-            sources[key] = f"example: {source} => {target}"
+            key = ("segment", serialized_source)
+            provided[key] = serialized_target
+            sources[key] = (
+                f"example: {source} => {target}"
+                if serialized_source == source and serialized_target == target
+                else f"example: {source} => {target} ({serialized_source} => {serialized_target})"
+            )
 
     return provided, sources
 

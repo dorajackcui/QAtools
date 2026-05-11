@@ -221,6 +221,56 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(actual["VIP10 Paid Pack"], "VIP10pack")
             self.assertEqual(actual["Sign in for 3 days"], None)
 
+    def test_raw_tagged_cli_examples_prefill_serialized_tagged_rows(self):
+        from phraseloom.workflow import generate_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "input.xlsx"
+            output_path = Path(tmp) / "output.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(['<a href="shop">VIP10 Pack</a>', ""])
+            ws.append(['<a href="shop">VIP20 Pack</a>', ""])
+            wb.save(input_path)
+
+            stats = generate_workbook(
+                input_path,
+                output_path,
+                source_col="source",
+                target_col="target",
+                examples=[
+                    (
+                        '<a href="shop">VIP10 Pack</a>',
+                        '<a href="shop">Pack VIP10 FR</a>',
+                    )
+                ],
+                min_group_size=2,
+                use_existing_targets=False,
+            )
+
+            self.assertEqual(stats["autofilled_count"], 2)
+
+            out = load_workbook(output_path, data_only=True)
+            filled = out["filled_workbook"]
+            headers = [cell.value for cell in filled[1]]
+            source_idx = headers.index("source") + 1
+            auto_idx = headers.index("auto_target") + 1
+            actual = {
+                row[source_idx - 1].value: row[auto_idx - 1].value
+                for row in filled.iter_rows(min_row=2)
+            }
+
+            self.assertEqual(
+                actual['<a href="shop">VIP10 Pack</a>'],
+                '<a href="shop">Pack VIP10 FR</a>',
+            )
+            self.assertEqual(
+                actual['<a href="shop">VIP20 Pack</a>'],
+                '<a href="shop">Pack VIP20 FR</a>',
+            )
+
     def test_minimal_translation_units_deduplicate_segments_and_fill_duplicate_rows(self):
         from phraseloom.workflow import generate_workbook
 
