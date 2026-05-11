@@ -3,7 +3,7 @@ import unittest
 
 class EntityClusterProbeTests(unittest.TestCase):
     def test_groups_one_entity_slot_when_surrounding_structure_matches(self):
-        from entity_cluster_probe import find_entity_clusters
+        from phraseloom.entity_cluster import find_entity_clusters
 
         rows = [
             ("Squirtle launched an attack and dealt damage.", "Carapuce a lancé une attaque et infligé des dégâts."),
@@ -25,7 +25,7 @@ class EntityClusterProbeTests(unittest.TestCase):
         self.assertGreaterEqual(cluster.confidence, 0.8)
 
     def test_ignores_numeric_only_variants(self):
-        from entity_cluster_probe import find_entity_clusters
+        from phraseloom.entity_cluster import find_entity_clusters
 
         rows = [
             ("Reach level 10", "Atteindre le niveau 10"),
@@ -38,7 +38,7 @@ class EntityClusterProbeTests(unittest.TestCase):
         self.assertEqual(clusters, [])
 
     def test_groups_cjk_sentence_with_two_entity_slots(self):
-        from entity_cluster_probe import find_entity_clusters
+        from phraseloom.entity_cluster import find_entity_clusters
 
         rows = [
             (
@@ -66,7 +66,7 @@ class EntityClusterProbeTests(unittest.TestCase):
         self.assertIn("蓝晶兽 / 蓝晶兽", cluster.entity_values)
 
     def test_prefers_broader_cjk_entity_boundary_over_suffix_split(self):
-        from entity_cluster_probe import find_entity_clusters
+        from phraseloom.entity_cluster import find_entity_clusters
 
         rows = [
             ("已解锁展示动作。进入演示时，可以和蓝晶兽进行互动。", ""),

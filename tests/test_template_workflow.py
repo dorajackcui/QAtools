@@ -10,7 +10,11 @@ from openpyxl import Workbook, load_workbook
 
 class TemplateDemoTests(unittest.TestCase):
     def test_infers_target_template_from_one_example_and_applies_to_matching_source(self):
-        from template_demo import apply_target_template, infer_target_template, parse_template
+        from phraseloom.template_engine import (
+            apply_target_template,
+            infer_target_template,
+            parse_template,
+        )
 
         example = parse_template("VIP10 Paid Pack")
 
@@ -23,7 +27,7 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertEqual(apply_target_template(target_template, {"num1": "11"}), "VIP11pack")
 
     def test_preserves_named_placeholders_and_uses_readable_numeric_names(self):
-        from template_demo import parse_template
+        from phraseloom.template_engine import parse_template
 
         named = parse_template("Player reaches level {a}")
         stage = parse_template("Clear Story 10-20")
@@ -34,7 +38,7 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertEqual(stage.values, {"stage1": "10-20"})
 
     def test_generated_workbook_prefills_auto_targets_from_cli_example(self):
-        from template_demo import generate_workbook
+        from phraseloom.workflow import generate_workbook
 
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.xlsx"
@@ -104,7 +108,7 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(actual["Sign in for 3 days"], None)
 
     def test_minimal_translation_units_deduplicate_segments_and_fill_duplicate_rows(self):
-        from template_demo import generate_workbook
+        from phraseloom.workflow import generate_workbook
 
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.xlsx"
@@ -178,7 +182,7 @@ class TemplateDemoTests(unittest.TestCase):
             )
 
     def test_tm_pairs_prefill_translation_units_and_leave_new_units_blank(self):
-        from template_demo import generate_tm_pairs, generate_workbook
+        from phraseloom.workflow import generate_tm_pairs, generate_workbook
 
         with tempfile.TemporaryDirectory() as tmp:
             tm_input = Path(tmp) / "tm.xlsx"
@@ -295,7 +299,7 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(todo_book["prefilled_units"].sheet_state, "hidden")
 
     def test_non_translatable_numeric_and_symbol_segments_are_autofilled(self):
-        from template_demo import generate_workbook
+        from phraseloom.workflow import generate_workbook
 
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "source.xlsx"
@@ -346,7 +350,7 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual([row["source_unit"] for row in todo_rows], ["New text"])
 
     def test_translated_to_translate_can_fill_target_column_in_output_copy(self):
-        from template_demo import (
+        from phraseloom.workflow import (
             fill_target_column_workbook,
             generate_tm_pairs,
             generate_workbook,
@@ -420,7 +424,7 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(rows[3][1], "全新文本")
 
     def test_default_output_paths_are_inside_input_work_folder(self):
-        from template_demo import (
+        from phraseloom.excel_io import (
             _default_extract_output_path,
             _default_fill_output_path,
             _default_tm_output_path,
@@ -452,7 +456,7 @@ class TemplateDemoTests(unittest.TestCase):
         )
 
     def test_interactive_path_input_accepts_copied_shell_quotes(self):
-        from template_demo import _user_path
+        from phraseloom.interactive import _user_path
 
         self.assertEqual(
             _user_path("'/tmp/project/source.xlsx'"),
@@ -464,7 +468,7 @@ class TemplateDemoTests(unittest.TestCase):
         )
 
     def test_repeated_numeric_source_without_variants_stays_segment(self):
-        from template_demo import generate_workbook
+        from phraseloom.workflow import generate_workbook
 
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.xlsx"
@@ -500,7 +504,7 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(rows[0]["coverage_count"], 3)
 
     def test_interactive_menu_shows_three_step_workflow(self):
-        from template_demo import main
+        from phraseloom.cli import main
 
         stdout = StringIO()
         with patch("builtins.input", side_effect=["q"]), redirect_stdout(stdout):
@@ -515,7 +519,7 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertNotIn("Extract source translation units", menu)
 
     def test_interactive_extract_creates_template_pack(self):
-        from template_demo import main
+        from phraseloom.cli import main
 
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.xlsx"
@@ -565,6 +569,20 @@ class TemplateDemoTests(unittest.TestCase):
                     "source_rows_to_translate": 2,
                 },
             )
+
+
+class CompatibilityShimTests(unittest.TestCase):
+    def test_template_demo_shim_exports_existing_workflow_api(self):
+        from template_demo import generate_workbook, main, parse_template
+
+        self.assertTrue(callable(generate_workbook))
+        self.assertTrue(callable(main))
+        self.assertEqual(parse_template("VIP10 Pack").template, "VIP{num1} Pack")
+
+    def test_entity_cluster_probe_shim_exports_existing_api(self):
+        from entity_cluster_probe import find_entity_clusters
+
+        self.assertTrue(callable(find_entity_clusters))
 
 
 if __name__ == "__main__":
