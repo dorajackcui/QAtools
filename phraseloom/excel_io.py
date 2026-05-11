@@ -10,6 +10,7 @@ from openpyxl.utils import get_column_letter
 from . import workbook_schema as schema
 from .errors import ColumnNotFoundError, TranslationUnitLoadError
 from .models import RowFillResult, RowItem, TranslationUnit
+from .tag_engine import extract_tags, serialize_known_tags
 from .template_engine import PLACEHOLDER_RE, parse_template
 
 
@@ -37,16 +38,25 @@ def _read_source_rows(
                 continue
             seen_source = True
             blank_source_run = 0
-            source = str(source_value).strip()
+            raw_source = str(source_value).strip()
+            source_extraction = extract_tags(raw_source)
             target_value = _cell_value(row, target_index) if target_index else ""
-            existing_target = "" if target_value is None else str(target_value).strip()
+            raw_existing_target = "" if target_value is None else str(target_value).strip()
+            target_extraction = serialize_known_tags(
+                raw_existing_target, source_extraction.tags
+            )
             rows.append(
                 RowItem(
                     row_number,
-                    source,
-                    existing_target,
-                    parse_template(source),
+                    source_extraction.text,
+                    target_extraction.text,
+                    parse_template(source_extraction.text),
                     tuple(row),
+                    raw_source=raw_source,
+                    raw_existing_target=raw_existing_target,
+                    tag_tokens=source_extraction.tags,
+                    tag_warnings=source_extraction.warnings,
+                    target_tag_warnings=target_extraction.warnings,
                 )
             )
 

@@ -46,6 +46,28 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertEqual(match.template, "{t1_op}VIP{num1} Pack{t1_cl}")
         self.assertEqual(match.values, {"num1": "10"})
 
+    def test_read_source_rows_serializes_source_and_existing_target_tags(self):
+        from phraseloom.excel_io import _read_source_rows
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "tagged.xlsx"
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(['<a href="shop">VIP10</a>', '<a href="shop">VIP10 Pack FR</a>'])
+            wb.save(input_path)
+
+            rows = _read_source_rows(input_path, "source", "target")
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].raw_source, '<a href="shop">VIP10</a>')
+        self.assertEqual(rows[0].raw_existing_target, '<a href="shop">VIP10 Pack FR</a>')
+        self.assertEqual(rows[0].source, "{t1_op}VIP10{t1_cl}")
+        self.assertEqual(rows[0].existing_target, "{t1_op}VIP10 Pack FR{t1_cl}")
+        self.assertEqual(rows[0].match.template, "{t1_op}VIP{num1}{t1_cl}")
+        self.assertEqual(rows[0].match.values, {"num1": "10"})
+        self.assertEqual(rows[0].tag_warnings, ())
+
     def test_row_item_carries_optional_tag_metadata(self):
         from phraseloom.models import RowFillResult, RowItem
         from phraseloom.template_engine import parse_template
