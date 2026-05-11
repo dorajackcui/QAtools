@@ -10,7 +10,7 @@ from openpyxl.utils import get_column_letter
 from . import workbook_schema as schema
 from .errors import ColumnNotFoundError, TranslationUnitLoadError
 from .models import RowFillResult, RowItem, TranslationUnit
-from .tag_engine import extract_tags, serialize_known_tags
+from .tag_engine import extract_tags, is_tag_placeholder, serialize_known_tags
 from .template_engine import PLACEHOLDER_RE, parse_template
 
 
@@ -408,6 +408,28 @@ def _write_output_workbook(
     )
     qa.append(["filled", sum(1 for result_row in result_rows if result_row.auto_target)])
     qa.append(["warning_units", sum(1 for unit in units if unit.warning)])
+    qa.append(
+        [
+            "tag_mismatch_rows",
+            sum(1 for result_row in result_rows if "tag_mismatch:" in result_row.warning),
+        ]
+    )
+    qa.append(
+        [
+            "tag_warning_rows",
+            sum(
+                1
+                for result_row in result_rows
+                if result_row.row.tag_warnings or result_row.row.target_tag_warnings
+            ),
+        ]
+    )
+    qa.append(
+        [
+            "tag_only_units",
+            sum(1 for unit in units if unit.target_unit_source == "tag_only"),
+        ]
+    )
     qa.append(["template_units", len(template_units)])
     qa.append(["segment_units", len(segment_units)])
 
@@ -592,7 +614,11 @@ def _write_tm_workbook(
 def _variables_summary(unit: TranslationUnit) -> str | None:
     if unit.unit_type != "template":
         return None
-    placeholders = PLACEHOLDER_RE.findall(unit.source_unit)
+    placeholders = [
+        placeholder
+        for placeholder in PLACEHOLDER_RE.findall(unit.source_unit)
+        if not is_tag_placeholder(placeholder)
+    ]
     if not placeholders:
         return None
     samples: dict[str, list[str]] = {placeholder: [] for placeholder in placeholders}

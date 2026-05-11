@@ -15,6 +15,12 @@ from .excel_io import (
     _write_to_translate_workbook,
 )
 from .models import RowFillResult, RowItem, TranslationUnit
+from .tag_engine import (
+    is_tag_only_segment,
+    is_tag_placeholder,
+    restore_tags,
+    validate_tag_placeholders,
+)
 from .template_engine import (
     PLACEHOLDER_RE,
     apply_target_template,
@@ -126,16 +132,28 @@ def _build_fill_context(
     for row in rows:
         unit = unit_by_row_number.get(row.row_number)
         target_template = unit.target_unit if unit else ""
-        auto_target = (
+        serialized_target = (
             apply_target_template(target_template, row.match.values)
             if target_template and unit and unit.unit_type == "template"
             else target_template
             if target_template
             else None
         )
+        auto_target = None
+        warning = ""
+        if serialized_target:
+            validation = validate_tag_placeholders(serialized_target, row.tag_tokens)
+            warning = _merge_warning_parts(
+                *row.tag_warnings,
+                *row.target_tag_warnings,
+                *validation.warnings,
+            )
+            auto_target = restore_tags(serialized_target, row.tag_tokens)
         if auto_target:
             autofilled_count += 1
-        result_rows.append(RowFillResult(row=row, unit=unit, auto_target=auto_target))
+        result_rows.append(
+            RowFillResult(row=row, unit=unit, auto_target=auto_target, warning=warning)
+        )
 
     return rows, units, result_rows, autofilled_count
 
@@ -296,6 +314,9 @@ def _build_translation_units(
         elif suggested:
             target_unit = suggested
             target_unit_source = "existing_target"
+        elif is_tag_only_segment(source_unit):
+            target_unit = source_unit
+            target_unit_source = "tag_only"
         elif _is_non_translatable_segment(source_unit):
             target_unit = source_unit
             target_unit_source = "non_translatable"
@@ -384,8 +405,16 @@ def _unit_warning(
     items: Iterable[RowItem],
 ) -> str:
     warnings: list[str] = []
-    source_placeholders = set(PLACEHOLDER_RE.findall(source_unit))
-    target_placeholders = set(PLACEHOLDER_RE.findall(target_unit))
+    source_placeholders = {
+        placeholder
+        for placeholder in PLACEHOLDER_RE.findall(source_unit)
+        if not is_tag_placeholder(placeholder)
+    }
+    target_placeholders = {
+        placeholder
+        for placeholder in PLACEHOLDER_RE.findall(target_unit)
+        if not is_tag_placeholder(placeholder)
+    }
 
     if unit_type == "template" and target_unit and source_placeholders - target_placeholders:
         warnings.append("target_unit is missing source variables")
@@ -407,6 +436,10 @@ def _unit_warning(
         warnings.append("multiple existing target patterns found")
 
     return "; ".join(warnings)
+
+
+def _merge_warning_parts(*warnings: str) -> str:
+    return "; ".join(warning for warning in warnings if warning)
 
 
 def _format_rate(numerator: int, denominator: int) -> str:
