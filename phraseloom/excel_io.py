@@ -17,85 +17,102 @@ def _read_source_rows(
     input_path: Path, source_col: str | int, target_col: str | int | None
 ) -> list[RowItem]:
     wb = load_workbook(input_path, read_only=True, data_only=True)
-    ws = wb.worksheets[0]
-    source_index = _resolve_column(ws, source_col)
-    target_index = _resolve_column(ws, target_col) if target_col is not None else None
+    try:
+        ws = wb.worksheets[0]
+        source_index = _resolve_column(ws, source_col)
+        target_index = _resolve_column(ws, target_col) if target_col is not None else None
 
-    rows: list[RowItem] = []
-    seen_source = False
-    blank_source_run = 0
-    for row_number, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        source_value = _cell_value(row, source_index)
-        if source_value is None or str(source_value).strip() == "":
-            if seen_source:
-                blank_source_run += 1
-                if blank_source_run >= 1000:
-                    break
-            continue
-        seen_source = True
+        rows: list[RowItem] = []
+        seen_source = False
         blank_source_run = 0
-        source = str(source_value).strip()
-        target_value = _cell_value(row, target_index) if target_index else ""
-        existing_target = "" if target_value is None else str(target_value).strip()
-        rows.append(
-            RowItem(row_number, source, existing_target, parse_template(source), tuple(row))
-        )
+        for row_number, row in enumerate(
+            ws.iter_rows(min_row=2, values_only=True), start=2
+        ):
+            source_value = _cell_value(row, source_index)
+            if source_value is None or str(source_value).strip() == "":
+                if seen_source:
+                    blank_source_run += 1
+                    if blank_source_run >= 1000:
+                        break
+                continue
+            seen_source = True
+            blank_source_run = 0
+            source = str(source_value).strip()
+            target_value = _cell_value(row, target_index) if target_index else ""
+            existing_target = "" if target_value is None else str(target_value).strip()
+            rows.append(
+                RowItem(
+                    row_number,
+                    source,
+                    existing_target,
+                    parse_template(source),
+                    tuple(row),
+                )
+            )
 
-    return rows
+        return rows
+    finally:
+        wb.close()
 
 
 def _load_translated_units(path: Path) -> dict[tuple[str, str], str]:
     wb = load_workbook(path, read_only=True, data_only=True)
-    if schema.TM_PAIRS_SHEET in wb.sheetnames:
-        return _load_unit_sheet(wb[schema.TM_PAIRS_SHEET], schema.TM_PAIRS_SHEET)
+    try:
+        if schema.TM_PAIRS_SHEET in wb.sheetnames:
+            return _load_unit_sheet(wb[schema.TM_PAIRS_SHEET], schema.TM_PAIRS_SHEET)
 
-    if schema.TRANSLATION_UNITS_SHEET in wb.sheetnames:
-        return _load_unit_sheet(
-            wb[schema.TRANSLATION_UNITS_SHEET], schema.TRANSLATION_UNITS_SHEET
-        )
-
-    if schema.TO_TRANSLATE_SHEET in wb.sheetnames:
-        units = _load_unit_sheet(wb[schema.TO_TRANSLATE_SHEET], schema.TO_TRANSLATE_SHEET)
-        if schema.PREFILLED_UNITS_SHEET in wb.sheetnames:
-            units.update(
-                _load_unit_sheet(
-                    wb[schema.PREFILLED_UNITS_SHEET],
-                    schema.PREFILLED_UNITS_SHEET,
-                )
-            )
-        return units
-
-    if schema.TEMPLATE_REVIEW_SHEET not in wb.sheetnames:
-        supported = ", ".join(
-            [
-                schema.TM_PAIRS_SHEET,
+        if schema.TRANSLATION_UNITS_SHEET in wb.sheetnames:
+            return _load_unit_sheet(
+                wb[schema.TRANSLATION_UNITS_SHEET],
                 schema.TRANSLATION_UNITS_SHEET,
-                schema.TO_TRANSLATE_SHEET,
-                schema.TEMPLATE_REVIEW_SHEET,
-            ]
-        )
-        raise TranslationUnitLoadError(
-            f"Workbook {path} does not contain a supported translation sheet. "
-            f"Expected one of: {supported}"
-        )
+            )
 
-    ws = wb[schema.TEMPLATE_REVIEW_SHEET]
-    headers = _header_values(ws)
-    indices = _require_columns(
-        headers,
-        schema.TEMPLATE_REVIEW_SHEET,
-        schema.TEMPLATE_REVIEW_REQUIRED_COLUMNS,
-    )
-    source_index = indices[schema.SOURCE_TEMPLATE_COLUMN]
-    target_index = indices[schema.TARGET_TEMPLATE_COLUMN]
+        if schema.TO_TRANSLATE_SHEET in wb.sheetnames:
+            units = _load_unit_sheet(
+                wb[schema.TO_TRANSLATE_SHEET], schema.TO_TRANSLATE_SHEET
+            )
+            if schema.PREFILLED_UNITS_SHEET in wb.sheetnames:
+                units.update(
+                    _load_unit_sheet(
+                        wb[schema.PREFILLED_UNITS_SHEET],
+                        schema.PREFILLED_UNITS_SHEET,
+                    )
+                )
+            return units
 
-    templates: dict[tuple[str, str], str] = {}
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        source_template = row[source_index] if source_index < len(row) else None
-        target_template = row[target_index] if target_index < len(row) else None
-        if source_template and target_template:
-            templates[("template", str(source_template))] = str(target_template)
-    return templates
+        if schema.TEMPLATE_REVIEW_SHEET not in wb.sheetnames:
+            supported = ", ".join(
+                [
+                    schema.TM_PAIRS_SHEET,
+                    schema.TRANSLATION_UNITS_SHEET,
+                    schema.TO_TRANSLATE_SHEET,
+                    schema.TEMPLATE_REVIEW_SHEET,
+                ]
+            )
+            raise TranslationUnitLoadError(
+                f"Workbook {path} does not contain a supported translation sheet. "
+                f"Expected one of: {supported}"
+            )
+
+        ws = wb[schema.TEMPLATE_REVIEW_SHEET]
+        headers = _header_values(ws)
+        indices = _require_columns(
+            headers,
+            schema.TEMPLATE_REVIEW_SHEET,
+            schema.TEMPLATE_REVIEW_REQUIRED_COLUMNS,
+        )
+        source_index = indices[schema.SOURCE_TEMPLATE_COLUMN]
+        target_index = indices[schema.TARGET_TEMPLATE_COLUMN]
+
+        templates: dict[tuple[str, str], str] = {}
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            source_template = row[source_index] if source_index < len(row) else None
+            target_template = row[target_index] if target_index < len(row) else None
+            if source_template and target_template:
+                templates[("template", str(source_template))] = str(target_template)
+        return templates
+    finally:
+        wb.close()
 
 
 def _load_unit_sheet(ws, sheet_name: str | None = None) -> dict[tuple[str, str], str]:
@@ -158,8 +175,11 @@ def _cell_value(row: tuple[object, ...], one_based_index: int | None) -> object 
 
 def _read_headers(input_path: Path) -> list[str]:
     wb = load_workbook(input_path, read_only=True, data_only=True)
-    ws = wb.worksheets[0]
-    return _header_values(ws, fallback=True)
+    try:
+        ws = wb.worksheets[0]
+        return _header_values(ws, fallback=True)
+    finally:
+        wb.close()
 
 
 def _header_values(ws, *, fallback: bool = False) -> list[str]:
@@ -432,15 +452,18 @@ def _write_target_column_workbook(
     result_rows: list[tuple[RowItem, TranslationUnit | None, str | None]],
 ) -> None:
     wb = load_workbook(input_path)
-    ws = wb.worksheets[0]
-    target_index = _resolve_or_create_column(ws, target_col)
+    try:
+        ws = wb.worksheets[0]
+        target_index = _resolve_or_create_column(ws, target_col)
 
-    for row, _, auto_target in result_rows:
-        if auto_target:
-            ws.cell(row=row.row_number, column=target_index).value = auto_target
+        for row, _, auto_target in result_rows:
+            if auto_target:
+                ws.cell(row=row.row_number, column=target_index).value = auto_target
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wb.save(output_path)
+    finally:
+        wb.close()
 
 
 def _resolve_or_create_column(ws, col: str | int) -> int:
