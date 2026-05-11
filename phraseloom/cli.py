@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import Iterable
 
+from .errors import ConfigError, PhraseLoomError
 from .excel_io import (
     _default_extract_output_path,
     _default_fill_output_path,
@@ -26,13 +27,21 @@ def _parse_examples(raw_examples: Iterable[str]) -> list[tuple[str, str]]:
     examples: list[tuple[str, str]] = []
     for raw in raw_examples:
         if "=" not in raw:
-            raise ValueError(f"Example must look like SOURCE=TARGET: {raw!r}")
+            raise ConfigError(f"Example must look like SOURCE=TARGET: {raw!r}")
         source, target = raw.split("=", 1)
         examples.append((source.strip(), target.strip()))
     return examples
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _dispatch(argv)
+    except PhraseLoomError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+
+
+def _dispatch(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
 
     if argv and argv[0] in {"-h", "--help"}:
@@ -141,7 +150,7 @@ def _main_fill(argv: list[str]) -> int:
     target_col = _normalize_optional_column(args.target_col)
     if args.mode == "target-column":
         if target_col is None:
-            raise ValueError("target-column mode needs a target column")
+            raise ConfigError("target-column mode needs a target column")
         stats = fill_target_column_workbook(
             args.input,
             output,
@@ -232,8 +241,8 @@ def _print_top_level_help() -> None:
     print("Localization Workflow")
     print()
     print("Interactive:")
-    print("  python template_demo.py")
-    print("  python template_demo.py interactive")
+    print("  phraseloom")
+    print("  phraseloom interactive")
     print()
     print("Steps:")
     print("  1) Build TM from completed Excel")
@@ -241,11 +250,14 @@ def _print_top_level_help() -> None:
     print("  3) Fill source from translated file")
     print()
     print("Commands:")
+    print("  phraseloom tm-extract COMPLETED_TM.xlsx [options]")
+    print("  phraseloom extract SOURCE.xlsx [options]")
+    print("  phraseloom fill SOURCE.xlsx --templates TEMPLATE_PACK.xlsx [options]")
+    print()
+    print("Legacy:")
     print("  python template_demo.py tm-extract COMPLETED_TM.xlsx [options]")
     print("  python template_demo.py extract SOURCE.xlsx [options]")
     print("  python template_demo.py fill SOURCE.xlsx --templates TEMPLATE_PACK.xlsx [options]")
-    print()
-    print("Legacy:")
     print("  python template_demo.py SOURCE.xlsx [options]")
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .errors import ConfigError
 from .excel_io import (
     _default_extract_output_path,
     _default_fill_output_path,
@@ -112,7 +113,7 @@ def _interactive_fill() -> int:
 
     if mode == "target-column":
         if target_col is None:
-            raise ValueError("target-column mode needs a target column")
+            raise ConfigError("target-column mode needs a target column")
         stats = fill_target_column_workbook(
             input_path,
             output_path,

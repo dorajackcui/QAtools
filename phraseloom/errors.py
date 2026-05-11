@@ -13,6 +13,13 @@ class WorkbookFormatError(PhraseLoomError):
 class ColumnNotFoundError(WorkbookFormatError):
     """Raised when a requested workbook column is missing."""
 
+    def __init__(self, column: str | int | None, available_columns: list[str]) -> None:
+        available = ", ".join(available_columns) if available_columns else "(none)"
+        super().__init__(
+            f"Column {column!r} not found in header row.\n"
+            f"Available columns: {available}"
+        )
+
 
 class TranslationUnitLoadError(WorkbookFormatError):
     """Raised when translated units cannot be loaded from a workbook."""

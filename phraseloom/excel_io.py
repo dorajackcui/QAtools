@@ -7,6 +7,8 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from . import workbook_schema as schema
+from .errors import ColumnNotFoundError, TranslationUnitLoadError
 from .models import RowItem, TranslationUnit
 from .template_engine import PLACEHOLDER_RE, parse_template
 
@@ -44,74 +46,48 @@ def _read_source_rows(
 
 def _load_translated_units(path: Path) -> dict[tuple[str, str], str]:
     wb = load_workbook(path, read_only=True, data_only=True)
-    if "tm_pairs" in wb.sheetnames:
-        ws = wb["tm_pairs"]
-        headers = [
-            str(cell.value).strip() if cell.value is not None else "" for cell in ws[1]
-        ]
-        try:
-            type_index = headers.index("unit_type")
-            source_index = headers.index("source_unit")
-            target_index = headers.index("target_unit")
-        except ValueError:
-            return {}
+    if schema.TM_PAIRS_SHEET in wb.sheetnames:
+        return _load_unit_sheet(wb[schema.TM_PAIRS_SHEET], schema.TM_PAIRS_SHEET)
 
-        units: dict[tuple[str, str], str] = {}
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            unit_type = row[type_index] if type_index < len(row) else None
-            source_unit = row[source_index] if source_index < len(row) else None
-            target_unit = row[target_index] if target_index < len(row) else None
-            if unit_type and source_unit and target_unit:
-                units[(str(unit_type), str(source_unit))] = str(target_unit)
-        return units
+    if schema.TRANSLATION_UNITS_SHEET in wb.sheetnames:
+        return _load_unit_sheet(
+            wb[schema.TRANSLATION_UNITS_SHEET], schema.TRANSLATION_UNITS_SHEET
+        )
 
-    if "translation_units" in wb.sheetnames:
-        ws = wb["translation_units"]
-        headers = [
-            str(cell.value).strip() if cell.value is not None else "" for cell in ws[1]
-        ]
-        try:
-            type_index = headers.index("unit_type")
-            source_index = headers.index("source_unit")
-            target_index = headers.index("target_unit")
-        except ValueError:
-            return {}
-
-        units: dict[tuple[str, str], str] = {}
-        status_index = headers.index("status") if "status" in headers else None
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            unit_type = row[type_index] if type_index < len(row) else None
-            source_unit = row[source_index] if source_index < len(row) else None
-            target_unit = row[target_index] if target_index < len(row) else None
-            status = (
-                row[status_index]
-                if status_index is not None and status_index < len(row)
-                else None
+    if schema.TO_TRANSLATE_SHEET in wb.sheetnames:
+        units = _load_unit_sheet(wb[schema.TO_TRANSLATE_SHEET], schema.TO_TRANSLATE_SHEET)
+        if schema.PREFILLED_UNITS_SHEET in wb.sheetnames:
+            units.update(
+                _load_unit_sheet(
+                    wb[schema.PREFILLED_UNITS_SHEET],
+                    schema.PREFILLED_UNITS_SHEET,
+                )
             )
-            if (
-                unit_type
-                and source_unit
-                and target_unit
-                and str(status or "").strip().lower() != "skip"
-            ):
-                units[(str(unit_type), str(source_unit))] = str(target_unit)
         return units
 
-    if "to_translate" in wb.sheetnames:
-        units = _load_unit_sheet(wb["to_translate"])
-        if "prefilled_units" in wb.sheetnames:
-            units.update(_load_unit_sheet(wb["prefilled_units"]))
-        return units
+    if schema.TEMPLATE_REVIEW_SHEET not in wb.sheetnames:
+        supported = ", ".join(
+            [
+                schema.TM_PAIRS_SHEET,
+                schema.TRANSLATION_UNITS_SHEET,
+                schema.TO_TRANSLATE_SHEET,
+                schema.TEMPLATE_REVIEW_SHEET,
+            ]
+        )
+        raise TranslationUnitLoadError(
+            f"Workbook {path} does not contain a supported translation sheet. "
+            f"Expected one of: {supported}"
+        )
 
-    if "template_review" not in wb.sheetnames:
-        return {}
-    ws = wb["template_review"]
-    headers = [str(cell.value).strip() if cell.value is not None else "" for cell in ws[1]]
-    try:
-        source_index = headers.index("source_template")
-        target_index = headers.index("target_template")
-    except ValueError:
-        return {}
+    ws = wb[schema.TEMPLATE_REVIEW_SHEET]
+    headers = _header_values(ws)
+    indices = _require_columns(
+        headers,
+        schema.TEMPLATE_REVIEW_SHEET,
+        schema.TEMPLATE_REVIEW_REQUIRED_COLUMNS,
+    )
+    source_index = indices[schema.SOURCE_TEMPLATE_COLUMN]
+    target_index = indices[schema.TARGET_TEMPLATE_COLUMN]
 
     templates: dict[tuple[str, str], str] = {}
     for row in ws.iter_rows(min_row=2, values_only=True):
@@ -122,19 +98,20 @@ def _load_translated_units(path: Path) -> dict[tuple[str, str], str]:
     return templates
 
 
-def _load_unit_sheet(ws) -> dict[tuple[str, str], str]:
-    headers = [
-        str(cell.value).strip() if cell.value is not None else "" for cell in ws[1]
-    ]
-    try:
-        type_index = headers.index("unit_type")
-        source_index = headers.index("source_unit")
-        target_index = headers.index("target_unit")
-    except ValueError:
-        return {}
+def _load_unit_sheet(ws, sheet_name: str | None = None) -> dict[tuple[str, str], str]:
+    sheet_name = sheet_name or ws.title
+    headers = _header_values(ws)
+    indices = _require_columns(
+        headers,
+        sheet_name,
+        schema.TRANSLATION_UNIT_REQUIRED_COLUMNS,
+    )
+    type_index = indices[schema.UNIT_TYPE_COLUMN]
+    source_index = indices[schema.SOURCE_UNIT_COLUMN]
+    target_index = indices[schema.TARGET_UNIT_COLUMN]
 
     units: dict[tuple[str, str], str] = {}
-    status_index = headers.index("status") if "status" in headers else None
+    status_index = _optional_column(headers, schema.STATUS_COLUMN)
     for row in ws.iter_rows(min_row=2, values_only=True):
         unit_type = row[type_index] if type_index < len(row) else None
         source_unit = row[source_index] if source_index < len(row) else None
@@ -155,8 +132,9 @@ def _load_unit_sheet(ws) -> dict[tuple[str, str], str]:
 
 
 def _resolve_column(ws, col: str | int | None) -> int:
+    headers = _header_values(ws, fallback=True)
     if col is None:
-        raise ValueError("Column cannot be None")
+        raise ColumnNotFoundError(col, headers)
     if isinstance(col, int):
         return col
     if str(col).isdigit():
@@ -168,7 +146,7 @@ def _resolve_column(ws, col: str | int | None) -> int:
         value = "" if cell.value is None else str(cell.value).strip()
         if value == wanted or value.lower() == wanted_lower:
             return cell.column
-    raise ValueError(f"Column {col!r} not found in header row")
+    raise ColumnNotFoundError(col, headers)
 
 
 def _cell_value(row: tuple[object, ...], one_based_index: int | None) -> object | None:
@@ -181,10 +159,48 @@ def _cell_value(row: tuple[object, ...], one_based_index: int | None) -> object 
 def _read_headers(input_path: Path) -> list[str]:
     wb = load_workbook(input_path, read_only=True, data_only=True)
     ws = wb.worksheets[0]
-    return [
-        str(cell.value).strip() if cell.value is not None else f"column_{cell.column}"
-        for cell in ws[1]
-    ]
+    return _header_values(ws, fallback=True)
+
+
+def _header_values(ws, *, fallback: bool = False) -> list[str]:
+    headers: list[str] = []
+    for cell in ws[1]:
+        if cell.value is None or str(cell.value).strip() == "":
+            if fallback:
+                headers.append(f"column_{cell.column}")
+            else:
+                headers.append("")
+            continue
+        headers.append(str(cell.value).strip())
+    return headers
+
+
+def _optional_column(headers: list[str], column: str) -> int | None:
+    return headers.index(column) if column in headers else None
+
+
+def _require_columns(
+    headers: list[str], sheet_name: str, required_columns: list[str]
+) -> dict[str, int]:
+    missing = [column for column in required_columns if column not in headers]
+    if missing:
+        available = ", ".join(column for column in headers if column) or "(none)"
+        raise TranslationUnitLoadError(
+            f"Sheet {sheet_name!r} is missing required columns: "
+            f"{', '.join(missing)}.\nAvailable columns: {available}"
+        )
+    return {column: headers.index(column) for column in required_columns}
+
+
+def _append_schema_version(summary) -> None:
+    summary.append([schema.SCHEMA_VERSION_KEY, schema.SCHEMA_VERSION])
+
+
+def _add_metadata_sheet(wb) -> None:
+    metadata = wb.create_sheet(schema.METADATA_SHEET)
+    metadata.append(schema.METADATA_COLUMNS)
+    metadata.append([schema.SCHEMA_VERSION_KEY, schema.SCHEMA_VERSION])
+    metadata.sheet_state = "hidden"
 
 
 def _default_work_dir(input_path: Path) -> Path:
@@ -219,7 +235,7 @@ def _write_output_workbook(
 ) -> None:
     wb = Workbook()
     summary = wb.active
-    summary.title = "summary"
+    summary.title = schema.SUMMARY_SHEET
 
     template_units = [unit for unit in units if unit.unit_type == "template"]
     segment_units = [unit for unit in units if unit.unit_type == "segment"]
@@ -238,26 +254,10 @@ def _write_output_workbook(
     ]
     for row in summary_rows:
         summary.append(row)
+    _append_schema_version(summary)
 
-    review = wb.create_sheet("translation_units")
-    review.append(
-        [
-            "unit_id",
-            "unit_type",
-            "source_unit",
-            "target_unit",
-            "coverage_count",
-            "unique_source_count",
-            "variables",
-            "status",
-            "sample_sources",
-            "row_numbers",
-            "target_unit_source",
-            "suggested_target_unit",
-            "warning",
-            "translator_note",
-        ]
-    )
+    review = wb.create_sheet(schema.TRANSLATION_UNITS_SHEET)
+    review.append(schema.TRANSLATION_UNIT_COLUMNS)
     for unit in units:
         review.append(
             [
@@ -278,20 +278,8 @@ def _write_output_workbook(
             ]
         )
 
-    todo = wb.create_sheet("to_translate")
-    todo.append(
-        [
-            "unit_id",
-            "unit_type",
-            "source_unit",
-            "target_unit",
-            "coverage_count",
-            "sample_sources",
-            "variables",
-            "warning",
-            "translator_note",
-        ]
-    )
+    todo = wb.create_sheet(schema.TO_TRANSLATE_SHEET)
+    todo.append(schema.TO_TRANSLATE_COLUMNS)
     for unit in units:
         if unit.target_unit:
             continue
@@ -309,22 +297,8 @@ def _write_output_workbook(
             ]
         )
 
-    result = wb.create_sheet("source_map")
-    result.append(
-        [
-            "row_number",
-            "source",
-            "unit_id",
-            "unit_type",
-            "source_unit",
-            "variable_values",
-            "target_unit",
-            "auto_target",
-            "existing_target",
-            "fill_status",
-            "warning",
-        ]
-    )
+    result = wb.create_sheet(schema.SOURCE_MAP_SHEET)
+    result.append(schema.SOURCE_MAP_COLUMNS)
     for row, unit, auto_target in result_rows:
         if unit is None:
             warning = "no translation unit"
@@ -355,18 +329,9 @@ def _write_output_workbook(
             ]
         )
 
-    filled = wb.create_sheet("filled_workbook")
+    filled = wb.create_sheet(schema.FILLED_WORKBOOK_SHEET)
     headers = _read_headers(input_path)
-    filled.append(
-        headers
-        + [
-            "auto_target",
-            "fill_status",
-            "unit_id",
-            "unit_type",
-            "warning",
-        ]
-    )
+    filled.append(headers + schema.FILLED_WORKBOOK_EXTRA_COLUMNS)
     for row, unit, auto_target in result_rows:
         if unit is None:
             warning = "no translation unit"
@@ -391,8 +356,8 @@ def _write_output_workbook(
             ]
         )
 
-    qa = wb.create_sheet("qa_report")
-    qa.append(["check", "count"])
+    qa = wb.create_sheet(schema.QA_REPORT_SHEET)
+    qa.append(schema.QA_REPORT_COLUMNS)
     qa.append(
         [
             "missing_target_unit",
@@ -416,20 +381,8 @@ def _write_to_translate_workbook(
 ) -> None:
     wb = Workbook()
     todo = wb.active
-    todo.title = "to_translate"
-    todo.append(
-        [
-            "unit_id",
-            "unit_type",
-            "source_unit",
-            "target_unit",
-            "coverage_count",
-            "sample_sources",
-            "variables",
-            "warning",
-            "translator_note",
-        ]
-    )
+    todo.title = schema.TO_TRANSLATE_SHEET
+    todo.append(schema.TO_TRANSLATE_COLUMNS)
     for unit in units:
         if unit.target_unit:
             continue
@@ -447,17 +400,8 @@ def _write_to_translate_workbook(
             ]
         )
 
-    prefilled = wb.create_sheet("prefilled_units")
-    prefilled.append(
-        [
-            "unit_id",
-            "unit_type",
-            "source_unit",
-            "target_unit",
-            "coverage_count",
-            "target_unit_source",
-        ]
-    )
+    prefilled = wb.create_sheet(schema.PREFILLED_UNITS_SHEET)
+    prefilled.append(schema.PREFILLED_UNIT_COLUMNS)
     for unit in units:
         if not unit.target_unit:
             continue
@@ -472,6 +416,7 @@ def _write_to_translate_workbook(
             ]
         )
     prefilled.sheet_state = "hidden"
+    _add_metadata_sheet(wb)
 
     for ws in wb.worksheets:
         _style_sheet(ws)
@@ -501,7 +446,7 @@ def _write_target_column_workbook(
 def _resolve_or_create_column(ws, col: str | int) -> int:
     try:
         return _resolve_column(ws, col)
-    except ValueError:
+    except ColumnNotFoundError:
         if isinstance(col, int) or str(col).isdigit():
             raise
         column = ws.max_column + 1
@@ -517,7 +462,7 @@ def _write_tm_workbook(
 ) -> None:
     wb = Workbook()
     summary = wb.active
-    summary.title = "summary"
+    summary.title = schema.SUMMARY_SHEET
 
     template_units = [unit for unit in units if unit.unit_type == "template"]
     segment_units = [unit for unit in units if unit.unit_type == "segment"]
@@ -535,23 +480,10 @@ def _write_tm_workbook(
     ]
     for row in summary_rows:
         summary.append(row)
+    _append_schema_version(summary)
 
-    pairs = wb.create_sheet("tm_pairs")
-    pairs.append(
-        [
-            "tm_id",
-            "unit_type",
-            "source_unit",
-            "target_unit",
-            "coverage_count",
-            "unique_source_count",
-            "variables",
-            "sample_sources",
-            "sample_targets",
-            "row_numbers",
-            "warning",
-        ]
-    )
+    pairs = wb.create_sheet(schema.TM_PAIRS_SHEET)
+    pairs.append(schema.TM_PAIR_COLUMNS)
     for index, unit in enumerate(units, start=1):
         pairs.append(
             [
@@ -573,18 +505,8 @@ def _write_tm_workbook(
             ]
         )
 
-    tm_map = wb.create_sheet("tm_map")
-    tm_map.append(
-        [
-            "row_number",
-            "source",
-            "target",
-            "unit_type",
-            "source_unit",
-            "target_unit",
-            "variable_values",
-        ]
-    )
+    tm_map = wb.create_sheet(schema.TM_SOURCE_MAP_SHEET)
+    tm_map.append(schema.TM_SOURCE_MAP_COLUMNS)
     unit_by_row_number = {
         item.row_number: unit for unit in units for item in unit.items
     }
@@ -605,8 +527,8 @@ def _write_tm_workbook(
             ]
         )
 
-    qa = wb.create_sheet("qa_report")
-    qa.append(["check", "count"])
+    qa = wb.create_sheet(schema.QA_REPORT_SHEET)
+    qa.append(schema.QA_REPORT_COLUMNS)
     qa.append(["tm_pairs", len(units)])
     qa.append(["template_pairs", len(template_units)])
     qa.append(["segment_pairs", len(segment_units)])

@@ -74,6 +74,7 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(
                 summary,
                 {
+                    "schema_version": "1.0",
                     "total_source_rows": 3,
                     "total_translation_units": 2,
                     "already_filled_units": 1,
@@ -243,6 +244,7 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(
                 summary,
                 {
+                    "schema_version": "1.0",
                     "total_source_rows": 3,
                     "total_translation_units": 3,
                     "already_filled_units": 2,
@@ -295,7 +297,10 @@ class TemplateDemoTests(unittest.TestCase):
             standalone_todo = source_input.parent / "source_l10n" / "source_to_translate.xlsx"
             self.assertTrue(standalone_todo.exists())
             todo_book = load_workbook(standalone_todo, data_only=True)
-            self.assertEqual(todo_book.sheetnames, ["to_translate", "prefilled_units"])
+            self.assertEqual(
+                todo_book.sheetnames,
+                ["to_translate", "prefilled_units", "_metadata"],
+            )
             self.assertEqual(todo_book["prefilled_units"].sheet_state, "hidden")
 
     def test_non_translatable_numeric_and_symbol_segments_are_autofilled(self):
@@ -455,6 +460,186 @@ class TemplateDemoTests(unittest.TestCase):
             Path("/tmp/project/source_l10n/source_tm_pairs.xlsx"),
         )
 
+    def test_missing_source_column_reports_available_headers(self):
+        from phraseloom.errors import ColumnNotFoundError
+        from phraseloom.excel_io import _read_source_rows
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "input.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Login failed", "登录失败"])
+            wb.save(input_path)
+
+            with self.assertRaises(ColumnNotFoundError) as raised:
+                _read_source_rows(input_path, "missing", "target")
+
+        message = str(raised.exception)
+        self.assertIn("Column 'missing' not found", message)
+        self.assertIn("Available columns: source, target", message)
+
+    def test_malformed_translated_workbook_reports_required_columns(self):
+        from phraseloom.errors import TranslationUnitLoadError
+        from phraseloom.excel_io import _load_translated_units
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workbook_path = Path(tmp) / "bad_to_translate.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "to_translate"
+            ws.append(["unit_type", "source_unit"])
+            ws.append(["segment", "Login failed"])
+            wb.save(workbook_path)
+
+            with self.assertRaises(TranslationUnitLoadError) as raised:
+                _load_translated_units(workbook_path)
+
+        message = str(raised.exception)
+        self.assertIn("to_translate", message)
+        self.assertIn("target_unit", message)
+        self.assertIn("Available columns: unit_type, source_unit", message)
+
+    def test_translated_workbook_without_supported_sheet_reports_expected_sheets(self):
+        from phraseloom.errors import TranslationUnitLoadError
+        from phraseloom.excel_io import _load_translated_units
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workbook_path = Path(tmp) / "unsupported.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "notes"
+            ws.append(["source", "target"])
+            ws.append(["Login failed", "登录失败"])
+            wb.save(workbook_path)
+
+            with self.assertRaises(TranslationUnitLoadError) as raised:
+                _load_translated_units(workbook_path)
+
+        message = str(raised.exception)
+        self.assertIn("does not contain a supported translation sheet", message)
+        self.assertIn("tm_pairs", message)
+        self.assertIn("translation_units", message)
+        self.assertIn("to_translate", message)
+
+    def test_generated_workbooks_include_schema_version_metadata(self):
+        from phraseloom.workflow import generate_tm_pairs, generate_workbook
+        from phraseloom.workbook_schema import (
+            METADATA_SHEET,
+            SCHEMA_VERSION,
+            SCHEMA_VERSION_KEY,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_input = Path(tmp) / "source.xlsx"
+            pack_output = Path(tmp) / "pack.xlsx"
+            tm_input = Path(tmp) / "tm.xlsx"
+            tm_output = Path(tmp) / "tm_pairs.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Login failed", ""])
+            ws.append(["Login failed", ""])
+            wb.save(source_input)
+
+            generate_workbook(
+                source_input,
+                pack_output,
+                source_col="source",
+                target_col="target",
+                min_group_size=2,
+                use_existing_targets=False,
+            )
+
+            pack = load_workbook(pack_output, data_only=True)
+            pack_summary = {
+                row[0].value: row[1].value
+                for row in pack["summary"].iter_rows(min_row=1, max_col=2)
+            }
+            self.assertEqual(pack_summary[SCHEMA_VERSION_KEY], SCHEMA_VERSION)
+
+            standalone_todo = source_input.parent / "source_l10n" / "source_to_translate.xlsx"
+            todo = load_workbook(standalone_todo, data_only=True)
+            self.assertIn(METADATA_SHEET, todo.sheetnames)
+            self.assertEqual(todo[METADATA_SHEET].sheet_state, "hidden")
+            todo_metadata = {
+                row[0].value: row[1].value
+                for row in todo[METADATA_SHEET].iter_rows(min_row=2, max_col=2)
+            }
+            self.assertEqual(todo_metadata[SCHEMA_VERSION_KEY], SCHEMA_VERSION)
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Login failed", "登录失败"])
+            ws.append(["Login failed", "登录失败"])
+            wb.save(tm_input)
+
+            generate_tm_pairs(
+                tm_input,
+                tm_output,
+                source_col="source",
+                target_col="target",
+                min_group_size=2,
+            )
+
+            tm = load_workbook(tm_output, data_only=True)
+            tm_summary = {
+                row[0].value: row[1].value
+                for row in tm["summary"].iter_rows(min_row=1, max_col=2)
+            }
+            self.assertEqual(tm_summary[SCHEMA_VERSION_KEY], SCHEMA_VERSION)
+
+    def test_cli_reports_phraseloom_errors_without_traceback(self):
+        from phraseloom.cli import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "input.xlsx"
+            output_path = Path(tmp) / "output.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Login failed", ""])
+            wb.save(input_path)
+
+            stderr = StringIO()
+            with patch("sys.stderr", stderr):
+                exit_code = main(
+                    [
+                        "extract",
+                        str(input_path),
+                        "-o",
+                        str(output_path),
+                        "--source-col",
+                        "missing",
+                        "--target-col",
+                        "target",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Column 'missing' not found", stderr.getvalue())
+        self.assertIn("Available columns: source, target", stderr.getvalue())
+        self.assertFalse(output_path.exists())
+
+    def test_top_level_help_promotes_package_cli(self):
+        from phraseloom.cli import main
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            exit_code = main(["--help"])
+
+        self.assertEqual(exit_code, 0)
+        help_text = stdout.getvalue()
+        self.assertIn("phraseloom tm-extract COMPLETED_TM.xlsx", help_text)
+        self.assertIn("phraseloom extract SOURCE.xlsx", help_text)
+        self.assertIn("python template_demo.py SOURCE.xlsx", help_text)
+
     def test_interactive_path_input_accepts_copied_shell_quotes(self):
         from phraseloom.interactive import _user_path
 
@@ -561,6 +746,7 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(
                 summary,
                 {
+                    "schema_version": "1.0",
                     "total_source_rows": 2,
                     "total_translation_units": 1,
                     "already_filled_units": 0,
