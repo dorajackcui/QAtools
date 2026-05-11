@@ -67,7 +67,6 @@ __all__ = [
     "_write_target_column_workbook",
     "_write_tm_workbook",
     "_write_to_translate_workbook",
-    "NAMED_PLACEHOLDER_RE",
     "PLACEHOLDER_RE",
     "VAR_RE",
     "apply_target_template",
