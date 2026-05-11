@@ -9,7 +9,7 @@ from openpyxl.utils import get_column_letter
 
 from . import workbook_schema as schema
 from .errors import ColumnNotFoundError, TranslationUnitLoadError
-from .models import RowItem, TranslationUnit
+from .models import RowFillResult, RowItem, TranslationUnit
 from .template_engine import PLACEHOLDER_RE, parse_template
 
 
@@ -251,7 +251,7 @@ def _write_output_workbook(
     output_path: Path,
     input_path: Path,
     units: list[TranslationUnit],
-    result_rows: list[tuple[RowItem, TranslationUnit | None, str | None]],
+    result_rows: list[RowFillResult],
 ) -> None:
     wb = Workbook()
     summary = wb.active
@@ -262,7 +262,7 @@ def _write_output_workbook(
     total_source_segments = len(result_rows)
     prefilled_units = sum(1 for unit in units if unit.target_unit)
     new_units = sum(1 for unit in units if not unit.target_unit)
-    filled_rows = sum(1 for _, _, auto in result_rows if auto)
+    filled_rows = sum(1 for result_row in result_rows if result_row.auto_target)
     new_rows = sum(unit.coverage_count for unit in units if not unit.target_unit)
     summary_rows = [
         ("total_source_rows", total_source_segments),
@@ -319,7 +319,10 @@ def _write_output_workbook(
 
     result = wb.create_sheet(schema.SOURCE_MAP_SHEET)
     result.append(schema.SOURCE_MAP_COLUMNS)
-    for row, unit, auto_target in result_rows:
+    for result_row in result_rows:
+        row = result_row.row
+        unit = result_row.unit
+        auto_target = result_row.auto_target
         if unit is None:
             warning = "no translation unit"
             fill_status = "unit_not_found"
@@ -329,6 +332,7 @@ def _write_output_workbook(
         else:
             warning = unit.warning
             fill_status = "filled"
+        warning = _merge_warnings(warning, result_row.warning)
 
         result.append(
             [
@@ -352,7 +356,10 @@ def _write_output_workbook(
     filled = wb.create_sheet(schema.FILLED_WORKBOOK_SHEET)
     headers = _read_headers(input_path)
     filled.append(headers + schema.FILLED_WORKBOOK_EXTRA_COLUMNS)
-    for row, unit, auto_target in result_rows:
+    for result_row in result_rows:
+        row = result_row.row
+        unit = result_row.unit
+        auto_target = result_row.auto_target
         if unit is None:
             warning = "no translation unit"
             fill_status = "unit_not_found"
@@ -362,6 +369,7 @@ def _write_output_workbook(
         else:
             warning = unit.warning
             fill_status = "filled"
+        warning = _merge_warnings(warning, result_row.warning)
         original = list(row.original_values)
         if len(original) < len(headers):
             original.extend([None] * (len(headers) - len(original)))
@@ -381,10 +389,14 @@ def _write_output_workbook(
     qa.append(
         [
             "missing_target_unit",
-            sum(1 for _, unit, auto in result_rows if unit and not unit.target_unit),
+            sum(
+                1
+                for result_row in result_rows
+                if result_row.unit and not result_row.unit.target_unit
+            ),
         ]
     )
-    qa.append(["filled", sum(1 for _, _, auto in result_rows if auto)])
+    qa.append(["filled", sum(1 for result_row in result_rows if result_row.auto_target)])
     qa.append(["warning_units", sum(1 for unit in units if unit.warning)])
     qa.append(["template_units", len(template_units)])
     qa.append(["segment_units", len(segment_units)])
@@ -449,16 +461,19 @@ def _write_target_column_workbook(
     output_path: Path,
     input_path: Path,
     target_col: str | int,
-    result_rows: list[tuple[RowItem, TranslationUnit | None, str | None]],
+    result_rows: list[RowFillResult],
 ) -> None:
     wb = load_workbook(input_path)
     try:
         ws = wb.worksheets[0]
         target_index = _resolve_or_create_column(ws, target_col)
 
-        for row, _, auto_target in result_rows:
-            if auto_target:
-                ws.cell(row=row.row_number, column=target_index).value = auto_target
+        for result_row in result_rows:
+            if result_row.auto_target:
+                ws.cell(
+                    row=result_row.row.row_number,
+                    column=target_index,
+                ).value = result_row.auto_target
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         wb.save(output_path)
@@ -579,6 +594,10 @@ def _variables_summary(unit: TranslationUnit) -> str | None:
     return "; ".join(
         f"{placeholder}={','.join(values[:5])}" for placeholder, values in samples.items()
     )
+
+
+def _merge_warnings(*warnings: str) -> str:
+    return "; ".join(warning for warning in warnings if warning)
 
 
 def _style_sheet(ws) -> None:

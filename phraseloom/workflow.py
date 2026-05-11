@@ -14,7 +14,7 @@ from .excel_io import (
     _write_tm_workbook,
     _write_to_translate_workbook,
 )
-from .models import RowItem, TranslationUnit
+from .models import RowFillResult, RowItem, TranslationUnit
 from .template_engine import (
     PLACEHOLDER_RE,
     apply_target_template,
@@ -103,7 +103,7 @@ def _build_fill_context(
 ) -> tuple[
     list[RowItem],
     list[TranslationUnit],
-    list[tuple[RowItem, TranslationUnit | None, str | None]],
+    list[RowFillResult],
     int,
 ]:
     rows = _read_source_rows(input_path, source_col, target_col)
@@ -135,7 +135,7 @@ def _build_fill_context(
         )
         if auto_target:
             autofilled_count += 1
-        result_rows.append((row, unit, auto_target))
+        result_rows.append(RowFillResult(row=row, unit=unit, auto_target=auto_target))
 
     return rows, units, result_rows, autofilled_count
 

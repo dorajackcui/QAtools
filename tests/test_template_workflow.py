@@ -46,6 +46,20 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertEqual(match.template, "{t1_op}VIP{num1} Pack{t1_cl}")
         self.assertEqual(match.values, {"num1": "10"})
 
+    def test_row_item_carries_optional_tag_metadata(self):
+        from phraseloom.models import RowFillResult, RowItem
+        from phraseloom.template_engine import parse_template
+
+        row = RowItem(2, "VIP{num1}", "", parse_template("VIP10"), ("VIP10",))
+        result = RowFillResult(row=row, unit=None, auto_target=None, warning="tag warning")
+
+        self.assertEqual(row.raw_source, "")
+        self.assertEqual(row.raw_existing_target, "")
+        self.assertEqual(row.tag_tokens, ())
+        self.assertEqual(row.tag_warnings, ())
+        self.assertEqual(row.target_tag_warnings, ())
+        self.assertEqual(result.warning, "tag warning")
+
     def test_generated_workbook_prefills_auto_targets_from_cli_example(self):
         from phraseloom.workflow import generate_workbook
 

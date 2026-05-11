@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .tag_engine import TagToken
+
 
 @dataclass(frozen=True)
 class TemplateMatch:
@@ -17,6 +19,11 @@ class RowItem:
     existing_target: str
     match: TemplateMatch
     original_values: tuple[object, ...]
+    raw_source: str = ""
+    raw_existing_target: str = ""
+    tag_tokens: tuple[TagToken, ...] = ()
+    tag_warnings: tuple[str, ...] = ()
+    target_tag_warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -31,6 +38,14 @@ class TranslationUnit:
     target_unit_source: str
     suggested_target_unit: str
     warning: str
+
+
+@dataclass(frozen=True)
+class RowFillResult:
+    row: RowItem
+    unit: TranslationUnit | None
+    auto_target: str | None
+    warning: str = ""
 
 
 @dataclass(frozen=True)
@@ -58,6 +73,7 @@ class EntityCluster:
 __all__ = [
     "EntityCluster",
     "EntityOccurrence",
+    "RowFillResult",
     "RowItem",
     "TemplateMatch",
     "TranslationUnit",
