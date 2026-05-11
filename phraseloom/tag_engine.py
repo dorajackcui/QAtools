@@ -160,7 +160,7 @@ def is_tag_only_segment(source: str) -> bool:
     stripped = text.strip()
     if not stripped:
         return False
-    remainder = TAG_PLACEHOLDER_RE.sub("", stripped)
+    remainder = PROTECTED_TOKEN_RE.sub("", stripped)
     return remainder.strip() == ""
 
 
@@ -173,26 +173,22 @@ def restore_tags(text: str, tags: tuple[TagToken, ...]) -> str:
 
 
 def validate_tag_placeholders(text: str, tags: tuple[TagToken, ...]) -> TagValidation:
+    source_counts = Counter(tag.placeholder for tag in tags)
     target_counts = Counter(
-        parsed
-        for found in TAG_PLACEHOLDER_RE.finditer("" if text is None else str(text))
-        if (parsed := parse_protected_token(found.group(0))) is not None
+        found.group(0) for found in PROTECTED_TOKEN_RE.finditer("" if text is None else str(text))
     )
-    source_counts = Counter((tag.index, tag.kind) for tag in tags)
     warnings: list[str] = []
 
-    for key in sorted(source_counts, key=_placeholder_sort_key):
-        missing = source_counts[key] - target_counts[key]
+    for placeholder in sorted(source_counts, key=_protected_token_sort_key):
+        missing = source_counts[placeholder] - target_counts[placeholder]
         warnings.extend(
-            f"tag_mismatch: missing {make_tag_placeholder(int(key[0]), key[1])}"
-            for _ in range(missing)
+            f"protected_token_mismatch: missing {placeholder}" for _ in range(missing)
         )
 
-    for key in sorted(target_counts, key=_placeholder_sort_key):
-        extra = target_counts[key] - source_counts[key]
+    for placeholder in sorted(target_counts, key=_protected_token_sort_key):
+        extra = target_counts[placeholder] - source_counts[placeholder]
         warnings.extend(
-            f"tag_mismatch: extra {make_tag_placeholder(int(key[0]), key[1])}"
-            for _ in range(extra)
+            f"protected_token_mismatch: extra {placeholder}" for _ in range(extra)
         )
 
     return TagValidation(tuple(warnings))
@@ -212,7 +208,7 @@ def serialize_known_tags(text: str, tags: tuple[TagToken, ...]) -> TagExtraction
             result = result.replace(tag.raw, tag.placeholder, 1)
             found_tags.append(tag)
         else:
-            warnings.append(f"source_tag_not_found: {tag.raw}")
+            warnings.append(f"source_protected_span_not_found: {tag.raw}")
 
     return TagExtraction(result, tuple(found_tags), tuple(warnings))
 
@@ -285,9 +281,13 @@ def _is_named_bbcode_close(raw: str) -> bool:
     return re.fullmatch(r"\[/[A-Za-z][A-Za-z0-9:._-]*\]", raw) is not None
 
 
-def _placeholder_sort_key(key: tuple[int, str]) -> tuple[int, int]:
-    kind_order = {TAG_OPEN: 0, TAG_CLOSE: 1, TAG_SELF: 2, PROTECTED_SINGLE: 2}
-    return int(key[0]), kind_order[key[1]]
+def _protected_token_sort_key(placeholder: str) -> tuple[int, int]:
+    parsed = parse_protected_token(placeholder)
+    if parsed is None:
+        return 10**9, 99
+    index, kind = parsed
+    kind_order = {TAG_OPEN: 0, PROTECTED_SINGLE: 1, TAG_CLOSE: 2}
+    return index, kind_order[kind]
 
 
 __all__ = [

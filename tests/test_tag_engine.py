@@ -54,9 +54,9 @@ class TagEngineTests(unittest.TestCase):
         self.assertEqual(
             validation.warnings,
             (
-                "tag_mismatch: extra {1>",
-                "tag_mismatch: extra <2}",
-                "tag_mismatch: extra {3}",
+                "protected_token_mismatch: extra {1>",
+                "protected_token_mismatch: extra <2}",
+                "protected_token_mismatch: extra {3}",
             ),
         )
 
@@ -244,34 +244,32 @@ class TagEngineTests(unittest.TestCase):
         )
         self.assertEqual(result.warnings, ())
 
-    def test_identifies_tag_only_segments(self):
+    def test_identifies_protected_only_segments(self):
         from phraseloom.tag_engine import is_tag_only_segment
 
-        self.assertTrue(is_tag_only_segment("{3}"))
+        self.assertTrue(is_tag_only_segment("{1}"))
         self.assertTrue(is_tag_only_segment("{1><2}"))
         self.assertTrue(is_tag_only_segment("{1> <2}"))
         self.assertFalse(is_tag_only_segment("{1>Click<2}"))
         self.assertFalse(is_tag_only_segment("{1} 100 coins"))
 
-    def test_restore_tags_replaces_known_placeholders_only(self):
+    def test_restore_tags_replaces_known_protected_tokens_only(self):
         from phraseloom.tag_engine import extract_tags, restore_tags
 
-        extraction = extract_tags('<a href="shop">VIP10</a>')
+        extraction = extract_tags('<a href="shop">VIP{0}</a>')
 
-        restored = restore_tags("{1>VIP<2} {9}", extraction.tags)
+        restored = restore_tags("{1>VIP{2}<3} {9}", extraction.tags)
 
-        self.assertEqual(restored, '<a href="shop">VIP</a> {9}')
+        self.assertEqual(restored, '<a href="shop">VIP{0}</a> {9}')
 
     def test_validate_tag_placeholders_reports_extra_counts(self):
         from phraseloom.tag_engine import extract_tags, validate_tag_placeholders
 
         extraction = extract_tags('<a href="shop">VIP10</a>')
 
-        validation = validate_tag_placeholders(
-            "{1>VIP10<2} {3} {4}", extraction.tags
-        )
+        validation = validate_tag_placeholders("{1>VIP10<2} {3}", extraction.tags)
 
-        self.assertEqual(validation.warnings, ("tag_mismatch: extra {4}",))
+        self.assertEqual(validation.warnings, ("protected_token_mismatch: extra {3}",))
 
     def test_validate_tag_placeholders_reports_missing_counts(self):
         from phraseloom.tag_engine import extract_tags, validate_tag_placeholders
@@ -280,9 +278,9 @@ class TagEngineTests(unittest.TestCase):
 
         validation = validate_tag_placeholders("{1>x", extraction.tags)
 
-        self.assertEqual(validation.warnings, ("tag_mismatch: missing <2}",))
+        self.assertEqual(validation.warnings, ("protected_token_mismatch: missing <2}",))
 
-    def test_serialize_known_tags_preserves_repeated_raw_tags_in_order(self):
+    def test_serialize_known_tags_preserves_repeated_raw_spans_in_order(self):
         from phraseloom.tag_engine import TAG_SELF, TagToken, serialize_known_tags
 
         tags = (
@@ -295,6 +293,17 @@ class TagEngineTests(unittest.TestCase):
         self.assertEqual(result.text, "{1} A {2}")
         self.assertEqual(result.tags, tags)
         self.assertEqual(result.warnings, ())
+
+    def test_nested_raw_braces_are_not_extracted_as_one_placeholder(self):
+        from phraseloom.tag_engine import RAW_PLACEHOLDER, extract_tags
+
+        result = extract_tags("Use {a{b}c}")
+
+        self.assertEqual(result.text, "Use {a{1}c}")
+        self.assertEqual(
+            tuple((tag.kind, tag.placeholder, tag.raw) for tag in result.tags),
+            ((RAW_PLACEHOLDER, "{1}", "{b}"),),
+        )
 
     def test_serialize_known_tags_returns_empty_extraction_for_empty_target(self):
         from phraseloom.tag_engine import TagExtraction, extract_tags, serialize_known_tags
