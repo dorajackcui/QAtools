@@ -280,6 +280,15 @@ class TagEngineTests(unittest.TestCase):
 
         self.assertEqual(validation.warnings, ("protected_token_mismatch: missing <2}",))
 
+    def test_self_closing_tag_validates_against_protected_token(self):
+        from phraseloom.tag_engine import extract_tags, validate_tag_placeholders
+
+        extraction = extract_tags("<br/>")
+
+        validation = validate_tag_placeholders("{1}", extraction.tags)
+
+        self.assertEqual(validation.warnings, ())
+
     def test_serialize_known_tags_preserves_repeated_raw_spans_in_order(self):
         from phraseloom.tag_engine import TAG_SELF, TagToken, serialize_known_tags
 
@@ -293,6 +302,19 @@ class TagEngineTests(unittest.TestCase):
         self.assertEqual(result.text, "{1} A {2}")
         self.assertEqual(result.tags, tags)
         self.assertEqual(result.warnings, ())
+
+    def test_serialize_known_tags_warns_when_source_span_not_found(self):
+        from phraseloom.tag_engine import extract_tags, serialize_known_tags
+
+        extraction = extract_tags("<br/>")
+
+        result = serialize_known_tags("no matching span", extraction.tags)
+
+        self.assertEqual(result.text, "no matching span")
+        self.assertEqual(
+            result.warnings,
+            ("source_protected_span_not_found: <br/>",),
+        )
 
     def test_nested_raw_braces_are_not_extracted_as_one_placeholder(self):
         from phraseloom.tag_engine import RAW_PLACEHOLDER, extract_tags

@@ -410,13 +410,17 @@ def _write_output_workbook(
     qa.append(["warning_units", sum(1 for unit in units if unit.warning)])
     qa.append(
         [
-            "tag_mismatch_rows",
-            sum(1 for result_row in result_rows if "tag_mismatch:" in result_row.warning),
+            "protected_token_mismatch_rows",
+            sum(
+                1
+                for result_row in result_rows
+                if "protected_token_mismatch:" in result_row.warning
+            ),
         ]
     )
     qa.append(
         [
-            "tag_warning_rows",
+            "protected_token_warning_rows",
             sum(
                 1
                 for result_row in result_rows
@@ -426,7 +430,7 @@ def _write_output_workbook(
     )
     qa.append(
         [
-            "tag_only_units",
+            "protected_only_units",
             sum(1 for unit in units if unit.target_unit_source == "tag_only"),
         ]
     )

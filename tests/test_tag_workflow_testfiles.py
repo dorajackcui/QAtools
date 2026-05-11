@@ -135,7 +135,7 @@ class TagWorkflowTestfilesTests(unittest.TestCase):
         finally:
             filled.close()
 
-    def test_fill_writes_target_when_tag_mismatch_warning_exists(self):
+    def test_fill_writes_target_when_protected_token_mismatch_warning_exists(self):
         pack = self.work_dir / "tag_source_l10n" / "tag_source_pack.xlsx"
         report = self.work_dir / "tag_source_l10n" / "tag_source_report.xlsx"
 
@@ -156,7 +156,7 @@ class TagWorkflowTestfilesTests(unittest.TestCase):
             target_idx = headers.index("target_unit") + 1
             for row in units.iter_rows(min_row=2):
                 source_unit = row[source_idx - 1].value
-                if source_unit == "{t1_op}VIP{num1} Pack{t1_cl}":
+                if source_unit == "{1>VIP{num1} Pack<2}":
                     row[target_idx - 1].value = "Pack VIP{num1} FR"
                 elif source_unit == "Brand new line":
                     row[target_idx - 1].value = "Brand new line FR"
@@ -178,7 +178,7 @@ class TagWorkflowTestfilesTests(unittest.TestCase):
         self.assertEqual(rows[0]["auto_target"], "Pack VIP30 FR")
         self.assertEqual(rows[1]["auto_target"], "Pack VIP40 FR")
         self.assertTrue(
-            any("tag_mismatch" in str(row["warning"] or "") for row in rows)
+            any("protected_token_mismatch" in str(row["warning"] or "") for row in rows)
         )
 
 

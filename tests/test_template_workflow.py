@@ -60,7 +60,7 @@ class TemplateDemoTests(unittest.TestCase):
             "{1>Niveau {num1}<2}",
         )
 
-    def test_tag_only_units_autofill_and_template_fill_restores_raw_tags(self):
+    def test_protected_only_units_autofill_and_template_fill_restores_raw_tags(self):
         from phraseloom.workflow import fill_target_column_workbook, generate_workbook
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -99,15 +99,15 @@ class TemplateDemoTests(unittest.TestCase):
                 for row in units.iter_rows(min_row=2)
             }
             self.assertEqual(
-                source_to_row["{t1_sf}"][target_idx - 1].value,
-                "{t1_sf}",
+                source_to_row["{1}"][target_idx - 1].value,
+                "{1}",
             )
             self.assertEqual(
-                source_to_row["{t1_op}VIP{num1} Pack{t1_cl}"][variables_idx - 1].value,
+                source_to_row["{1>VIP{num1} Pack<2}"][variables_idx - 1].value,
                 "{num1}=10,20",
             )
-            source_to_row["{t1_op}VIP{num1} Pack{t1_cl}"][target_idx - 1].value = (
-                "{t1_op}Pack VIP{num1}{t1_cl}"
+            source_to_row["{1>VIP{num1} Pack<2}"][target_idx - 1].value = (
+                "{1>Pack VIP{num1}<2}"
             )
             pack.save(pack_path)
 
@@ -143,12 +143,64 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].raw_source, '<a href="shop">VIP10</a>')
         self.assertEqual(rows[0].raw_existing_target, '<a href="shop">VIP10 Pack FR</a>')
-        self.assertEqual(rows[0].source, "{t1_op}VIP10{t1_cl}")
-        self.assertEqual(rows[0].existing_target, "{t1_op}VIP10 Pack FR{t1_cl}")
-        self.assertEqual(rows[0].match.template, "{t1_op}VIP{num1}{t1_cl}")
+        self.assertEqual(rows[0].source, "{1>VIP10<2}")
+        self.assertEqual(rows[0].existing_target, "{1>VIP10 Pack FR<2}")
+        self.assertEqual(rows[0].match.template, "{1>VIP{num1}<2}")
         self.assertEqual(rows[0].match.values, {"num1": "10"})
         self.assertEqual(rows[0].tag_warnings, ())
         self.assertEqual(rows[0].target_tag_warnings, ())
+
+    def test_raw_brace_placeholders_are_translator_facing_protected_tokens(self):
+        from phraseloom.workflow import fill_target_column_workbook, generate_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "source.xlsx"
+            pack_path = Path(tmp) / "pack.xlsx"
+            filled_path = Path(tmp) / "filled.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Hit deals {0} damage", ""])
+            ws.append(["Hit deals {value} damage", ""])
+            wb.save(input_path)
+
+            generate_workbook(
+                input_path,
+                pack_path,
+                source_col="source",
+                target_col="target",
+                min_group_size=2,
+                use_existing_targets=False,
+            )
+
+            pack = load_workbook(pack_path)
+            units = pack["translation_units"]
+            headers = [cell.value for cell in units[1]]
+            source_idx = headers.index("source_unit") + 1
+            target_idx = headers.index("target_unit") + 1
+            rows = {
+                row[source_idx - 1].value: row
+                for row in units.iter_rows(min_row=2)
+            }
+
+            self.assertIn("Hit deals {1} damage", rows)
+            rows["Hit deals {1} damage"][target_idx - 1].value = "Inflige {1} degats"
+            pack.save(pack_path)
+
+            fill_target_column_workbook(
+                input_path,
+                filled_path,
+                source_col="source",
+                target_col="target",
+                template_workbook=pack_path,
+                min_group_size=2,
+            )
+
+            filled = load_workbook(filled_path, data_only=True)
+            output_rows = list(filled.active.iter_rows(values_only=True))
+            self.assertEqual(output_rows[1][1], "Inflige {0} degats")
+            self.assertEqual(output_rows[2][1], "Inflige {value} degats")
 
     def test_row_item_carries_optional_tag_metadata(self):
         from phraseloom.models import RowFillResult, RowItem
