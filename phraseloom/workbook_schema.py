@@ -1,0 +1,17 @@
+SCHEMA_VERSION = "1.0"
+
+SUMMARY_SHEET = "summary"
+TRANSLATION_UNITS_SHEET = "translation_units"
+TO_TRANSLATE_SHEET = "to_translate"
+PREFILLED_UNITS_SHEET = "prefilled_units"
+SOURCE_MAP_SHEET = "source_map"
+FILLED_WORKBOOK_SHEET = "filled_workbook"
+QA_REPORT_SHEET = "qa_report"
+TM_PAIRS_SHEET = "tm_pairs"
+TM_SOURCE_MAP_SHEET = "tm_source_map"
+ENTITY_CLUSTERS_SHEET = "entity_clusters"
+
+UNIT_TYPE_COLUMN = "unit_type"
+SOURCE_UNIT_COLUMN = "source_unit"
+TARGET_UNIT_COLUMN = "target_unit"
+UNIT_ID_COLUMN = "unit_id"
