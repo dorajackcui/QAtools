@@ -3,30 +3,48 @@ from dataclasses import astuple
 
 
 class TagEngineTests(unittest.TestCase):
-    def test_placeholder_helpers_accept_only_tag_namespace(self):
+    def test_protected_token_helpers_accept_new_contract(self):
         from phraseloom.tag_engine import (
+            RAW_PLACEHOLDER,
             TAG_CLOSE,
             TAG_OPEN,
             TAG_SELF,
+            is_protected_token,
             is_tag_placeholder,
+            make_protected_token,
             make_tag_placeholder,
-            parse_tag_placeholder,
+            parse_protected_token,
         )
 
         self.assertEqual(TAG_OPEN, "op")
         self.assertEqual(TAG_CLOSE, "cl")
         self.assertEqual(TAG_SELF, "sf")
-        self.assertEqual(make_tag_placeholder(1, TAG_OPEN), "{t1_op}")
-        self.assertEqual(make_tag_placeholder(1, TAG_CLOSE), "{t1_cl}")
-        self.assertEqual(make_tag_placeholder(2, TAG_SELF), "{t2_sf}")
-        self.assertEqual(parse_tag_placeholder("{t1_op}"), (1, TAG_OPEN))
-        self.assertEqual(parse_tag_placeholder("{t1_cl}"), (1, TAG_CLOSE))
-        self.assertEqual(parse_tag_placeholder("{t2_sf}"), (2, TAG_SELF))
-        self.assertTrue(is_tag_placeholder("{t1_op}"))
-        self.assertTrue(is_tag_placeholder("{t1_cl}"))
-        self.assertTrue(is_tag_placeholder("{t2_sf}"))
-        self.assertFalse(is_tag_placeholder("{num1}"))
-        self.assertFalse(is_tag_placeholder("{tag1_op}"))
+        self.assertEqual(RAW_PLACEHOLDER, "ph")
+        self.assertEqual(make_protected_token(1, TAG_OPEN), "{1>")
+        self.assertEqual(make_protected_token(2, TAG_CLOSE), "<2}")
+        self.assertEqual(make_protected_token(3, TAG_SELF), "{3}")
+        self.assertEqual(make_protected_token(4, RAW_PLACEHOLDER), "{4}")
+        self.assertEqual(make_tag_placeholder(1, TAG_OPEN), "{1>")
+        self.assertTrue(is_protected_token("{1>"))
+        self.assertTrue(is_protected_token("<2}"))
+        self.assertTrue(is_protected_token("{3}"))
+        self.assertFalse(is_protected_token("{num1}"))
+        self.assertFalse(is_protected_token("{t1_op}"))
+        self.assertTrue(is_tag_placeholder("{3}"))
+        self.assertEqual(parse_protected_token("{1>"), (1, TAG_OPEN))
+        self.assertEqual(parse_protected_token("<2}"), (2, TAG_CLOSE))
+        self.assertEqual(parse_protected_token("{3}"), (3, "single"))
+        self.assertIsNone(parse_protected_token("{num1}"))
+        self.assertIsNone(parse_protected_token("{t1_op}"))
+
+    def test_protected_token_scans_accept_all_token_shapes(self):
+        from phraseloom.tag_engine import extract_tags, validate_tag_placeholders
+
+        extraction = extract_tags("{1><2}{3}")
+        validation = validate_tag_placeholders("{1>", ())
+
+        self.assertEqual(extraction.text, "{1><2}{3}")
+        self.assertEqual(validation.warnings, ("tag_mismatch: extra {1>",))
 
     def test_extracts_angle_tags_and_preserves_token_fields(self):
         from phraseloom.tag_engine import TAG_CLOSE, TAG_OPEN, TAG_SELF, extract_tags

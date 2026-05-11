@@ -5,13 +5,17 @@ from collections import Counter
 from dataclasses import dataclass
 
 
-TAG_PLACEHOLDER_PREFIX = "t"
 TAG_OPEN = "op"
 TAG_CLOSE = "cl"
 TAG_SELF = "sf"
+RAW_PLACEHOLDER = "ph"
+PROTECTED_SINGLE = "single"
 
-TAG_PLACEHOLDER_RE = re.compile(r"\{t([1-9]\d*)_(op|cl|sf)\}")
-_TAG_PLACEHOLDER_FULL_RE = re.compile(r"^\{t([1-9]\d*)_(op|cl|sf)\}$")
+PROTECTED_TOKEN_RE = re.compile(r"\{([1-9]\d*)>|<([1-9]\d*)\}|\{([1-9]\d*)\}")
+_PROTECTED_TOKEN_FULL_RE = re.compile(
+    r"^\{([1-9]\d*)>$|^<([1-9]\d*)\}$|^\{([1-9]\d*)\}$"
+)
+TAG_PLACEHOLDER_RE = PROTECTED_TOKEN_RE
 _TAG_SPAN_RE = re.compile(
     r"</[A-Za-z][A-Za-z0-9:._-]*\s*>"
     r"|</>"
@@ -29,6 +33,7 @@ class TagToken:
     kind: str
     placeholder: str
     raw: str
+    partner_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -43,29 +48,51 @@ class TagValidation:
     warnings: tuple[str, ...]
 
 
-def make_tag_placeholder(index: int, kind: str) -> str:
+def make_protected_token(index: int, kind: str) -> str:
     if index < 1:
-        raise ValueError("tag placeholder index must be >= 1")
-    if kind not in {TAG_OPEN, TAG_CLOSE, TAG_SELF}:
-        raise ValueError(f"unknown tag placeholder kind: {kind}")
-    return f"{{{TAG_PLACEHOLDER_PREFIX}{index}_{kind}}}"
+        raise ValueError("protected token index must be >= 1")
+    if kind == TAG_OPEN:
+        return f"{{{index}>"
+    if kind == TAG_CLOSE:
+        return f"<{index}}}"
+    if kind in {TAG_SELF, RAW_PLACEHOLDER, PROTECTED_SINGLE}:
+        return f"{{{index}}}"
+    raise ValueError(f"unknown protected token kind: {kind}")
+
+
+def parse_protected_token(token: str) -> tuple[int, str] | None:
+    found = _PROTECTED_TOKEN_FULL_RE.match(token)
+    if not found:
+        return None
+    if found.group(1):
+        return int(found.group(1)), TAG_OPEN
+    if found.group(2):
+        return int(found.group(2)), TAG_CLOSE
+    return int(found.group(3)), PROTECTED_SINGLE
+
+
+def is_protected_token(token: str) -> bool:
+    return parse_protected_token(token) is not None
+
+
+def make_tag_placeholder(index: int, kind: str) -> str:
+    return make_protected_token(index, kind)
 
 
 def parse_tag_placeholder(placeholder: str) -> tuple[int, str] | None:
-    found = _TAG_PLACEHOLDER_FULL_RE.match(placeholder)
-    if not found:
-        return None
-    return int(found.group(1)), found.group(2)
+    return parse_protected_token(placeholder)
 
 
 def is_tag_placeholder(placeholder: str) -> bool:
-    return parse_tag_placeholder(placeholder) is not None
+    return is_protected_token(placeholder)
 
 
 def extract_tags(text: str) -> TagExtraction:
     source = "" if text is None else str(text)
     reserved_indexes = {
-        int(found.group(1)) for found in TAG_PLACEHOLDER_RE.finditer(source)
+        parsed[0]
+        for found in TAG_PLACEHOLDER_RE.finditer(source)
+        if (parsed := parse_protected_token(found.group(0))) is not None
     }
     warnings = [
         f"reserved_tag_placeholder: {found.group(0)}"
@@ -137,8 +164,12 @@ def restore_tags(text: str, tags: tuple[TagToken, ...]) -> str:
 
 
 def validate_tag_placeholders(text: str, tags: tuple[TagToken, ...]) -> TagValidation:
-    target_counts = Counter(TAG_PLACEHOLDER_RE.findall("" if text is None else str(text)))
-    source_counts = Counter((str(tag.index), tag.kind) for tag in tags)
+    target_counts = Counter(
+        parsed
+        for found in TAG_PLACEHOLDER_RE.finditer("" if text is None else str(text))
+        if (parsed := parse_protected_token(found.group(0))) is not None
+    )
+    source_counts = Counter((tag.index, tag.kind) for tag in tags)
     warnings: list[str] = []
 
     for key in sorted(source_counts, key=_placeholder_sort_key):
@@ -251,20 +282,25 @@ def _is_named_bbcode_close(raw: str) -> bool:
     return re.fullmatch(r"\[/[A-Za-z][A-Za-z0-9:._-]*\]", raw) is not None
 
 
-def _placeholder_sort_key(key: tuple[str, str]) -> tuple[int, int]:
-    kind_order = {TAG_OPEN: 0, TAG_CLOSE: 1, TAG_SELF: 2}
+def _placeholder_sort_key(key: tuple[int, str]) -> tuple[int, int]:
+    kind_order = {TAG_OPEN: 0, TAG_CLOSE: 1, TAG_SELF: 2, PROTECTED_SINGLE: 2}
     return int(key[0]), kind_order[key[1]]
 
 
 __all__ = [
-    "TAG_PLACEHOLDER_PREFIX",
+    "RAW_PLACEHOLDER",
+    "PROTECTED_SINGLE",
     "TAG_OPEN",
     "TAG_CLOSE",
     "TAG_SELF",
+    "PROTECTED_TOKEN_RE",
     "TAG_PLACEHOLDER_RE",
     "TagToken",
     "TagExtraction",
     "TagValidation",
+    "make_protected_token",
+    "parse_protected_token",
+    "is_protected_token",
     "make_tag_placeholder",
     "parse_tag_placeholder",
     "is_tag_placeholder",
