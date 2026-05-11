@@ -194,6 +194,8 @@ These should not auto-fill:
 The new protected-token contract replaces `{tN_op}`, `{tN_cl}`, and `{tN_sf}` in
 newly generated workbooks. The implementation should centralize token parsing
 behind helpers so old compatibility shims can be handled deliberately if needed.
+Some internal Python helper names may retain `tag_` wording for compatibility,
+but their behavior follows the protected-token contract.
 
 Existing workbooks that already contain `{tN_op}` tokens are not part of the new
 translator-facing format. This spec does not require legacy workbook support.

@@ -17,12 +17,12 @@ Main workflow:
 3. Translator fills `target_unit` in the todo workbook.
 4. Todo workbook -> filled source workbook copy or report workbook.
 
-Tag extraction is now integrated into the main workflow as an internal
-pre-template layer. It serializes recognized tags into protected placeholders
-such as `{t1_op}`, `{t1_cl}`, and `{t2_sf}`, runs the normal template/TM flow on
-that serialized text, then restores raw tags during fill. Entity clustering
-exists as an experimental side module and is not integrated into the main
-localization workflow yet.
+Protected-token extraction is integrated into the main workflow as an internal
+pre-template layer. It serializes recognized tags and every complete raw `{...}`
+placeholder into translator-facing protected tokens such as `{1>`, `<2}`, and
+`{3}`, runs the normal template/TM flow on that serialized text, then restores
+raw spans during fill. Entity clustering exists as an experimental side module
+and is not integrated into the main localization workflow yet.
 
 ## First Files To Read
 
@@ -122,10 +122,11 @@ Known sample stats from `testfiles/`:
 
 - Keep `template_engine.py` pure: no Excel, CLI, or filesystem logic there.
 - Keep `tag_engine.py` pure: no Excel, CLI, or filesystem logic there.
-- Tag placeholders are reserved as `{tN_op}`, `{tN_cl}`, and `{tN_sf}`. The tag
-  extractor owns that namespace; template parsing must preserve these
-  placeholders and must not include them in normal template variables.
-- Tag-only units should auto-fill with `target_unit_source = "tag_only"`.
+- Protected tokens are reserved as `{N>`, `<N}`, and `{N}`. The protected-token
+  extractor owns those tokens; template parsing must preserve them and must not
+  include their numbers in normal template variables.
+- Protected-only units should auto-fill with `target_unit_source = "tag_only"`
+  for workbook compatibility.
 - Fill order matters: apply template variables first, validate tag placeholders,
   then restore known raw tags. Tag mismatch warnings do not block writing the
   target; downstream QA can do stricter checks.
