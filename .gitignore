@@ -17,6 +17,9 @@ venv/
 # Generated localization work folders
 *_l10n/
 
+# Local git worktrees
+.worktrees/
+
 # Python tooling outputs
 .pytest_cache/
 .coverage
