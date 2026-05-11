@@ -11,13 +11,34 @@
 to_translate -> 回填源文件
 ```
 
+## 开发环境
+
+推荐使用虚拟环境安装为可编辑包：
+
+```bash
+python -m venv .venv
+.venv\Scripts\python -m pip install -e .
+```
+
+运行测试：
+
+```bash
+python -m unittest discover -v
+```
+
+## 项目结构
+
+核心代码位于 `phraseloom/` 包中。`template_demo.py` 和 `entity_cluster_probe.py` 保留为兼容入口；新代码应优先从 `phraseloom.workflow`、`phraseloom.template_engine`、`phraseloom.excel_io`、`phraseloom.entity_cluster` 等模块导入。
+
+安装后可以直接使用 `phraseloom` 命令；未安装时仍可使用兼容入口 `python3 template_demo.py`。
+
 ## 快速开始
 
 进入工具目录：
 
 ```bash
 cd /path/to/phrase-loom
-python3 template_demo.py
+phraseloom
 ```
 
 交互菜单：
@@ -48,7 +69,7 @@ q) Quit
 历史 TM 是已经完成翻译的 Excel，必须有 source 列和 target 列。
 
 ```bash
-python3 template_demo.py tm-extract '/path/to/tm.xlsx' \
+phraseloom tm-extract '/path/to/tm.xlsx' \
   --source-col en \
   --target-col fr
 ```
@@ -66,7 +87,7 @@ python3 template_demo.py tm-extract '/path/to/tm.xlsx' \
 用历史 TM 预填本轮源文件：
 
 ```bash
-python3 template_demo.py extract '/path/to/source.xlsx' \
+phraseloom extract '/path/to/source.xlsx' \
   --source-col '英語' \
   --target-col - \
   --tm '/path/to/tm_l10n/tm_tm_pairs.xlsx' \
@@ -95,7 +116,7 @@ source_to_translate.xlsx
 生成检查用 workbook，不改源文件结构：
 
 ```bash
-python3 template_demo.py fill '/path/to/source.xlsx' \
+phraseloom fill '/path/to/source.xlsx' \
   --templates '/path/to/source_l10n/source_to_translate.xlsx' \
   --source-col '英語' \
   --target-col '法语' \
@@ -107,7 +128,7 @@ python3 template_demo.py fill '/path/to/source.xlsx' \
 生成一个源文件 copy，并把结果写进 target 列：
 
 ```bash
-python3 template_demo.py fill '/path/to/source.xlsx' \
+phraseloom fill '/path/to/source.xlsx' \
   --templates '/path/to/source_l10n/source_to_translate.xlsx' \
   --source-col '英語' \
   --target-col '法语' \
