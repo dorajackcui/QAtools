@@ -32,8 +32,8 @@ and is not integrated into the main localization workflow yet.
 - `phraseloom/excel_io.py`: Excel reading/writing, default output paths, schema
   metadata, and workbook lifecycle handling.
 - `phraseloom/template_engine.py`: pure template parsing/inference/application.
-- `phraseloom/tag_engine.py`: pure tag serialization, validation, tag-only
-  detection, and raw tag restoration.
+- `phraseloom/tag_engine.py`: pure protected-token serialization, validation,
+  protected-only detection, and raw span restoration.
 - `phraseloom/workbook_schema.py`: centralized sheet names, column names, and
   schema version constants.
 - `phraseloom/errors.py`: user-facing structured exceptions.
@@ -51,10 +51,12 @@ and is not integrated into the main localization workflow yet.
   architecture design context.
 - `docs/superpowers/plans/2026-05-11-phraseloom-internal-tool-architecture.md`:
   implementation plan that shaped the current package structure.
-- `docs/superpowers/specs/2026-05-11-tag-extractor-design.md`: tag extractor
-  design, placeholder contract, and workflow integration.
-- `docs/superpowers/plans/2026-05-11-tag-extractor.md`: implementation plan for
-  the tag extraction integration.
+- `docs/superpowers/specs/2026-05-11-protected-token-design.md`: current
+  protected-token contract and workflow integration.
+- `docs/superpowers/plans/2026-05-11-protected-token.md`: implementation plan
+  for the protected-token contract.
+- `docs/superpowers/specs/2026-05-11-tag-extractor-design.md`: historical tag
+  extractor design that the protected-token contract superseded.
 
 ## Package Shape
 
@@ -127,9 +129,9 @@ Known sample stats from `testfiles/`:
   include their numbers in normal template variables.
 - Protected-only units should auto-fill with `target_unit_source = "tag_only"`
   for workbook compatibility.
-- Fill order matters: apply template variables first, validate tag placeholders,
-  then restore known raw tags. Tag mismatch warnings do not block writing the
-  target; downstream QA can do stricter checks.
+- Fill order matters: apply template variables first, validate protected tokens,
+  then restore known raw spans. Protected-token mismatch warnings do not block
+  writing the target; downstream QA can do stricter checks.
 - Keep orchestration in `workflow.py`; keep Excel serialization in `excel_io.py`.
 - Use `workbook_schema.py` constants instead of hardcoding sheet/column names in
   new I/O code.
@@ -137,7 +139,7 @@ Known sample stats from `testfiles/`:
   them and print concise actionable messages.
 - Always close `openpyxl` workbooks after loading. Windows locks `.xlsx` files
   until `wb.close()` is called.
-- The default test command should discover 48 tests at the time of this note.
+- The default test command should discover 57 tests at the time of this note.
 - `testfiles/` contains local sample workbooks and generated outputs. Treat it as
   local test data; do not commit large generated workbook outputs.
 - `.worktrees/` is ignored for local git worktrees. Do not commit generated
@@ -156,8 +158,8 @@ Known sample stats from `testfiles/`:
 Likely future work:
 
 - Integrate entity cluster discovery into the main workflow as an optional step.
-- Add a stricter optional tag QA/reporting pass for ordering and malformed
-  placeholder structure if needed.
+- Add a stricter optional protected-token QA/reporting pass for ordering and
+  malformed token structure if needed.
 - Extend `tag_engine.py` with additional conservative tag rules as real samples
   reveal them.
 - Improve README encoding/content if the displayed Chinese text appears garbled.
