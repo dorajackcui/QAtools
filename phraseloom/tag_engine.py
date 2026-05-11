@@ -25,6 +25,8 @@ _TAG_SPAN_RE = re.compile(
     r"|\[/[A-Za-z][A-Za-z0-9:._-]*\]"
     r"|\[[A-Za-z][A-Za-z0-9:._-]*(?:=[^\[\]]+)?\]"
 )
+_RAW_BRACE_RE = re.compile(r"\{[^{}]+\}")
+_PROTECTED_SPAN_RE = re.compile(_TAG_SPAN_RE.pattern + r"|" + _RAW_BRACE_RE.pattern)
 
 
 @dataclass(frozen=True)
@@ -89,16 +91,8 @@ def is_tag_placeholder(placeholder: str) -> bool:
 
 def extract_tags(text: str) -> TagExtraction:
     source = "" if text is None else str(text)
-    reserved_indexes = {
-        parsed[0]
-        for found in TAG_PLACEHOLDER_RE.finditer(source)
-        if (parsed := parse_protected_token(found.group(0))) is not None
-    }
-    warnings = [
-        f"reserved_tag_placeholder: {found.group(0)}"
-        for found in TAG_PLACEHOLDER_RE.finditer(source)
-    ]
-    spans = list(_TAG_SPAN_RE.finditer(source))
+    warnings: list[str] = []
+    spans = list(_PROTECTED_SPAN_RE.finditer(source))
     matched_plain_bbcode_starts = _matched_plain_bbcode_open_starts(spans)
     chunks: list[str] = []
     tags: list[TagToken] = []
@@ -109,6 +103,15 @@ def extract_tags(text: str) -> TagExtraction:
     for found in spans:
         raw = found.group(0)
         chunks.append(source[pos : found.start()])
+        if _RAW_BRACE_RE.fullmatch(raw):
+            index = next_index
+            next_index += 1
+            placeholder = make_protected_token(index, RAW_PLACEHOLDER)
+            tags.append(TagToken(index, RAW_PLACEHOLDER, placeholder, raw))
+            chunks.append(placeholder)
+            pos = found.end()
+            continue
+
         if _is_unmatched_plain_bbcode_open(raw, found.start(), matched_plain_bbcode_starts):
             chunks.append(raw)
             pos = found.end()
@@ -116,12 +119,16 @@ def extract_tags(text: str) -> TagExtraction:
         kind, name = _classify_raw_tag(raw)
 
         if kind == TAG_OPEN:
-            index, next_index = _take_next_index(next_index, reserved_indexes)
+            index = next_index
+            next_index += 1
             stack.append((index, name))
-            placeholder = make_tag_placeholder(index, TAG_OPEN)
+            placeholder = make_protected_token(index, TAG_OPEN)
+            token = TagToken(index, TAG_OPEN, placeholder, raw)
         elif kind == TAG_SELF:
-            index, next_index = _take_next_index(next_index, reserved_indexes)
-            placeholder = make_tag_placeholder(index, TAG_SELF)
+            index = next_index
+            next_index += 1
+            placeholder = make_protected_token(index, TAG_SELF)
+            token = TagToken(index, TAG_SELF, placeholder, raw)
         else:
             matched = _pop_matching_open(stack, name)
             if matched is None:
@@ -129,10 +136,12 @@ def extract_tags(text: str) -> TagExtraction:
                 warnings.append(f"unpaired close tag: {raw}")
                 pos = found.end()
                 continue
-            index = matched
-            placeholder = make_tag_placeholder(index, TAG_CLOSE)
+            index = next_index
+            next_index += 1
+            placeholder = make_protected_token(index, TAG_CLOSE)
+            token = TagToken(index, TAG_CLOSE, placeholder, raw, matched)
 
-        tags.append(TagToken(index, kind, placeholder, raw))
+        tags.append(token)
         chunks.append(placeholder)
         pos = found.end()
 
@@ -140,7 +149,7 @@ def extract_tags(text: str) -> TagExtraction:
 
     for index, _name in stack:
         warnings.append(
-            f"open tag has no close partner: {make_tag_placeholder(index, TAG_OPEN)}"
+            f"open tag has no close partner: {make_protected_token(index, TAG_OPEN)}"
         )
 
     return TagExtraction("".join(chunks), tuple(tags), tuple(warnings))
@@ -242,12 +251,6 @@ def _pop_matching_open(stack: list[tuple[int, str | None]], name: str | None) ->
         stack.pop()
         return index
     return None
-
-
-def _take_next_index(next_index: int, reserved_indexes: set[int]) -> tuple[int, int]:
-    while next_index in reserved_indexes:
-        next_index += 1
-    return next_index, next_index + 1
 
 
 def _matched_plain_bbcode_open_starts(spans: list[re.Match[str]]) -> set[int]:
