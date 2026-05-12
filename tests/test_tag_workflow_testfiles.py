@@ -20,10 +20,10 @@ def create_tag_testfiles(tag_tm, tag_source):
         tm_ws = tm.active
         tm_ws.append(["source", "target"])
         tm_ws.append(
-            ['<a href="shop">VIP10 Pack</a>', '<a href="shop">Pack VIP10 FR</a>']
+            ['<color=#fff>VIP10 Pack</color>', '<color=#fff>Pack VIP10 FR</color>']
         )
         tm_ws.append(
-            ['<a href="shop">VIP20 Pack</a>', '<a href="shop">Pack VIP20 FR</a>']
+            ['<color=#fff>VIP20 Pack</color>', '<color=#fff>Pack VIP20 FR</color>']
         )
         tm_ws.append(["Login failed", "Login failed FR"])
         tm.save(tag_tm)
@@ -34,8 +34,8 @@ def create_tag_testfiles(tag_tm, tag_source):
     try:
         source_ws = source.active
         source_ws.append(["source", "target"])
-        source_ws.append(['<a href="shop">VIP30 Pack</a>', None])
-        source_ws.append(['<a href="shop">VIP40 Pack</a>', None])
+        source_ws.append(['<color=#fff>VIP30 Pack</color>', None])
+        source_ws.append(['<color=#fff>VIP40 Pack</color>', None])
         source_ws.append(['<img src="coin.png"/>', None])
         source_ws.append(["Brand new line", None])
         source.save(tag_source)
@@ -128,8 +128,8 @@ class TagWorkflowTestfilesTests(unittest.TestCase):
         filled = load_workbook(filled_workbook, data_only=True)
         try:
             rows = list(filled.active.iter_rows(values_only=True))
-            self.assertEqual(rows[1][1], '<a href="shop">Pack VIP30 FR</a>')
-            self.assertEqual(rows[2][1], '<a href="shop">Pack VIP40 FR</a>')
+            self.assertEqual(rows[1][1], '<color=#fff>Pack VIP30 FR</color>')
+            self.assertEqual(rows[2][1], '<color=#fff>Pack VIP40 FR</color>')
             self.assertEqual(rows[3][1], '<img src="coin.png"/>')
             self.assertEqual(rows[4][1], "Brand new line FR")
         finally:
