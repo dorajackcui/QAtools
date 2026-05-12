@@ -776,6 +776,129 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(rows[2][1], "登录失败")
             self.assertEqual(rows[3][1], "全新文本")
 
+    def test_tm_prefill_restores_current_row_color_attributes(self):
+        from phraseloom.workflow import (
+            fill_target_column_workbook,
+            generate_tm_pairs,
+            generate_workbook,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            tm_input = tmp_path / "tm.xlsx"
+            tm_pairs = tmp_path / "tm_pairs.xlsx"
+            source_input = tmp_path / "source.xlsx"
+            pack_path = tmp_path / "pack.xlsx"
+            filled_path = tmp_path / "filled.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["<color=#123>Source</>", "<color=#123>Target</>"])
+            wb.save(tm_input)
+
+            generate_tm_pairs(
+                tm_input,
+                tm_pairs,
+                source_col="source",
+                target_col="target",
+            )
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["<color=#3333>Source</>", ""])
+            wb.save(source_input)
+
+            generate_workbook(
+                source_input,
+                pack_path,
+                source_col="source",
+                target_col="target",
+                tm_workbook=tm_pairs,
+                use_existing_targets=False,
+            )
+            fill_target_column_workbook(
+                source_input,
+                filled_path,
+                source_col="source",
+                target_col="target",
+                template_workbook=pack_path,
+            )
+
+            filled = load_workbook(filled_path, data_only=True)
+            rows = list(filled.active.iter_rows(values_only=True))
+            filled.close()
+
+        self.assertEqual(rows[1][1], "<color=#3333>Target</>")
+
+    def test_tm_prefill_keeps_unlisted_angle_labels_translatable(self):
+        from phraseloom.workflow import generate_tm_pairs
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            tm_input = tmp_path / "tm.xlsx"
+            tm_pairs = tmp_path / "tm_pairs.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(
+                [
+                    "<Activate> HP increased by {a}%",
+                    "<Active> PV augmentes de {a}%",
+                ]
+            )
+            wb.save(tm_input)
+
+            generate_tm_pairs(
+                tm_input,
+                tm_pairs,
+                source_col="source",
+                target_col="target",
+            )
+
+            out = load_workbook(tm_pairs, data_only=True)
+            ws = out["tm_pairs"]
+            headers = [cell.value for cell in ws[1]]
+            source_idx = headers.index("source_unit")
+            target_idx = headers.index("target_unit")
+            row = next(ws.iter_rows(min_row=2, values_only=True))
+            out.close()
+
+        self.assertEqual(row[source_idx], "<Activate> HP increased by {1}%")
+        self.assertEqual(row[target_idx], "<Active> PV augmentes de {1}%")
+
+    def test_tm_pair_warning_includes_target_serialization_warning(self):
+        from phraseloom.workflow import generate_tm_pairs
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            tm_input = tmp_path / "tm.xlsx"
+            tm_pairs = tmp_path / "tm_pairs.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["<br/>", "no matching span"])
+            wb.save(tm_input)
+
+            generate_tm_pairs(
+                tm_input,
+                tm_pairs,
+                source_col="source",
+                target_col="target",
+            )
+
+            out = load_workbook(tm_pairs, data_only=True)
+            ws = out["tm_pairs"]
+            headers = [cell.value for cell in ws[1]]
+            warning_idx = headers.index("warning")
+            row = next(ws.iter_rows(min_row=2, values_only=True))
+            out.close()
+
+        self.assertIn("source_protected_span_not_found: <br/>", row[warning_idx])
+
     def test_default_output_paths_are_inside_input_work_folder(self):
         from phraseloom.excel_io import (
             _default_extract_output_path,

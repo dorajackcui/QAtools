@@ -424,6 +424,14 @@ def _suggest_segment_target_unit(items: Iterable[RowItem]) -> str:
     return Counter(suggestions).most_common(1)[0][0]
 
 
+def _row_serialization_warnings(items: Iterable[RowItem]) -> list[str]:
+    warnings: list[str] = []
+    for item in items:
+        warnings.extend(item.tag_warnings)
+        warnings.extend(item.target_tag_warnings)
+    return list(dict.fromkeys(warnings))
+
+
 def _unit_warning(
     unit_type: str,
     source_unit: str,
@@ -431,7 +439,9 @@ def _unit_warning(
     suggested_target_unit: str,
     items: Iterable[RowItem],
 ) -> str:
+    item_list = list(items)
     warnings: list[str] = []
+    warnings.extend(_row_serialization_warnings(item_list))
     source_placeholders = {
         placeholder
         for placeholder in PLACEHOLDER_RE.findall(source_unit)
@@ -452,13 +462,13 @@ def _unit_warning(
 
     inferred = []
     if unit_type == "template":
-        for item in items:
+        for item in item_list:
             if item.existing_target:
                 guess = infer_target_template(item.match.values, item.existing_target)
                 if guess:
                     inferred.append(guess)
     else:
-        inferred = [item.existing_target for item in items if item.existing_target]
+        inferred = [item.existing_target for item in item_list if item.existing_target]
     if suggested_target_unit and len(set(inferred)) > 1:
         warnings.append("multiple existing target patterns found")
 
