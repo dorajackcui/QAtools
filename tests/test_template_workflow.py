@@ -72,8 +72,8 @@ class TemplateDemoTests(unittest.TestCase):
             ws = wb.active
             ws.append(["source", "target"])
             ws.append(['<img src="coin.png"/>', ""])
-            ws.append(['<a href="shop">VIP10 Pack</a>', ""])
-            ws.append(['<a href="shop">VIP20 Pack</a>', ""])
+            ws.append(['<color=#fff>VIP10 Pack</color>', ""])
+            ws.append(['<color=#fff>VIP20 Pack</color>', ""])
             wb.save(input_path)
 
             stats = generate_workbook(
@@ -124,8 +124,8 @@ class TemplateDemoTests(unittest.TestCase):
             filled = load_workbook(filled_path, data_only=True)
             rows = list(filled.active.iter_rows(values_only=True))
             self.assertEqual(rows[1][1], '<img src="coin.png"/>')
-            self.assertEqual(rows[2][1], '<a href="shop">Pack VIP10</a>')
-            self.assertEqual(rows[3][1], '<a href="shop">Pack VIP20</a>')
+            self.assertEqual(rows[2][1], '<color=#fff>Pack VIP10</color>')
+            self.assertEqual(rows[3][1], '<color=#fff>Pack VIP20</color>')
 
     def test_read_source_rows_serializes_source_and_existing_target_tags(self):
         from phraseloom.excel_io import _read_source_rows
@@ -135,20 +135,139 @@ class TemplateDemoTests(unittest.TestCase):
             wb = Workbook()
             ws = wb.active
             ws.append(["source", "target"])
-            ws.append(['<a href="shop">VIP10</a>', '<a href="shop">VIP10 Pack FR</a>'])
+            ws.append(
+                [
+                    '<color=#fff>VIP10</color>',
+                    '<color=#fff>VIP10 Pack FR</color>',
+                ]
+            )
             wb.save(input_path)
 
             rows = _read_source_rows(input_path, "source", "target")
 
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0].raw_source, '<a href="shop">VIP10</a>')
-        self.assertEqual(rows[0].raw_existing_target, '<a href="shop">VIP10 Pack FR</a>')
+        self.assertEqual(rows[0].raw_source, '<color=#fff>VIP10</color>')
+        self.assertEqual(
+            rows[0].raw_existing_target, '<color=#fff>VIP10 Pack FR</color>'
+        )
         self.assertEqual(rows[0].source, "{1>VIP10<2}")
         self.assertEqual(rows[0].existing_target, "{1>VIP10 Pack FR<2}")
         self.assertEqual(rows[0].match.template, "{1>VIP{num1}<2}")
         self.assertEqual(rows[0].match.values, {"num1": "10"})
         self.assertEqual(rows[0].tag_warnings, ())
         self.assertEqual(rows[0].target_tag_warnings, ())
+
+    def test_custom_tag_config_controls_workflow_extraction(self):
+        from phraseloom.workflow import generate_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "source.xlsx"
+            output_path = tmp_path / "pack.xlsx"
+            config_path = tmp_path / "tag_rules.toml"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["<foo>Power {a}</foo>", ""])
+            ws.append(["<foo>Power {b}</foo>", ""])
+            wb.save(input_path)
+
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "version = 1",
+                        "",
+                        "[angle_tags]",
+                        'mode = "allowlist"',
+                        'allowed = ["foo"]',
+                        "",
+                        "[bbcode_tags]",
+                        'mode = "allowlist"',
+                        'allowed = ["color"]',
+                        "",
+                        "[raw_braces]",
+                        "protect_all = true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            generate_workbook(
+                input_path,
+                output_path,
+                source_col="source",
+                target_col="target",
+                min_group_size=2,
+                use_existing_targets=False,
+                tag_config=config_path,
+            )
+
+            out = load_workbook(output_path, data_only=True)
+            units = out["translation_units"]
+            headers = [cell.value for cell in units[1]]
+            source_idx = headers.index("source_unit")
+            source_units = [
+                row[source_idx]
+                for row in units.iter_rows(min_row=2, values_only=True)
+            ]
+
+        self.assertIn("{1>Power {2}<3}", source_units)
+
+    def test_cli_accepts_tag_config_option(self):
+        from phraseloom.cli import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "source.xlsx"
+            output_path = tmp_path / "pack.xlsx"
+            config_path = tmp_path / "tag_rules.toml"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["<foo>Power {a}</foo>", ""])
+            ws.append(["<foo>Power {b}</foo>", ""])
+            wb.save(input_path)
+
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "version = 1",
+                        "",
+                        "[angle_tags]",
+                        'mode = "allowlist"',
+                        'allowed = ["foo"]',
+                        "",
+                        "[bbcode_tags]",
+                        'mode = "allowlist"',
+                        'allowed = ["color"]',
+                        "",
+                        "[raw_braces]",
+                        "protect_all = true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    "extract",
+                    str(input_path),
+                    "-o",
+                    str(output_path),
+                    "--source-col",
+                    "source",
+                    "--target-col",
+                    "target",
+                    "--tag-config",
+                    str(config_path),
+                    "--no-existing-targets",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(output_path.exists())
 
     def test_raw_brace_placeholders_are_translator_facing_protected_tokens(self):
         from phraseloom.workflow import fill_target_column_workbook, generate_workbook
@@ -297,8 +416,8 @@ class TemplateDemoTests(unittest.TestCase):
             wb = Workbook()
             ws = wb.active
             ws.append(["source", "target"])
-            ws.append(['<a href="shop">VIP10 Pack</a>', ""])
-            ws.append(['<a href="shop">VIP20 Pack</a>', ""])
+            ws.append(['<color=#fff>VIP10 Pack</color>', ""])
+            ws.append(['<color=#fff>VIP20 Pack</color>', ""])
             wb.save(input_path)
 
             stats = generate_workbook(
@@ -308,8 +427,8 @@ class TemplateDemoTests(unittest.TestCase):
                 target_col="target",
                 examples=[
                     (
-                        '<a href="shop">VIP10 Pack</a>',
-                        '<a href="shop">Pack VIP10 FR</a>',
+                        '<color=#fff>VIP10 Pack</color>',
+                        '<color=#fff>Pack VIP10 FR</color>',
                     )
                 ],
                 min_group_size=2,
@@ -329,12 +448,12 @@ class TemplateDemoTests(unittest.TestCase):
             }
 
             self.assertEqual(
-                actual['<a href="shop">VIP10 Pack</a>'],
-                '<a href="shop">Pack VIP10 FR</a>',
+                actual['<color=#fff>VIP10 Pack</color>'],
+                '<color=#fff>Pack VIP10 FR</color>',
             )
             self.assertEqual(
-                actual['<a href="shop">VIP20 Pack</a>'],
-                '<a href="shop">Pack VIP20 FR</a>',
+                actual['<color=#fff>VIP20 Pack</color>'],
+                '<color=#fff>Pack VIP20 FR</color>',
             )
 
     def test_minimal_translation_units_deduplicate_segments_and_fill_duplicate_rows(self):

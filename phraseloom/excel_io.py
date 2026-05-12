@@ -11,12 +11,18 @@ from . import workbook_schema as schema
 from .errors import ColumnNotFoundError, TranslationUnitLoadError
 from .models import RowFillResult, RowItem, TranslationUnit
 from .tag_engine import extract_tags, is_tag_placeholder, serialize_known_tags
+from .tag_rules import TagRules, default_tag_rules
 from .template_engine import PLACEHOLDER_RE, parse_template
 
 
 def _read_source_rows(
-    input_path: Path, source_col: str | int, target_col: str | int | None
+    input_path: Path,
+    source_col: str | int,
+    target_col: str | int | None,
+    *,
+    tag_rules: TagRules | None = None,
 ) -> list[RowItem]:
+    active_tag_rules = default_tag_rules() if tag_rules is None else tag_rules
     wb = load_workbook(input_path, read_only=True, data_only=True)
     try:
         ws = wb.worksheets[0]
@@ -39,7 +45,7 @@ def _read_source_rows(
             seen_source = True
             blank_source_run = 0
             raw_source = str(source_value).strip()
-            source_extraction = extract_tags(raw_source)
+            source_extraction = extract_tags(raw_source, rules=active_tag_rules)
             target_value = _cell_value(row, target_index) if target_index else ""
             raw_existing_target = "" if target_value is None else str(target_value).strip()
             target_extraction = serialize_known_tags(

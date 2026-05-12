@@ -67,6 +67,11 @@ def _main_tm_extract(argv: list[str]) -> int:
     parser.add_argument("--source-col", default="英語", help="Header name or 1-based index")
     parser.add_argument("--target-col", default="target", help="Header name or 1-based index")
     parser.add_argument("--min-group-size", type=int, default=2)
+    parser.add_argument(
+        "--tag-config",
+        type=Path,
+        help="TOML file defining which tag-like spans are protected",
+    )
 
     args = parser.parse_args(argv)
     output = args.output or _default_tm_output_path(args.input)
@@ -76,6 +81,7 @@ def _main_tm_extract(argv: list[str]) -> int:
         source_col=args.source_col,
         target_col=args.target_col,
         min_group_size=args.min_group_size,
+        tag_config=args.tag_config,
     )
     _print_tm_stats(output, stats)
     return 0
@@ -102,6 +108,11 @@ def _main_extract(argv: list[str]) -> int:
     )
     parser.add_argument("--min-group-size", type=int, default=2)
     parser.add_argument(
+        "--tag-config",
+        type=Path,
+        help="TOML file defining which tag-like spans are protected",
+    )
+    parser.add_argument(
         "--no-existing-targets",
         action="store_true",
         help="Do not infer target templates from the existing target column",
@@ -118,6 +129,7 @@ def _main_extract(argv: list[str]) -> int:
         examples=_parse_examples(args.example),
         min_group_size=args.min_group_size,
         use_existing_targets=not args.no_existing_targets,
+        tag_config=args.tag_config,
     )
     _print_stats(output, stats)
     return 0
@@ -139,6 +151,11 @@ def _main_fill(argv: list[str]) -> int:
     parser.add_argument("--target-col", default="target", help="Header name or 1-based index")
     parser.add_argument("--min-group-size", type=int, default=2)
     parser.add_argument(
+        "--tag-config",
+        type=Path,
+        help="TOML file defining which tag-like spans are protected",
+    )
+    parser.add_argument(
         "--mode",
         choices=["report", "target-column"],
         default="report",
@@ -158,6 +175,7 @@ def _main_fill(argv: list[str]) -> int:
             target_col=target_col,
             template_workbook=args.templates,
             min_group_size=args.min_group_size,
+            tag_config=args.tag_config,
         )
     else:
         stats = generate_workbook(
@@ -168,6 +186,7 @@ def _main_fill(argv: list[str]) -> int:
             template_workbook=args.templates,
             min_group_size=args.min_group_size,
             use_existing_targets=False,
+            tag_config=args.tag_config,
         )
     _print_stats(output, stats)
     return 0
@@ -194,6 +213,11 @@ def _main_legacy(argv: list[str]) -> int:
     )
     parser.add_argument("--min-group-size", type=int, default=2)
     parser.add_argument(
+        "--tag-config",
+        type=Path,
+        help="TOML file defining which tag-like spans are protected",
+    )
+    parser.add_argument(
         "--no-existing-targets",
         action="store_true",
         help="Do not infer target templates from the existing target column",
@@ -210,6 +234,7 @@ def _main_legacy(argv: list[str]) -> int:
         template_workbook=args.templates,
         min_group_size=args.min_group_size,
         use_existing_targets=not args.no_existing_targets,
+        tag_config=args.tag_config,
     )
     _print_stats(output, stats)
     return 0

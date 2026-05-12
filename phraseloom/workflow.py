@@ -23,6 +23,7 @@ from .tag_engine import (
     serialize_known_tags,
     validate_tag_placeholders,
 )
+from .tag_rules import TagRules, load_tag_rules
 from .template_engine import (
     PLACEHOLDER_RE,
     apply_target_template,
@@ -47,9 +48,11 @@ def generate_workbook(
     tm_workbook: str | Path | None = None,
     min_group_size: int = 2,
     use_existing_targets: bool = True,
+    tag_config: str | Path | None = None,
 ) -> dict[str, int]:
     input_path = Path(input_path)
     output_path = Path(output_path)
+    tag_rules = load_tag_rules(tag_config)
 
     rows, units, result_rows, autofilled_count = _build_fill_context(
         input_path,
@@ -60,6 +63,7 @@ def generate_workbook(
         tm_workbook=tm_workbook,
         min_group_size=min_group_size,
         use_existing_targets=use_existing_targets,
+        tag_rules=tag_rules,
     )
 
     _write_output_workbook(output_path, input_path, units, result_rows)
@@ -81,9 +85,11 @@ def fill_target_column_workbook(
     template_workbook: str | Path,
     tm_workbook: str | Path | None = None,
     min_group_size: int = 2,
+    tag_config: str | Path | None = None,
 ) -> dict[str, int]:
     input_path = Path(input_path)
     output_path = Path(output_path)
+    tag_rules = load_tag_rules(tag_config)
 
     rows, units, result_rows, autofilled_count = _build_fill_context(
         input_path,
@@ -93,6 +99,7 @@ def fill_target_column_workbook(
         tm_workbook=tm_workbook,
         min_group_size=min_group_size,
         use_existing_targets=False,
+        tag_rules=tag_rules,
     )
     _write_target_column_workbook(output_path, input_path, target_col, result_rows)
     return _workbook_stats(rows, units, autofilled_count)
@@ -108,15 +115,16 @@ def _build_fill_context(
     tm_workbook: str | Path | None = None,
     min_group_size: int,
     use_existing_targets: bool,
+    tag_rules: TagRules,
 ) -> tuple[
     list[RowItem],
     list[TranslationUnit],
     list[RowFillResult],
     int,
 ]:
-    rows = _read_source_rows(input_path, source_col, target_col)
+    rows = _read_source_rows(input_path, source_col, target_col, tag_rules=tag_rules)
     provided_units, provided_sources = _build_provided_units(
-        examples, template_workbook, tm_workbook
+        examples, template_workbook, tm_workbook, tag_rules=tag_rules
     )
     units = _build_translation_units(
         rows,
@@ -204,12 +212,16 @@ def generate_tm_pairs(
     source_col: str | int = "英語",
     target_col: str | int = "target",
     min_group_size: int = 2,
+    tag_config: str | Path | None = None,
 ) -> dict[str, int]:
     input_path = Path(input_path)
     output_path = Path(output_path)
+    tag_rules = load_tag_rules(tag_config)
     rows = [
         row
-        for row in _read_source_rows(input_path, source_col, target_col)
+        for row in _read_source_rows(
+            input_path, source_col, target_col, tag_rules=tag_rules
+        )
         if row.existing_target
     ]
     units = _build_translation_units(
@@ -348,6 +360,8 @@ def _build_provided_units(
     examples: Iterable[tuple[str, str]],
     template_workbook: str | Path | None,
     tm_workbook: str | Path | None = None,
+    *,
+    tag_rules: TagRules,
 ) -> tuple[dict[tuple[str, str], str], dict[tuple[str, str], str]]:
     provided: dict[tuple[str, str], str] = {}
     sources: dict[tuple[str, str], str] = {}
@@ -365,7 +379,7 @@ def _build_provided_units(
             sources[key] = "translation_units"
 
     for source, target in examples:
-        source_extraction = extract_tags(source)
+        source_extraction = extract_tags(source, rules=tag_rules)
         serialized_source = source_extraction.text
         serialized_target = serialize_known_tags(target, source_extraction.tags).text
         match = parse_template(serialized_source)
