@@ -962,7 +962,11 @@ class TemplateDemoTests(unittest.TestCase):
 
         warning = row[warning_idx]
         self.assertIsNotNone(warning)
-        self.assertEqual(warning, "source_protected_span_not_found: <color=a;b/>")
+        parts = [part.strip() for part in warning.split("; ")]
+        self.assertIn("source_protected_span_not_found: <color=a;b/>", parts)
+        self.assertIn("protected_token_mismatch: missing {1}", parts)
+        self.assertNotIn("source_protected_span_not_found: <color=a", parts)
+        self.assertNotIn("b/>", parts)
 
     def test_default_output_paths_are_inside_input_work_folder(self):
         from phraseloom.excel_io import (
