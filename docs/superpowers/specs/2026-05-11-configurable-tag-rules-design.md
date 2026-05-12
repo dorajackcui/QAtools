@@ -43,7 +43,7 @@ The fix is not to independently extract target tags. That would classify
 translated label text as structure too. The fix is to restrict structural tag
 extraction to configured tag names.
 
-## Recommended Approach
+## Implemented Approach
 
 Use an allowlist configuration file.
 
@@ -52,19 +52,21 @@ Use an allowlist configuration file.
 - Raw `{...}` placeholders stay protected.
 - TM source, TM target, new source rows, and fill rows all use the same tag
   rules.
+- TM source and target serialize under the same active rules, with target
+  serialization driven by the source row's protected metadata.
 - Matching uses the protected source unit/template only.
 - Target units are protected so that matched translations can restore the
   current source row's raw tags during fill.
 
 ## Config File
 
-Add a default packaged config:
+The default packaged config path is:
 
 ```text
 phraseloom/tag_rules.toml
 ```
 
-Proposed schema:
+Schema:
 
 ```toml
 version = 1
@@ -93,7 +95,7 @@ Rules:
   unpaired-tag warnings.
 - Allowed but malformed tags can still produce warnings, as they do today.
 
-The CLI should accept an optional override:
+The CLI accepts an optional override:
 
 ```text
 phraseloom tm-extract TM.xlsx --tag-config path/to/tag_rules.toml
@@ -182,9 +184,9 @@ The angle-bracket labels remain translatable text. Only `{a}` is protected.
 
 ## Config Metadata
 
-Generated workbooks should record the tag rules used to produce protected units.
+Generated workbooks record the tag rules used to produce protected units.
 
-Recommended metadata keys:
+Metadata keys:
 
 ```text
 tag_rules_version
@@ -192,46 +194,44 @@ tag_rules_hash
 tag_rules_source
 ```
 
-The hash should be computed from the normalized config content, not from raw
+The hash is computed from the normalized config content, not from raw
 file formatting. This makes harmless TOML formatting changes less noisy.
 
 Compatibility behavior:
 
-- If both workbooks have tag rule hashes and they differ, fail with a clear
-  configuration mismatch error.
-- If a workbook has no tag rule hash, treat it as legacy and continue with a
-  warning.
-- New workbooks should always write the metadata.
+- If both workbooks have tag rule hashes and they differ, loading rejects the
+  workbook with a clear configuration mismatch error.
+- If a workbook has no tag rule hash, it is treated as legacy and still loads.
+- New generated workbooks write the metadata hash, version, and source.
 
 This prevents using TM pairs generated under one tag rule set to fill a source
 file generated under another rule set.
 
 ## Implementation Shape
 
-Add a small module, likely `phraseloom.tag_rules`, with:
+The `phraseloom.tag_rules` module provides:
 
 - `TagRules` dataclass.
 - `load_tag_rules(path: Path | None) -> TagRules`.
 - `default_tag_rules() -> TagRules`.
 - `normalized_tag_rules_hash(rules: TagRules) -> str`.
 
-Update `tag_engine` to accept rules:
+`tag_engine` accepts rules:
 
 ```python
 extract_tags(text, rules: TagRules | None = None)
 ```
 
-The exact default handling should avoid repeatedly reading the TOML file per
-row. Workflow should load once and pass the rules through row reading and TM
-creation.
+The default handling avoids repeatedly reading the TOML file per row. Workflow
+loads once and passes the rules through row reading and TM creation.
 
 `serialize_known_tags()` remains source-metadata-driven and does not need to
 independently read rules.
 
 Because the default config is packaged inside `phraseloom`, packaging metadata
-must include the TOML file as package data.
+includes the TOML file as package data.
 
-Update `workflow` and `excel_io` to carry the loaded rules through:
+`workflow` and `excel_io` carry the loaded rules through:
 
 - `generate_tm_pairs(..., tag_config=None)`
 - `generate_workbook(..., tag_config=None)`
@@ -240,19 +240,19 @@ Update `workflow` and `excel_io` to carry the loaded rules through:
 
 ## Warning Behavior
 
-Warnings should become more useful:
+Warnings are surfaced through the generated unit metadata:
 
-- Source extraction warnings should be attached to generated units.
-- Target serialization warnings should be attached to generated units.
-- TM pair workbooks should surface these warnings in `tm_pairs.warning`.
-- Fill should continue warning on missing or extra protected tokens.
+- Source extraction warnings are attached to generated units.
+- Target serialization warnings are attached to generated units.
+- TM pair workbooks surface these warnings in `tm_pairs.warning`.
+- Fill continues warning on missing or extra protected tokens.
 
 Excluded tag-like text should not emit warnings merely because it looks like a
 tag. It is intentional text under the current config.
 
 ## Tests
 
-Focused tests should cover:
+Focused tests cover:
 
 - Default config loads and includes expected allowed tags.
 - `<color=#123>Text</>` is protected.

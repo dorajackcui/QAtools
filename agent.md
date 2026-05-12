@@ -18,11 +18,14 @@ Main workflow:
 4. Todo workbook -> filled source workbook copy or report workbook.
 
 Protected-token extraction is integrated into the main workflow as an internal
-pre-template layer. It serializes recognized tags and every complete raw `{...}`
+pre-template layer. It serializes allowed tags and every complete raw `{...}`
 placeholder into translator-facing protected tokens such as `{1>`, `<2}`, and
 `{3}`, runs the normal template/TM flow on that serialized text, then restores
-raw spans during fill. Entity clustering exists as an experimental side module
-and is not integrated into the main localization workflow yet.
+raw spans during fill. Tag extraction is governed by `phraseloom/tag_rules.toml`.
+The default allowlist protects formatting tags such as `color`, `size`, `img`,
+`br`, `i`, `u`, `outline`, and `c`; unknown angle-bracket labels such as
+`<Activate>` stay translatable text. Entity clustering exists as an experimental
+side module and is not integrated into the main localization workflow yet.
 
 ## First Files To Read
 
@@ -127,6 +130,10 @@ Known sample stats from `testfiles/`:
 - Protected tokens are reserved as `{N>`, `<N}`, and `{N}`. The protected-token
   extractor owns those tokens; template parsing must preserve them and must not
   include their numbers in normal template variables.
+- Tag extraction is governed by `phraseloom/tag_rules.toml`. The default
+  allowlist protects formatting tags such as `color`, `size`, `img`, `br`, `i`,
+  `u`, `outline`, and `c`; unknown angle-bracket labels such as `<Activate>`
+  stay translatable text.
 - Protected-only units should auto-fill with `target_unit_source = "tag_only"`
   for workbook compatibility.
 - Fill order matters: apply template variables first, validate protected tokens,
@@ -139,7 +146,8 @@ Known sample stats from `testfiles/`:
   them and print concise actionable messages.
 - Always close `openpyxl` workbooks after loading. Windows locks `.xlsx` files
   until `wb.close()` is called.
-- The default test command should discover 57 tests at the time of this note.
+- The default test count changes as regression coverage grows; rely on the
+  command result rather than a hardcoded count.
 - `testfiles/` contains local sample workbooks and generated outputs. Treat it as
   local test data; do not commit large generated workbook outputs.
 - `.worktrees/` is ignored for local git worktrees. Do not commit generated

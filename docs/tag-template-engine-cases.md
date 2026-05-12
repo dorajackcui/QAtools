@@ -11,7 +11,7 @@ boundaries.
 
 | Layer | Owns | Does not own |
 |---|---|---|
-| `tag_engine` | Protect raw inline structure before template parsing. This includes HTML-like tags, BBCode-like tags, self-closing tags, and complete non-nested raw `{...}` spans. | Numeric variable extraction, template grouping, entity clustering. |
+| `tag_engine` | Protect raw inline structure before template parsing. `tag_engine` protects only tag names allowed by the active tag rules. Unknown angle-bracket labels remain normal text. Raw `{...}` placeholders remain protected when `raw_braces.protect_all = true`. | Numeric variable extraction, template grouping, entity clustering. |
 | `template_engine` | Extract reusable numeric/color variables from protected text and infer/apply target templates. | Raw tag parsing, raw `{...}` placeholder parsing, restoring original raw spans. |
 | `workflow` / `excel_io` | Connect both layers when reading rows, building translation units, validating fill output, and restoring raw text. | Deep tag nesting QA beyond the current warnings. |
 
@@ -22,8 +22,8 @@ sequence per source segment.
 
 | Token shape | Meaning | Example raw span |
 |---|---|---|
-| `{N>` | Opening protected span | `<a href="shop">`, `[color=#ff0]` |
-| `<N}` | Closing protected span | `</a>`, `[/]`, `[/b]` |
+| `{N>` | Opening protected span | `<color=#123>`, `[color=#ff0]` |
+| `<N}` | Closing protected span | `</color>`, `[/]`, `[/b]` |
 | `{N}` | Single protected span | `<br/>`, `{0}`, `{player.name}` |
 
 Current rules:
@@ -36,6 +36,12 @@ Current rules:
   `TagToken.kind` distinguishes self-closing tags from raw brace placeholders.
 - Legacy helper names such as `make_tag_placeholder` are aliases for protected
   token helpers.
+- Tag extraction is governed by `phraseloom/tag_rules.toml` by default. The
+  default angle allowlist is `color`, `size`, `img`, `br`, `i`, `u`, `outline`,
+  and `c`; the default BBCode allowlist is `color`, `b`, `i`, `u`, and `size`.
+- Generated workbooks record tag-rule metadata. Translated and TM workbook
+  loading validates matching metadata when both sides include it; legacy
+  no-metadata workbooks still load.
 
 ## Tag Engine Extraction Cases
 
@@ -44,8 +50,10 @@ metadata, and warnings.
 
 | Case | Raw input | Protected output | Notes |
 |---|---|---|---|
-| Angle tag pair | `<a href="shop">VIP10</a>` | `{1>VIP10<2}` | Open and close are separate tokens; close points to open via metadata. |
-| Shorthand angle close | `<a>Text</>` | `{1>Text<2}` | `</>` closes the nearest open tag. |
+| Allowed angle tag | `<color=#123>HP {a}</>` | `{1>HP {2}<3}` | `color` is in the default allowlist. |
+| Unknown angle label | `<Activate> HP {a}` | `<Activate> HP {1}` | `activate` is not in the default allowlist. |
+| Custom allowed angle tag pair | `<a href="shop">VIP10</a>` | `{1>VIP10<2}` | Protected only when `a` is allowed by the active custom tag rules. |
+| Shorthand angle close | `<color=#123>Text</>` | `{1>Text<2}` | `</>` closes the nearest protected open tag. |
 | Self-closing angle tag | `<img src="coin.png"/>` | `{1}` | Single token. |
 | BBCode pair | `[b]Bold[/b]` | `{1>Bold<2}` | Named BBCode close must match the stack top. |
 | BBCode parameter with shorthand close | `[color=#ff0]Bonus[/]` | `{1>Bonus<2}` | Color value stays out of template parsing. |
@@ -53,7 +61,7 @@ metadata, and warnings.
 | Raw named placeholder | `Hello {player}` | `Hello {1}` | All raw brace contents are considered non-translatable. |
 | Raw complex placeholder | `Value {player.name:N2}` | `Value {1}` | Colon and dots inside raw braces are protected. |
 | Mixed tag and raw placeholder | `[color=#1213]Hit {0}[/]` | `{1>Hit {2}<3}` | One index sequence covers tags and raw braces together. |
-| Legacy placeholder text | `{t1_op}<a>x</a>` | `{1}{2>x<3}` | Old placeholder-looking text is treated as raw `{...}`. |
+| Legacy placeholder text | `{t1_op}<color=#123>x</>` | `{1}{2>x<3}` | Old placeholder-looking text is treated as raw `{...}`. |
 | Repeated same raw span | `<br/> A <br/>` | `{1} A {2}` | Repeated spans get distinct tokens. |
 | Plain UI bracket text | `Press [OK] to continue` | `Press [OK] to continue` | Unmatched plain `[name]` text is left raw. |
 | Incomplete raw brace | `Use {abc` | `Use {abc` | Left raw without warning. |
@@ -63,9 +71,9 @@ metadata, and warnings.
 
 | Case | Raw input | Protected output | Warning behavior |
 |---|---|---|---|
-| Unpaired close | `</a>Text` | `</a>Text` | Close remains raw; warning includes `unpaired close tag`. |
-| Unclosed open | `<a href="x">Text` | `{1>Text` | Open is serialized; warning includes `open tag has no close partner`. |
-| Misnested named tags | `<a><b>x</a>y</b>` | `{1>{2>x</a>y<3}` | The `</a>` close is not cross-matched over `<b>`; warnings are emitted. |
+| Unpaired close | `</color>Text` | `</color>Text` | Close remains raw; warning includes `unpaired close tag`. |
+| Unclosed open | `<color=#123>Text` | `{1>Text` | Open is serialized; warning includes `open tag has no close partner`. |
+| Misnested named tags | `<color=#123><i>x</color>y</i>` | `{1>{2>x</color>y<3}` | The `</color>` close is not cross-matched over `<i>`; warnings are emitted. |
 | Self-closing validation | `<br/>` then target `{1}` | `{1}` | Counts as valid because source has one single protected token. |
 
 The pairing model is intentionally conservative. Named closes only match the
@@ -88,7 +96,7 @@ Example fill path:
 
 | Source raw | Source protected | Translator target unit | Row values | Serialized target | Restored target |
 |---|---|---|---|---|---|
-| `<a href="shop">VIP10</a>` | `{1>VIP10<2}` | `{1>Pack VIP{num1}<2}` | `num1=10` | `{1>Pack VIP10<2}` | `<a href="shop">Pack VIP10</a>` |
+| `<color=#123>VIP10</>` | `{1>VIP10<2}` | `{1>Pack VIP{num1}<2}` | `num1=10` | `{1>Pack VIP10<2}` | `<color=#123>Pack VIP10</>` |
 | `Hit deals {0} damage` | `Hit deals {1} damage` | `Inflige {1} degats` | none | `Inflige {1} degats` | `Inflige {0} degats` |
 
 If the target unit is `{1>Pack VIP{num1}<2} {9}`, validation reports extra
