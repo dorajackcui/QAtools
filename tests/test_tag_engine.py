@@ -247,6 +247,87 @@ class TagEngineTests(unittest.TestCase):
         self.assertEqual(result.tags[1].raw, "</>")
         self.assertEqual(result.warnings, ())
 
+    def test_angle_alias_close_pairs_with_canonical_open(self):
+        from phraseloom.tag_engine import TAG_CLOSE, TAG_OPEN, extract_tags
+
+        result = extract_tags("<color=#{a}C{b}F>Text</c>")
+
+        self.assertEqual(result.text, "{1>Text<2}")
+        self.assertEqual(
+            tuple((tag.kind, tag.placeholder, tag.raw, tag.partner_index) for tag in result.tags),
+            (
+                (TAG_OPEN, "{1>", "<color=#{a}C{b}F>", None),
+                (TAG_CLOSE, "<2}", "</c>", 1),
+            ),
+        )
+        self.assertEqual(result.warnings, ())
+
+    def test_configured_single_angle_open_serializes_without_close_warning(self):
+        from phraseloom.tag_engine import TAG_SELF, extract_tags
+
+        result = extract_tags('<br>Line<img src="coin.png">')
+
+        self.assertEqual(result.text, "{1}Line{2}")
+        self.assertEqual(
+            tuple((tag.kind, tag.placeholder, tag.raw) for tag in result.tags),
+            (
+                (TAG_SELF, "{1}", "<br>"),
+                (TAG_SELF, "{2}", '<img src="coin.png">'),
+            ),
+        )
+        self.assertEqual(result.warnings, ())
+
+    def test_optional_pair_angle_open_without_named_close_serializes_as_single(self):
+        from phraseloom.tag_engine import TAG_CLOSE, TAG_OPEN, TAG_SELF, extract_tags
+
+        result = extract_tags("<i><size={a}>Voir</size><size={b}> division</size>")
+
+        self.assertEqual(result.text, "{1}{2>Voir<3}{4> division<5}")
+        self.assertEqual(
+            tuple((tag.kind, tag.placeholder, tag.raw, tag.partner_index) for tag in result.tags),
+            (
+                (TAG_SELF, "{1}", "<i>", None),
+                (TAG_OPEN, "{2>", "<size={a}>", None),
+                (TAG_CLOSE, "<3}", "</size>", 2),
+                (TAG_OPEN, "{4>", "<size={b}>", None),
+                (TAG_CLOSE, "<5}", "</size>", 4),
+            ),
+        )
+        self.assertEqual(result.warnings, ())
+
+    def test_default_outline_without_named_close_serializes_as_single(self):
+        from phraseloom.tag_engine import TAG_CLOSE, TAG_OPEN, TAG_SELF, extract_tags
+
+        result = extract_tags(
+            "<outline color=#{a}C{b} width={c}><color=#FFFDF{d}>Time</c>"
+        )
+
+        self.assertEqual(result.text, "{1}{2>Time<3}")
+        self.assertEqual(
+            tuple((tag.kind, tag.placeholder, tag.raw, tag.partner_index) for tag in result.tags),
+            (
+                (TAG_SELF, "{1}", "<outline color=#{a}C{b} width={c}>", None),
+                (TAG_OPEN, "{2>", "<color=#FFFDF{d}>", None),
+                (TAG_CLOSE, "<3}", "</c>", 2),
+            ),
+        )
+        self.assertEqual(result.warnings, ())
+
+    def test_optional_pair_angle_open_with_named_close_stays_paired(self):
+        from phraseloom.tag_engine import TAG_CLOSE, TAG_OPEN, extract_tags
+
+        result = extract_tags("<i>Voir</i>")
+
+        self.assertEqual(result.text, "{1>Voir<2}")
+        self.assertEqual(
+            tuple((tag.kind, tag.placeholder, tag.raw, tag.partner_index) for tag in result.tags),
+            (
+                (TAG_OPEN, "{1>", "<i>", None),
+                (TAG_CLOSE, "<2}", "</i>", 1),
+            ),
+        )
+        self.assertEqual(result.warnings, ())
+
     def test_extracts_existing_placeholders_as_raw_braces(self):
         from phraseloom.tag_engine import (
             RAW_PLACEHOLDER,

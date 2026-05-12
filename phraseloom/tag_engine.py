@@ -97,6 +97,9 @@ def extract_tags(text: str, rules: TagRules | None = None) -> TagExtraction:
     warnings: list[str] = []
     spans = list(_PROTECTED_SPAN_RE.finditer(source))
     matched_plain_bbcode_starts = _matched_plain_bbcode_open_starts(spans, active_rules)
+    matched_optional_angle_starts = _matched_optional_pair_angle_open_starts(
+        spans, active_rules
+    )
     chunks: list[str] = []
     tags: list[TagToken] = []
     stack: list[tuple[int, str | None]] = []
@@ -128,11 +131,19 @@ def extract_tags(text: str, rules: TagRules | None = None) -> TagExtraction:
             chunks.append(raw)
             pos = found.end()
             continue
+        if (
+            kind == TAG_OPEN
+            and raw.startswith("<")
+            and _angle_open_should_be_single(
+                name, found.start(), matched_optional_angle_starts, active_rules
+            )
+        ):
+            kind = TAG_SELF
 
         if kind == TAG_OPEN:
             index = next_index
             next_index += 1
-            stack.append((index, name))
+            stack.append((index, _canonical_raw_tag_name(raw, name, active_rules)))
             placeholder = make_protected_token(index, TAG_OPEN)
             token = TagToken(index, TAG_OPEN, placeholder, raw)
         elif kind == TAG_SELF:
@@ -141,7 +152,9 @@ def extract_tags(text: str, rules: TagRules | None = None) -> TagExtraction:
             placeholder = make_protected_token(index, TAG_SELF)
             token = TagToken(index, TAG_SELF, placeholder, raw)
         else:
-            matched = _pop_matching_open(stack, name)
+            matched = _pop_matching_open(
+                stack, _canonical_raw_tag_name(raw, name, active_rules)
+            )
             if matched is None:
                 chunks.append(raw)
                 warnings.append(f"unpaired close tag: {raw}")
@@ -248,6 +261,29 @@ def _is_raw_tag_allowed(raw: str, kind: str, name: str | None, rules: TagRules) 
     return name is not None and rules.allows_bbcode(name)
 
 
+def _angle_open_should_be_single(
+    name: str | None,
+    start: int,
+    matched_optional_angle_starts: set[int],
+    rules: TagRules,
+) -> bool:
+    if name is None:
+        return False
+    if rules.is_angle_single(name):
+        return True
+    return rules.is_angle_optional_pair(name) and start not in matched_optional_angle_starts
+
+
+def _canonical_raw_tag_name(
+    raw: str, name: str | None, rules: TagRules
+) -> str | None:
+    if name is None:
+        return None
+    if raw.startswith("<"):
+        return rules.canonical_angle(name)
+    return name.lower()
+
+
 def _angle_tag_name(raw: str) -> str:
     match = re.match(r"</?\s*([A-Za-z][A-Za-z0-9:._-]*)", raw)
     return match.group(1).lower() if match else ""
@@ -288,6 +324,38 @@ def _matched_plain_bbcode_open_starts(
             if rules.allows_bbcode(name) and later_closes_by_name.get(name, 0) > 0:
                 matched_starts.add(found.start())
                 later_closes_by_name[name] -= 1
+
+    return matched_starts
+
+
+def _matched_optional_pair_angle_open_starts(
+    spans: list[re.Match[str]], rules: TagRules
+) -> set[int]:
+    later_closes_by_name: dict[str, int] = {}
+    matched_starts: set[int] = set()
+
+    for found in reversed(spans):
+        raw = found.group(0)
+        if not raw.startswith("<"):
+            continue
+
+        kind, name = _classify_raw_tag(raw)
+        if not _is_raw_tag_allowed(raw, kind, name, rules):
+            continue
+        canonical_name = _canonical_raw_tag_name(raw, name, rules)
+
+        if kind == TAG_CLOSE and canonical_name is not None:
+            later_closes_by_name[canonical_name] = (
+                later_closes_by_name.get(canonical_name, 0) + 1
+            )
+        elif (
+            kind == TAG_OPEN
+            and name is not None
+            and rules.is_angle_optional_pair(name)
+            and later_closes_by_name.get(canonical_name or "", 0) > 0
+        ):
+            matched_starts.add(found.start())
+            later_closes_by_name[canonical_name or ""] -= 1
 
     return matched_starts
 

@@ -4,6 +4,15 @@ version = 1
 mode = "allowlist"
 allowed = ["color", "size", "img", "br", "i", "u", "outline", "c"]
 
+[angle_tags.aliases]
+c = "color"
+
+[angle_tags.single]
+tags = ["img", "br"]
+
+[angle_tags.optional_pair]
+tags = ["i", "outline"]
+
 [bbcode_tags]
 mode = "allowlist"
 allowed = ["color", "b", "i", "u", "size"]

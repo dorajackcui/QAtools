@@ -18,6 +18,12 @@ class TagRulesTests(unittest.TestCase):
         self.assertFalse(rules.allows_angle("activate"))
         self.assertTrue(rules.allows_bbcode("color"))
         self.assertTrue(rules.protect_raw_braces)
+        self.assertEqual(rules.canonical_angle("c"), "color")
+        self.assertTrue(rules.is_angle_single("br"))
+        self.assertTrue(rules.is_angle_single("img"))
+        self.assertTrue(rules.is_angle_optional_pair("i"))
+        self.assertTrue(rules.is_angle_optional_pair("outline"))
+        self.assertFalse(rules.is_angle_optional_pair("u"))
 
     def test_custom_rules_load_from_toml(self):
         from phraseloom.tag_rules import load_tag_rules
@@ -31,7 +37,16 @@ class TagRulesTests(unittest.TestCase):
                         "",
                         "[angle_tags]",
                         'mode = "allowlist"',
-                        'allowed = ["foo"]',
+                        'allowed = ["foo", "bar", "br"]',
+                        "",
+                        "[angle_tags.aliases]",
+                        'bar = "foo"',
+                        "",
+                        "[angle_tags.single]",
+                        'tags = ["br"]',
+                        "",
+                        "[angle_tags.optional_pair]",
+                        'tags = ["foo"]',
                         "",
                         "[bbcode_tags]",
                         'mode = "allowlist"',
@@ -47,7 +62,11 @@ class TagRulesTests(unittest.TestCase):
             rules = load_tag_rules(path)
 
         self.assertTrue(rules.allows_angle("foo"))
+        self.assertTrue(rules.allows_angle("bar"))
         self.assertFalse(rules.allows_angle("color"))
+        self.assertEqual(rules.canonical_angle("bar"), "foo")
+        self.assertTrue(rules.is_angle_single("br"))
+        self.assertTrue(rules.is_angle_optional_pair("foo"))
         self.assertTrue(rules.allows_bbcode("bar"))
         self.assertFalse(rules.protect_raw_braces)
 

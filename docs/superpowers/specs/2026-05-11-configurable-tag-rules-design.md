@@ -75,6 +75,15 @@ version = 1
 mode = "allowlist"
 allowed = ["color", "size", "img", "br", "i", "u", "outline", "c"]
 
+[angle_tags.aliases]
+c = "color"
+
+[angle_tags.single]
+tags = ["img", "br"]
+
+[angle_tags.optional_pair]
+tags = ["i", "outline"]
+
 [bbcode_tags]
 mode = "allowlist"
 allowed = ["color", "b", "i", "u", "size"]
@@ -87,6 +96,14 @@ Rules:
 
 - Tag names are case-insensitive.
 - Attributes do not affect matching once the tag name is allowed.
+- Angle tag aliases canonicalize names before pairing. The default `c = "color"`
+  lets `<color=...>text</c>` pair normally.
+- Angle tags listed in `single.tags` are serialized as `{N}` even when the raw
+  syntax is `<br>` or `<img ...>` rather than self-closing.
+- Angle tags listed in `optional_pair.tags` are paired only when a later named
+  close exists. Otherwise they are serialized as single spans. The default
+  treats `<i>` and `<outline ...>` as single prefix tags unless the row contains
+  a later named close for the same tag.
 - Shorthand closes such as `</>` and `[/]` close the nearest currently protected
   open tag.
 - A named close is protected only when its tag name is allowed and it matches
@@ -264,6 +281,16 @@ Focused tests cover:
 - Target is not independently scanned for translated angle labels.
 - Config mismatch metadata is detected.
 - Existing protected-token behavior for raw `{...}` placeholders still passes.
+
+For repeatable business-data verification, run:
+
+```text
+py -3 scripts\verify_tm_self_prefill.py --input testfiles\TM.xlsx --output-dir testfiles\tm_self_prefill_verification
+```
+
+The script uses the same workbook as both TM and a targetless source file,
+then reports row coverage, residual protected tokens, target mismatches, and
+protected-token QA warnings.
 
 ## Out Of Scope
 

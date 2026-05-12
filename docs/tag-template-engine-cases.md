@@ -39,6 +39,10 @@ Current rules:
 - Tag extraction is governed by `phraseloom/tag_rules.toml` by default. The
   default angle allowlist is `color`, `size`, `img`, `br`, `i`, `u`, `outline`,
   and `c`; the default BBCode allowlist is `color`, `b`, `i`, `u`, and `size`.
+- Angle tag rules also carry pairing semantics. By default `c` is an alias for
+  `color`, `img` and `br` are single tags even without a trailing `/`, and `i`
+  and `outline` are optional pairs: they are paired only when a later named
+  close exists.
 - Generated workbooks record tag-rule metadata. Translated and TM workbook
   loading validates matching metadata when both sides include it; legacy
   no-metadata workbooks still load.
@@ -55,6 +59,11 @@ metadata, and warnings.
 | Custom allowed angle tag pair | `<a href="shop">VIP10</a>` | `{1>VIP10<2}` | Protected only when `a` is allowed by the active custom tag rules. |
 | Shorthand angle close | `<color=#123>Text</>` | `{1>Text<2}` | `</>` closes the nearest protected open tag. |
 | Self-closing angle tag | `<img src="coin.png"/>` | `{1}` | Single token. |
+| Configured single angle tag | `<br>Line<img src="coin.png">` | `{1}Line{2}` | `br` and `img` are single by config even when not written as `/>`. |
+| Angle close alias | `<color=#123>Text</c>` | `{1>Text<2}` | `c` canonicalizes to `color` before stack matching. |
+| Optional-pair angle tag without close | `<i><size={a}>Voir</size>` | `{1}{2>Voir<3}` | `i` becomes a single token when no later named `</i>` exists. |
+| Optional-pair style wrapper without close | `<outline width={a}><color=#fff>Time</c>` | `{1}{2>Time<3}` | `outline` behaves the same way when no later named `</outline>` exists. |
+| Optional-pair angle tag with close | `<i>Voir</i>` | `{1>Voir<2}` | A later named close keeps `i` as a normal pair. |
 | BBCode pair | `[b]Bold[/b]` | `{1>Bold<2}` | Named BBCode close must match the stack top. |
 | BBCode parameter with shorthand close | `[color=#ff0]Bonus[/]` | `{1>Bonus<2}` | Color value stays out of template parsing. |
 | Raw numeric placeholder | `Hit deals {0} damage` | `Hit deals {1} damage` | Complete raw `{...}` spans are protected. |
@@ -77,8 +86,10 @@ metadata, and warnings.
 | Self-closing validation | `<br/>` then target `{1}` | `{1}` | Counts as valid because source has one single protected token. |
 
 The pairing model is intentionally conservative. Named closes only match the
-top of the stack. Shorthand closes such as `[/]` and `</>` pop the nearest open
-tag.
+top of the stack after angle aliases are canonicalized. Shorthand closes such
+as `[/]` and `</>` pop the nearest open tag. Optional-pair angle tags are
+opened only when a later named close for the same canonical tag exists;
+otherwise they are serialized as single protected spans.
 
 ## Tag Engine Target-Side Helpers
 
@@ -222,7 +233,9 @@ The warning is surfaced in workbook QA/status columns.
 - Protected-token validation is count-based, not order-based.
 - Existing target serialization uses source-side raw spans. It does not support
   independently invented target-only tags unless they are already written as
-  protected tokens in the translator todo.
+  protected tokens in the translator todo. Equivalent-looking raw tags can still
+  miss serialization when their raw text differs, for example normal space vs
+  non-breaking space in attributes.
 - Text inside opening and closing protected tags is still templateable.
 - Text inside a single protected token is not visible to template parsing.
 - Dot decimals currently use `seqN`, not `numN`, because the separator regex is
