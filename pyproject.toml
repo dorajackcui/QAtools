@@ -17,3 +17,6 @@ phraseloom = "phraseloom.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["phraseloom*"]
+
+[tool.setuptools.package-data]
+phraseloom = ["*.toml"]

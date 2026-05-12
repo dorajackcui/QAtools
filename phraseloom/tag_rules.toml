@@ -1,0 +1,12 @@
+version = 1
+
+[angle_tags]
+mode = "allowlist"
+allowed = ["color", "size", "img", "br", "i", "u", "outline", "c"]
+
+[bbcode_tags]
+mode = "allowlist"
+allowed = ["color", "b", "i", "u", "size"]
+
+[raw_braces]
+protect_all = true
