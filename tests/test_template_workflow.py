@@ -211,6 +211,7 @@ class TemplateDemoTests(unittest.TestCase):
                 row[source_idx]
                 for row in units.iter_rows(min_row=2, values_only=True)
             ]
+            out.close()
 
         self.assertIn("{1>Power {2}<3}", source_units)
 
@@ -265,9 +266,8 @@ class TemplateDemoTests(unittest.TestCase):
                     "--no-existing-targets",
                 ]
             )
-
-        self.assertEqual(exit_code, 0)
-        self.assertTrue(output_path.exists())
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(output_path.exists())
 
     def test_raw_brace_placeholders_are_translator_facing_protected_tokens(self):
         from phraseloom.workflow import fill_target_column_workbook, generate_workbook
