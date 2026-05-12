@@ -153,11 +153,7 @@ def _build_fill_context(
         warning = ""
         if serialized_target:
             validation = validate_tag_placeholders(serialized_target, row.tag_tokens)
-            warning = _merge_warning_parts(
-                *row.tag_warnings,
-                *row.target_tag_warnings,
-                *validation.warnings,
-            )
+            warning = _merge_warning_parts(*validation.warnings)
             auto_target = restore_tags(serialized_target, row.tag_tokens)
         if auto_target:
             autofilled_count += 1

@@ -931,6 +931,39 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertIsNotNone(warning)
         self.assertEqual(warning.count("source_protected_span_not_found: <br/>"), 1)
 
+    def test_source_map_warning_preserves_semicolon_bearing_tag_payload(self):
+        from phraseloom.workflow import generate_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "source.xlsx"
+            output_path = tmp_path / "pack.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["<color=a;b/>", "no matching span"])
+            wb.save(input_path)
+
+            generate_workbook(
+                input_path,
+                output_path,
+                source_col="source",
+                target_col="target",
+                use_existing_targets=True,
+            )
+
+            out = load_workbook(output_path, data_only=True)
+            ws = out["source_map"]
+            headers = [cell.value for cell in ws[1]]
+            warning_idx = headers.index("warning")
+            row = next(ws.iter_rows(min_row=2, values_only=True))
+            out.close()
+
+        warning = row[warning_idx]
+        self.assertIsNotNone(warning)
+        self.assertEqual(warning, "source_protected_span_not_found: <color=a;b/>")
+
     def test_default_output_paths_are_inside_input_work_folder(self):
         from phraseloom.excel_io import (
             _default_extract_output_path,
