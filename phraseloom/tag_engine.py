@@ -4,6 +4,8 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 
+from .tag_rules import TagRules, default_tag_rules
+
 
 TAG_OPEN = "op"
 TAG_CLOSE = "cl"
@@ -89,11 +91,12 @@ def is_tag_placeholder(placeholder: str) -> bool:
     return is_protected_token(placeholder)
 
 
-def extract_tags(text: str) -> TagExtraction:
+def extract_tags(text: str, rules: TagRules | None = None) -> TagExtraction:
     source = "" if text is None else str(text)
+    active_rules = default_tag_rules() if rules is None else rules
     warnings: list[str] = []
     spans = list(_PROTECTED_SPAN_RE.finditer(source))
-    matched_plain_bbcode_starts = _matched_plain_bbcode_open_starts(spans)
+    matched_plain_bbcode_starts = _matched_plain_bbcode_open_starts(spans, active_rules)
     chunks: list[str] = []
     tags: list[TagToken] = []
     stack: list[tuple[int, str | None]] = []
@@ -104,6 +107,10 @@ def extract_tags(text: str) -> TagExtraction:
         raw = found.group(0)
         chunks.append(source[pos : found.start()])
         if _RAW_BRACE_RE.fullmatch(raw):
+            if not active_rules.protect_raw_braces:
+                chunks.append(raw)
+                pos = found.end()
+                continue
             index = next_index
             next_index += 1
             placeholder = make_protected_token(index, RAW_PLACEHOLDER)
@@ -117,6 +124,10 @@ def extract_tags(text: str) -> TagExtraction:
             pos = found.end()
             continue
         kind, name = _classify_raw_tag(raw)
+        if not _is_raw_tag_allowed(raw, kind, name, active_rules):
+            chunks.append(raw)
+            pos = found.end()
+            continue
 
         if kind == TAG_OPEN:
             index = next_index
@@ -227,6 +238,16 @@ def _classify_raw_tag(raw: str) -> tuple[str, str | None]:
     return TAG_OPEN, _bbcode_tag_name(raw)
 
 
+def _is_raw_tag_allowed(raw: str, kind: str, name: str | None, rules: TagRules) -> bool:
+    if raw.startswith("<"):
+        if raw == "</>":
+            return True
+        return name is not None and rules.allows_angle(name)
+    if raw == "[/]":
+        return True
+    return name is not None and rules.allows_bbcode(name)
+
+
 def _angle_tag_name(raw: str) -> str:
     match = re.match(r"</?\s*([A-Za-z][A-Za-z0-9:._-]*)", raw)
     return match.group(1).lower() if match else ""
@@ -249,7 +270,9 @@ def _pop_matching_open(stack: list[tuple[int, str | None]], name: str | None) ->
     return None
 
 
-def _matched_plain_bbcode_open_starts(spans: list[re.Match[str]]) -> set[int]:
+def _matched_plain_bbcode_open_starts(
+    spans: list[re.Match[str]], rules: TagRules
+) -> set[int]:
     later_closes_by_name: dict[str, int] = {}
     matched_starts: set[int] = set()
 
@@ -257,10 +280,12 @@ def _matched_plain_bbcode_open_starts(spans: list[re.Match[str]]) -> set[int]:
         raw = found.group(0)
         if _is_named_bbcode_close(raw):
             name = raw[2:-1].strip().lower()
+            if not rules.allows_bbcode(name):
+                continue
             later_closes_by_name[name] = later_closes_by_name.get(name, 0) + 1
         elif _is_plain_bbcode_open(raw):
             name = _bbcode_tag_name(raw)
-            if later_closes_by_name.get(name, 0) > 0:
+            if rules.allows_bbcode(name) and later_closes_by_name.get(name, 0) > 0:
                 matched_starts.add(found.start())
                 later_closes_by_name[name] -= 1
 

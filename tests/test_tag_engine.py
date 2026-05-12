@@ -63,7 +63,7 @@ class TagEngineTests(unittest.TestCase):
     def test_extracts_angle_tags_and_preserves_token_fields(self):
         from phraseloom.tag_engine import TAG_CLOSE, TAG_OPEN, TAG_SELF, extract_tags
 
-        result = extract_tags('<a href="shop">VIP10</a> <img src="coin.png"/>')
+        result = extract_tags('<color=#fff>VIP10</color> <img src="coin.png"/>')
 
         self.assertEqual(result.text, "{1>VIP10<2} {3}")
         self.assertEqual(
@@ -72,11 +72,77 @@ class TagEngineTests(unittest.TestCase):
                 for tag in result.tags
             ),
             (
-                (1, TAG_OPEN, "{1>", '<a href="shop">', None),
-                (2, TAG_CLOSE, "<2}", "</a>", 1),
+                (1, TAG_OPEN, "{1>", "<color=#fff>", None),
+                (2, TAG_CLOSE, "<2}", "</color>", 1),
                 (3, TAG_SELF, "{3}", '<img src="coin.png"/>', None),
             ),
         )
+        self.assertEqual(result.warnings, ())
+
+    def test_default_rules_keep_unlisted_angle_label_raw(self):
+        from phraseloom.tag_engine import RAW_PLACEHOLDER, extract_tags
+
+        result = extract_tags("<Activate> HP increased by {a}%")
+
+        self.assertEqual(result.text, "<Activate> HP increased by {1}%")
+        self.assertEqual(
+            tuple((tag.kind, tag.placeholder, tag.raw) for tag in result.tags),
+            ((RAW_PLACEHOLDER, "{1}", "{a}"),),
+        )
+        self.assertEqual(result.warnings, ())
+
+    def test_default_rules_keep_unlisted_angle_label_with_spaces_raw(self):
+        from phraseloom.tag_engine import RAW_PLACEHOLDER, extract_tags
+
+        result = extract_tags("<Weather Change> before turn {a}")
+
+        self.assertEqual(result.text, "<Weather Change> before turn {1}")
+        self.assertEqual(
+            tuple((tag.kind, tag.placeholder, tag.raw) for tag in result.tags),
+            ((RAW_PLACEHOLDER, "{1}", "{a}"),),
+        )
+        self.assertEqual(result.warnings, ())
+
+    def test_default_rules_still_extract_allowed_color_pair(self):
+        from phraseloom.tag_engine import RAW_PLACEHOLDER, TAG_CLOSE, TAG_OPEN, extract_tags
+
+        result = extract_tags("<color=#123>HP {a}</>")
+
+        self.assertEqual(result.text, "{1>HP {2}<3}")
+        self.assertEqual(
+            tuple((tag.kind, tag.placeholder, tag.raw, tag.partner_index) for tag in result.tags),
+            (
+                (TAG_OPEN, "{1>", "<color=#123>", None),
+                (RAW_PLACEHOLDER, "{2}", "{a}", None),
+                (TAG_CLOSE, "<3}", "</>", 1),
+            ),
+        )
+        self.assertEqual(result.warnings, ())
+
+    def test_default_rules_leave_unlisted_named_close_raw(self):
+        from phraseloom.tag_engine import extract_tags
+
+        result = extract_tags("<foo>x</foo>")
+
+        self.assertEqual(result.text, "<foo>x</foo>")
+        self.assertEqual(result.tags, ())
+        self.assertEqual(result.warnings, ())
+
+    def test_custom_rules_can_leave_raw_braces_unprotected(self):
+        from phraseloom.tag_engine import extract_tags
+        from phraseloom.tag_rules import TagRules
+
+        rules = TagRules(1, frozenset({"color"}), frozenset({"color"}), False)
+        result = extract_tags("<color>HP {a}</>", rules=rules)
+        self.assertEqual(result.text, "{1>HP {a}<2}")
+
+    def test_default_rules_leave_unlisted_anchor_raw(self):
+        from phraseloom.tag_engine import extract_tags
+
+        result = extract_tags('<a href="shop">VIP10</a>')
+
+        self.assertEqual(result.text, '<a href="shop">VIP10</a>')
+        self.assertEqual(result.tags, ())
         self.assertEqual(result.warnings, ())
 
     def test_extracts_bbcode_tags(self):
@@ -153,21 +219,21 @@ class TagEngineTests(unittest.TestCase):
     def test_unpaired_close_stays_raw_and_warns(self):
         from phraseloom.tag_engine import extract_tags
 
-        result = extract_tags("</a>Text")
+        result = extract_tags("</color>Text")
 
-        self.assertEqual(result.text, "</a>Text")
+        self.assertEqual(result.text, "</color>Text")
         self.assertEqual(result.tags, ())
         self.assertTrue(any("unpaired close" in warning for warning in result.warnings))
 
     def test_unclosed_open_serializes_and_warns(self):
         from phraseloom.tag_engine import TAG_OPEN, extract_tags
 
-        result = extract_tags('<a href="x">Text')
+        result = extract_tags("<color=#fff>Text")
 
         self.assertEqual(result.text, "{1>Text")
         self.assertEqual(len(result.tags), 1)
         self.assertEqual(result.tags[0].kind, TAG_OPEN)
-        self.assertEqual(result.tags[0].raw, '<a href="x">')
+        self.assertEqual(result.tags[0].raw, "<color=#fff>")
         self.assertTrue(
             any("open tag has no close partner" in warning for warning in result.warnings)
         )
@@ -175,7 +241,7 @@ class TagEngineTests(unittest.TestCase):
     def test_shorthand_angle_close_pairs_with_nearest_open(self):
         from phraseloom.tag_engine import extract_tags
 
-        result = extract_tags("<a>Text</>")
+        result = extract_tags("<color>Text</>")
 
         self.assertEqual(result.text, "{1>Text<2}")
         self.assertEqual(result.tags[1].raw, "</>")
@@ -190,7 +256,7 @@ class TagEngineTests(unittest.TestCase):
             restore_tags,
         )
 
-        result = extract_tags("{t1_op}<a>x</a>")
+        result = extract_tags("{t1_op}<color>x</color>")
 
         self.assertEqual(result.text, "{1}{2>x<3}")
         self.assertEqual(
@@ -200,19 +266,19 @@ class TagEngineTests(unittest.TestCase):
             ),
             (
                 (1, RAW_PLACEHOLDER, "{1}", "{t1_op}", None),
-                (2, TAG_OPEN, "{2>", "<a>", None),
-                (3, TAG_CLOSE, "<3}", "</a>", 2),
+                (2, TAG_OPEN, "{2>", "<color>", None),
+                (3, TAG_CLOSE, "<3}", "</color>", 2),
             ),
         )
         self.assertEqual(result.warnings, ())
-        self.assertEqual(restore_tags(result.text, result.tags), "{t1_op}<a>x</a>")
+        self.assertEqual(restore_tags(result.text, result.tags), "{t1_op}<color>x</color>")
 
     def test_misnested_named_tags_do_not_cross_pair(self):
         from phraseloom.tag_engine import extract_tags
 
-        result = extract_tags("<a><b>x</a>y</b>")
+        result = extract_tags("<color><size>x</color>y</size>")
 
-        self.assertEqual(result.text, "{1>{2>x</a>y<3}")
+        self.assertEqual(result.text, "{1>{2>x</color>y<3}")
         self.assertEqual(
             [tag.placeholder for tag in result.tags],
             ["{1>", "{2>", "<3}"],
@@ -256,16 +322,16 @@ class TagEngineTests(unittest.TestCase):
     def test_restore_tags_replaces_known_protected_tokens_only(self):
         from phraseloom.tag_engine import extract_tags, restore_tags
 
-        extraction = extract_tags('<a href="shop">VIP{0}</a>')
+        extraction = extract_tags("<color=#fff>VIP{0}</color>")
 
         restored = restore_tags("{1>VIP{2}<3} {9}", extraction.tags)
 
-        self.assertEqual(restored, '<a href="shop">VIP{0}</a> {9}')
+        self.assertEqual(restored, "<color=#fff>VIP{0}</color> {9}")
 
     def test_validate_tag_placeholders_reports_extra_counts(self):
         from phraseloom.tag_engine import extract_tags, validate_tag_placeholders
 
-        extraction = extract_tags('<a href="shop">VIP10</a>')
+        extraction = extract_tags("<color=#fff>VIP10</color>")
 
         validation = validate_tag_placeholders("{1>VIP10<2} {3}", extraction.tags)
 
@@ -274,7 +340,7 @@ class TagEngineTests(unittest.TestCase):
     def test_validate_tag_placeholders_reports_missing_counts(self):
         from phraseloom.tag_engine import extract_tags, validate_tag_placeholders
 
-        extraction = extract_tags("<a>x</a>")
+        extraction = extract_tags("<color>x</color>")
 
         validation = validate_tag_placeholders("{1>x", extraction.tags)
 
@@ -330,7 +396,7 @@ class TagEngineTests(unittest.TestCase):
     def test_serialize_known_tags_returns_empty_extraction_for_empty_target(self):
         from phraseloom.tag_engine import TagExtraction, extract_tags, serialize_known_tags
 
-        extraction = extract_tags("<a>x</a>")
+        extraction = extract_tags("<color>x</color>")
 
         result = serialize_known_tags("", extraction.tags)
 
