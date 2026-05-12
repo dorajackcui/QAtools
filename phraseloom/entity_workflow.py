@@ -137,6 +137,29 @@ def split_entity_workbook(
     }
 
 
+def extract_entity_tm_workbook(
+    input_path: str | Path,
+    output_path: str | Path,
+    *,
+    min_group_size: int = 3,
+    strategy: EntityExtractionStrategy | None = None,
+) -> dict[str, int | str]:
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+    rows = _read_tm_pair_rows(input_path)
+    active_strategy = strategy or ClusterProbeStrategy(min_group_size=min_group_size)
+    clusters = active_strategy.find_clusters(
+        [(row.source_unit, row.target_unit) for row in rows]
+    )
+    structures, terms = _build_entity_tm(rows, clusters, min_group_size)
+    _write_entity_tm_workbook(output_path, structures, terms)
+    return {
+        "entity_structure_count": len(structures),
+        "entity_term_count": len(terms),
+        "output_path": str(output_path),
+    }
+
+
 def prefill_entity_workbook(
     entity_input_path: str | Path,
     tm_path: str | Path,
@@ -278,6 +301,171 @@ def _read_unit_rows(path: Path, sheet_name: str) -> tuple[list[UnitRow], list[st
         return rows, headers
     finally:
         wb.close()
+
+
+def _read_tm_pair_rows(path: Path) -> list[UnitRow]:
+    wb = load_workbook(path, read_only=True, data_only=True)
+    try:
+        ws = wb[schema.TM_PAIRS_SHEET]
+        headers = _header_values(ws)
+        rows: list[UnitRow] = []
+        for sequence_index, row in enumerate(
+            ws.iter_rows(min_row=2, values_only=True),
+            start=1,
+        ):
+            values = {
+                header: row[index] if index < len(row) else None
+                for index, header in enumerate(headers)
+                if header
+            }
+            if values.get(schema.SOURCE_UNIT_COLUMN) and values.get(schema.TARGET_UNIT_COLUMN):
+                values[schema.UNIT_ID_COLUMN] = values.get(schema.TM_ID_COLUMN)
+                rows.append(UnitRow(sequence_index, values))
+        return rows
+    finally:
+        wb.close()
+
+
+def _build_entity_tm(
+    rows: list[UnitRow],
+    clusters: list[EntityCluster],
+    min_group_size: int,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    structures: list[dict[str, object]] = []
+    term_occurrences: dict[str, Counter[str]] = defaultdict(Counter)
+    term_targets: dict[str, set[str]] = defaultdict(set)
+    assigned_indexes: set[int] = set()
+
+    for structure_index, cluster in enumerate(clusters, start=1):
+        structure_id = f"TMES{structure_index:04d}"
+        occurrences: list[tuple[UnitRow, dict[str, str]]] = []
+        for cluster_row_number in cluster.row_numbers:
+            row_index = cluster_row_number - 2
+            if row_index < 0 or row_index >= len(rows):
+                continue
+            unit_row = rows[row_index]
+            if unit_row.original_index in assigned_indexes:
+                continue
+            source_entities = _extract_entities(
+                cluster.source_pattern,
+                unit_row.source_unit,
+            )
+            if source_entities is None:
+                continue
+            occurrences.append((unit_row, source_entities))
+
+        if not occurrences:
+            continue
+
+        target_structure, target_entity_rows = _derive_target_entity_pattern(
+            occurrences,
+            min_group_size=min(min_group_size, len(occurrences)),
+        )
+        for unit_row, source_entities in occurrences:
+            assigned_indexes.add(unit_row.original_index)
+            for source_entity in source_entities.values():
+                term_occurrences[source_entity][structure_id] += 1
+            target_entities = target_entity_rows.get(unit_row.original_index, {})
+            for source_entity, target_entity in _ordered_entity_pairs(
+                source_entities,
+                target_entities,
+            ):
+                if target_entity:
+                    term_targets[source_entity].add(target_entity)
+
+        structures.append(
+            {
+                schema.STRUCTURE_ID_COLUMN: structure_id,
+                schema.SOURCE_STRUCTURE_COLUMN: cluster.source_pattern,
+                schema.TARGET_STRUCTURE_COLUMN: target_structure,
+                schema.COVERAGE_COUNT_COLUMN: len(occurrences),
+                schema.CONFIDENCE_COLUMN: cluster.confidence,
+                schema.RISK_COLUMN: cluster.risk or None,
+                schema.STATUS_COLUMN: "ready" if target_structure else "review",
+                schema.SAMPLE_SOURCES_COLUMN: "\n".join(
+                    dict.fromkeys(row.source_unit for row, _entities in occurrences[:10])
+                ),
+                schema.ROW_NUMBERS_COLUMN: ",".join(
+                    str(row.original_index) for row, _entities in occurrences
+                ),
+                schema.WARNING_COLUMN: None
+                if target_structure
+                else "target entity structure not inferred",
+            }
+        )
+
+    terms = []
+    for index, (source_entity, structures_count) in enumerate(
+        sorted(term_occurrences.items()),
+        start=1,
+    ):
+        targets = term_targets.get(source_entity, set())
+        target_entity = next(iter(targets)) if len(targets) == 1 else None
+        warning = "ambiguous_entity_translation" if len(targets) > 1 else None
+        if not targets:
+            warning = "target entity not inferred"
+        terms.append(
+            {
+                schema.TERM_ID_COLUMN: f"TMET{index:04d}",
+                schema.SOURCE_ENTITY_COLUMN: source_entity,
+                schema.TARGET_ENTITY_COLUMN: target_entity,
+                schema.OCCURRENCE_COUNT_COLUMN: sum(structures_count.values()),
+                schema.STRUCTURE_IDS_COLUMN: ",".join(sorted(structures_count)),
+                schema.STATUS_COLUMN: "ready" if target_entity else "review",
+                schema.WARNING_COLUMN: warning,
+            }
+        )
+    return structures, terms
+
+
+def _derive_target_entity_pattern(
+    occurrences: list[tuple[UnitRow, dict[str, str]]],
+    *,
+    min_group_size: int,
+) -> tuple[str | None, dict[int, dict[str, str]]]:
+    if len(occurrences) < min_group_size:
+        return None, {}
+    target_rows = [(row.target_unit, "") for row, _entities in occurrences]
+    target_clusters = find_entity_clusters(
+        target_rows,
+        min_group_size=min_group_size,
+        max_entity_tokens=4,
+        min_literal_tokens=3,
+        top=1,
+    )
+    if not target_clusters:
+        return None, {}
+
+    target_cluster = target_clusters[0]
+    target_entities_by_index: dict[int, dict[str, str]] = {}
+    for target_cluster_row_number in target_cluster.row_numbers:
+        occurrence_index = target_cluster_row_number - 2
+        if occurrence_index < 0 or occurrence_index >= len(occurrences):
+            continue
+        unit_row, _source_entities = occurrences[occurrence_index]
+        target_entities = _extract_entities(
+            target_cluster.source_pattern,
+            unit_row.target_unit,
+        )
+        if target_entities is not None:
+            target_entities_by_index[unit_row.original_index] = target_entities
+    return target_cluster.source_pattern, target_entities_by_index
+
+
+def _ordered_entity_pairs(
+    source_entities: dict[str, str],
+    target_entities: dict[str, str],
+) -> list[tuple[str, str | None]]:
+    source_values = [
+        value for key, value in sorted(source_entities.items(), key=lambda item: item[0])
+    ]
+    target_values = [
+        value for key, value in sorted(target_entities.items(), key=lambda item: item[0])
+    ]
+    return [
+        (source_entity, target_values[index] if index < len(target_values) else None)
+        for index, source_entity in enumerate(source_values)
+    ]
 
 
 def _load_rows_by_key(ws, key_column: str) -> dict[str, dict[str, object]]:
@@ -689,6 +877,19 @@ def _write_non_entity_workbook(
     _save_workbook(wb, output_path)
 
 
+def _write_entity_tm_workbook(
+    output_path: Path,
+    structures: list[dict[str, object]],
+    terms: list[dict[str, object]],
+) -> None:
+    wb = Workbook()
+    structures_ws = wb.active
+    structures_ws.title = schema.ENTITY_STRUCTURES_SHEET
+    _append_dict_sheet(structures_ws, ENTITY_STRUCTURE_COLUMNS, structures)
+    _append_dict_sheet(wb.create_sheet(schema.ENTITY_TERMS_SHEET), ENTITY_TERM_COLUMNS, terms)
+    _save_workbook(wb, output_path)
+
+
 def _append_unit_rows(ws, headers: list[str], rows: list[UnitRow], *, include_original_index: bool) -> None:
     output_headers = (
         [schema.ORIGINAL_INDEX_COLUMN] + headers
@@ -743,6 +944,7 @@ def _merge_warnings(*warnings: object) -> str | None:
 __all__ = [
     "ClusterProbeStrategy",
     "EntityExtractionStrategy",
+    "extract_entity_tm_workbook",
     "fill_entity_workbook",
     "merge_entity_workbooks",
     "prefill_entity_workbook",

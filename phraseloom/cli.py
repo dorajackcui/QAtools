@@ -7,6 +7,7 @@ from typing import Iterable
 
 from .errors import ConfigError, PhraseLoomError
 from .entity_workflow import (
+    extract_entity_tm_workbook,
     fill_entity_workbook,
     merge_entity_workbooks,
     prefill_entity_workbook,
@@ -65,6 +66,8 @@ def _dispatch(argv: list[str] | None = None) -> int:
         return _main_entity_split(argv[1:])
     if argv[0] == "entity-prefill":
         return _main_entity_prefill(argv[1:])
+    if argv[0] == "entity-extract-tm":
+        return _main_entity_extract_tm(argv[1:])
     if argv[0] == "entity-fill":
         return _main_entity_fill(argv[1:])
     if argv[0] == "entity-merge":
@@ -249,6 +252,24 @@ def _main_entity_prefill(argv: list[str]) -> int:
     return 0
 
 
+def _main_entity_extract_tm(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Extract reusable entity structures and terms from a TM pairs workbook."
+    )
+    parser.add_argument("input", type=Path, help="TM reusable units .xlsx file")
+    parser.add_argument("-o", "--output", type=Path, help="Entity TM output workbook")
+    parser.add_argument("--min-group-size", type=int, default=3)
+    args = parser.parse_args(argv)
+    output = args.output or args.input.with_name(f"{args.input.stem}_entity_tm.xlsx")
+    stats = extract_entity_tm_workbook(
+        args.input,
+        output,
+        min_group_size=args.min_group_size,
+    )
+    _print_entity_extract_tm_stats(stats)
+    return 0
+
+
 def _main_entity_fill(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description="Fill ready entity rows back into an entity-related todo workbook."
@@ -366,6 +387,12 @@ def _print_entity_prefill_stats(stats: dict[str, int | str]) -> None:
     print(f"Prefilled terms: {stats['prefilled_term_count']}")
 
 
+def _print_entity_extract_tm_stats(stats: dict[str, int | str]) -> None:
+    print(f"Wrote: {stats['output_path']}")
+    print(f"Entity structures: {stats['entity_structure_count']}")
+    print(f"Entity terms: {stats['entity_term_count']}")
+
+
 def _print_entity_fill_stats(stats: dict[str, int | str]) -> None:
     print(f"Wrote: {stats['output_path']}")
     print(f"Filled entity units: {stats['filled_entity_unit_count']}")
@@ -393,6 +420,7 @@ def _print_top_level_help() -> None:
     print("  phraseloom extract SOURCE.xlsx [options]")
     print("  phraseloom fill SOURCE.xlsx --templates TEMPLATE_PACK.xlsx [options]")
     print("  phraseloom entity-split TODO.xlsx [options]")
+    print("  phraseloom entity-extract-tm TM_REUSABLE_UNITS.xlsx [options]")
     print("  phraseloom entity-prefill ENTITY.xlsx --tm ENTITY_TM.xlsx [options]")
     print("  phraseloom entity-fill ENTITY.xlsx [options]")
     print("  phraseloom entity-merge --entity ENTITY.xlsx --non-entity NON_ENTITY.xlsx [options]")
@@ -409,6 +437,7 @@ __all__ = [
     "_parse_examples",
     "_main_tm_extract",
     "_main_extract",
+    "_main_entity_extract_tm",
     "_main_entity_fill",
     "_main_entity_merge",
     "_main_entity_prefill",

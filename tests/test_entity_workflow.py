@@ -108,6 +108,50 @@ def _write_entity_tm_workbook(path: Path) -> None:
     wb.save(path)
 
 
+def _write_tm_pairs_workbook(path: Path) -> None:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = schema.TM_PAIRS_SHEET
+    ws.append(schema.TM_PAIR_COLUMNS)
+    rows = [
+        (
+            "TM00001",
+            "segment",
+            "Squirtle launched an attack and dealt damage.",
+            "Carapuce launched a localized attack and dealt localized damage.",
+        ),
+        (
+            "TM00002",
+            "segment",
+            "Pikachu launched an attack and dealt damage.",
+            "Pikachu launched a localized attack and dealt localized damage.",
+        ),
+        (
+            "TM00003",
+            "segment",
+            "Bulbasaur launched an attack and dealt damage.",
+            "Bulbizarre launched a localized attack and dealt localized damage.",
+        ),
+    ]
+    for tm_id, unit_type, source_unit, target_unit in rows:
+        ws.append(
+            [
+                tm_id,
+                unit_type,
+                source_unit,
+                target_unit,
+                1,
+                1,
+                None,
+                source_unit,
+                target_unit,
+                None,
+                None,
+            ]
+        )
+    wb.save(path)
+
+
 def _complete_entity_workbook(
     path: Path,
     *,
@@ -282,6 +326,45 @@ class EntityWorkflowTests(unittest.TestCase):
                 {"Squirtle": "Carapuce", "Pikachu": "Pikachu"},
             )
             self.assertEqual({row["status"] for row in terms}, {"ready"})
+
+    def test_extract_entity_tm_workbook_reads_tm_pairs(self):
+        from phraseloom.entity_workflow import extract_entity_tm_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            tm_pairs_path = tmp_path / "tm_pairs.xlsx"
+            entity_tm_path = tmp_path / "entity_tm.xlsx"
+            _write_tm_pairs_workbook(tm_pairs_path)
+
+            stats = extract_entity_tm_workbook(
+                tm_pairs_path,
+                entity_tm_path,
+                min_group_size=2,
+            )
+
+            self.assertEqual(stats["entity_structure_count"], 1)
+            self.assertEqual(stats["entity_term_count"], 3)
+            structures = _rows_by_header(entity_tm_path, "entity_structures")
+            self.assertEqual(
+                structures[0]["source_structure"],
+                "{entity1} launched an attack and dealt damage.",
+            )
+            self.assertEqual(
+                structures[0]["target_structure"],
+                "{entity1} launched a localized attack and dealt localized damage.",
+            )
+            terms = _rows_by_header(entity_tm_path, "entity_terms")
+            self.assertEqual(
+                {
+                    row["source_entity"]: row["target_entity"]
+                    for row in terms
+                },
+                {
+                    "Bulbasaur": "Bulbizarre",
+                    "Pikachu": "Pikachu",
+                    "Squirtle": "Carapuce",
+                },
+            )
 
     def test_fill_writes_ready_entity_targets(self):
         from phraseloom.entity_workflow import (
@@ -472,6 +555,35 @@ class EntityWorkflowTests(unittest.TestCase):
 
 
 class EntityWorkflowCliTests(unittest.TestCase):
+    def test_entity_extract_tm_cli_reads_tm_pairs(self):
+        from phraseloom.cli import _dispatch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            tm_pairs_path = tmp_path / "tm_pairs.xlsx"
+            entity_tm_path = tmp_path / "entity_tm.xlsx"
+            _write_tm_pairs_workbook(tm_pairs_path)
+
+            self.assertEqual(
+                _dispatch(
+                    [
+                        "entity-extract-tm",
+                        str(tm_pairs_path),
+                        "-o",
+                        str(entity_tm_path),
+                        "--min-group-size",
+                        "2",
+                    ]
+                ),
+                0,
+            )
+
+            structures = _rows_by_header(entity_tm_path, "entity_structures")
+            self.assertEqual(
+                structures[0]["target_structure"],
+                "{entity1} launched a localized attack and dealt localized damage.",
+            )
+
     def test_entity_cli_commands_run_workflow(self):
         from phraseloom.cli import _dispatch
 
