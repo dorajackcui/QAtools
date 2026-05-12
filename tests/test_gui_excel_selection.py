@@ -7,8 +7,10 @@ from pathlib import Path
 from openpyxl import Workbook
 
 from tools.excel_line_splitter.split_excel_lines_gui import SplitExcelLinesApp
+from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
 from tools.term_glossary_checker.check_terms_against_glossary_gui import TermGlossaryCheckerApp
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
+from tools.workflow.workflow_gui import WorkflowRunnerApp
 
 
 class FakeVar:
@@ -83,6 +85,20 @@ class GuiSheetSelectionTests(unittest.TestCase):
         workbook.active = 0
         workbook.save(path)
 
+    def create_tag_checker_workbook(self, path: Path) -> None:
+        workbook = Workbook()
+        data_sheet = workbook.active
+        data_sheet.title = "Tags"
+        data_sheet["D1"] = "source"
+        data_sheet["F1"] = "target"
+
+        archive_sheet = workbook.create_sheet("Archive")
+        archive_sheet["A1"] = "source"
+        archive_sheet["B1"] = "target"
+
+        workbook.active = 0
+        workbook.save(path)
+
     def build_extract_terms_app(self, input_path: Path) -> ExtractTermsApp:
         app = ExtractTermsApp.__new__(ExtractTermsApp)
         app.input_file_var = FakeVar(str(input_path))
@@ -111,6 +127,26 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.input_file_var = FakeVar(str(input_path))
         app.output_file_var = FakeVar("")
         app.sheet_var = FakeVar("")
+        app.sheet_combobox = FakeCombobox()
+        return app
+
+    def build_tag_checker_app(self, input_path: Path) -> TagPlaceholderCheckerApp:
+        app = TagPlaceholderCheckerApp.__new__(TagPlaceholderCheckerApp)
+        app.input_file_var = FakeVar(str(input_path))
+        app.output_file_var = FakeVar("")
+        app.sheet_var = FakeVar("")
+        app.source_column_var = FakeVar("A")
+        app.target_column_var = FakeVar("B")
+        app.sheet_combobox = FakeCombobox()
+        return app
+
+    def build_workflow_app(self, input_path: Path) -> WorkflowRunnerApp:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        app.input_file_var = FakeVar(str(input_path))
+        app.output_file_var = FakeVar("")
+        app.sheet_var = FakeVar("")
+        app.source_column_var = FakeVar("A")
+        app.target_column_var = FakeVar("B")
         app.sheet_combobox = FakeCombobox()
         return app
 
@@ -200,6 +236,45 @@ class GuiSheetSelectionTests(unittest.TestCase):
 
             self.assertEqual(app.sheet_combobox["values"], ("Split", "Other"))
             self.assertEqual(app.sheet_var.get(), "Split")
+
+    def test_tag_checker_refresh_populates_sheet_choices_and_detects_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "tags.xlsx"
+            self.create_tag_checker_workbook(workbook_path)
+            app = self.build_tag_checker_app(workbook_path)
+
+            app.refresh_sheet_choices(show_error=False)
+
+            self.assertEqual(app.sheet_combobox["values"], ("Tags", "Archive"))
+            self.assertEqual(app.sheet_var.get(), "Tags")
+            self.assertEqual(app.source_column_var.get(), "D")
+            self.assertEqual(app.target_column_var.get(), "F")
+
+    def test_tag_checker_switching_sheet_redetects_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "tags.xlsx"
+            self.create_tag_checker_workbook(workbook_path)
+            app = self.build_tag_checker_app(workbook_path)
+
+            app.refresh_sheet_choices(show_error=False)
+            app.sheet_var.set("Archive")
+            app.handle_sheet_selected(show_error=False)
+
+            self.assertEqual(app.source_column_var.get(), "A")
+            self.assertEqual(app.target_column_var.get(), "B")
+
+    def test_workflow_refresh_populates_sheet_choices_and_detects_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "workflow.xlsx"
+            self.create_tag_checker_workbook(workbook_path)
+            app = self.build_workflow_app(workbook_path)
+
+            app.refresh_sheet_choices(show_error=False)
+
+            self.assertEqual(app.sheet_combobox["values"], ("Tags", "Archive"))
+            self.assertEqual(app.sheet_var.get(), "Tags")
+            self.assertEqual(app.source_column_var.get(), "D")
+            self.assertEqual(app.target_column_var.get(), "F")
 
 
 if __name__ == "__main__":

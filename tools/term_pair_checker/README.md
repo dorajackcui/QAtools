@@ -4,14 +4,13 @@
 
 处理完成后会新增两个工作表：
 
-- `术语表`：A 列为 `source术语`，B 列为 `target术语`
-- `术语表（无mark）`：A 列为去 mark 后的 `source术语`，B 列为去 mark 后的 `target术语`
-- `问题列`：A 列为问题行号，B 列为问题类型，C 列为问题简述，D/E 列为有问题的 source/target 原文
+- `术语表`：A/B 列为保留 mark 的 `source术语` / `target术语`，C/D 列为去 mark 后的 `source术语（无mark）` / `target术语（无mark）`
+- `问题列`：A 列为问题行号，B 列为问题source术语，C 列为预期target术语，D 列为问题简述，E/F 列为有问题的 source/target 原文；默认按 `问题source术语` 排序
 
 ## 规则
 
 - 新术语只会由带所选 tag 的显式术语对触发发现
-- 术语特征：被所选 tag 包裹的完整片段，输出到 `术语表` 时会保留外层 tag 本身
+- 术语特征：被所选 tag 包裹的完整片段，输出到 `术语表` 时会同时保留带 mark 和去 mark 两套结果
 - 当前支持三种 tag：`【】`、`[]`、`<>`
 - 可同时选择多种 tag 类型，系统会按文本出现顺序提取并配对
 - 选择 `[]` 时，也会兼容全角方括号 `［］`
@@ -23,6 +22,8 @@
 - 默认会通过 `false_positive_exclusions.json` 排除 `</>`、`<color=...>`、`<outline color=...>` 这类伪标签误判
 - 如需新增或调整排除规则，直接编辑 `tools/term_pair_checker/false_positive_exclusions.json`
 - 术语表以去 mark 后的 `source` 为唯一键，首次出现的映射作为基准；不同 mark 但相同纯术语不会重复建条目
+- 如果某一行 `source` 提取到了术语、但 `target` 没有对应术语，该 `source` 术语仍会写入术语表，`target` 留空
+- 这类仅 `source` 有术语的空 target 条目不会参与后续“预期 target 命中”回扫校验
 - 后续同一个纯 `source` 如果对应到不同的纯 `target`，该行记入 `问题列`
 - 如果某一行两侧术语数量不一致，或只有一侧提取到术语，该行记入 `问题列`
 - 如果某一行两侧都没有提取到术语，则忽略

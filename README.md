@@ -2,6 +2,8 @@
 
 这个仓库现在是一个轻量的 Excel `toolshub`，每个工具都有独立目录、独立说明，同时继续共用根目录依赖。
 
+如果你是通过 agent / 脚本来调用这些工具，建议优先查看独立的 CLI 文档：[CLI 使用指南](docs/cli-usage.md)。
+
 ## 当前工具
 
 ### 1. 术语对检查
@@ -11,13 +13,19 @@
 - tag 支持：`【】`、`[]`、`<>`，且可在 GUI 中多选组合检查
 - 检查规则：`术语表` 保留 tag，实际术语检查会忽略 tag，并回溯整表未标注出现
 - 误判排除：默认通过 `tools/term_pair_checker/false_positive_exclusions.json` 排除 `</>`、`<color=...>` 这类伪标签
-- 输出增强：结果会同时给出保留 mark 的 `术语表`、无 mark 的 `术语表（无mark）`，以及带原文上下文的 `问题列`
+- 输出增强：结果会给出合并后的 `术语表`（同时包含保留 mark 和无 mark 列），以及带原文上下文的 `问题列`
 - GUI 增强：自动读取工作表列表，并尝试自动识别 `source` / `target` 列
 - 输出方式：生成新的结果 Excel，不覆盖原文件
 - CLI：
 
 ```bash
-python3 tools/term_pair_checker/extract_terms_from_excel.py input.xlsx -c A -t B
+python3 tools/term_pair_checker/extract_terms_from_excel.py input.xlsx \
+  -s Sheet1 \
+  -c A \
+  -t B \
+  --start-row 2 \
+  --mark-style '【】' \
+  -o output_term_pairs.xlsx
 ```
 
 - 兼容旧入口：
@@ -44,7 +52,9 @@ python3 tools/term_pair_checker/extract_terms_gui.py
 
 ```bash
 python3 tools/term_glossary_checker/check_terms_against_glossary.py glossary.xlsx data.xlsx \
+  --glossary-sheet Glossary \
   --glossary-source-column A --glossary-target-column B \
+  --data-sheet Sheet1 \
   --data-source-column A --data-target-column B
 ```
 
@@ -65,7 +75,12 @@ python3 tools/term_glossary_checker/check_terms_against_glossary_gui.py
 - CLI：
 
 ```bash
-python3 tools/excel_line_splitter/split_excel_lines.py input.xlsx -c A -r B --start-row 2
+python3 tools/excel_line_splitter/split_excel_lines.py input.xlsx \
+  -s Sheet1 \
+  -c A \
+  -r B \
+  --start-row 2 \
+  -o output_split_lines.xlsx
 ```
 
 - GUI：
@@ -76,11 +91,48 @@ python3 tools/excel_line_splitter/split_excel_lines_gui.py
 
 详情见 `tools/excel_line_splitter/README.md`。
 
+### 4. Tag / Placeholder 检查
+
+- 目录：`tools/tag_placeholder_checker`
+- 用途：逐行检查双语 Excel 中 `source` / `target` 的 `<...>`、`{...}` 和 `\n` 是否一致
+- 检查类型：支持 `<...>` tag、`{...}` placeholder 与 `\n` mark，可单独或组合检查
+- `<...>` 识别：默认直接复用 `tools/term_pair_checker/false_positive_exclusions.json` 识别真正需要校验的 tag，避免维护两份规则
+- GUI 增强：自动读取工作表列表，并尝试自动识别 `source` / `target` 列
+- 输出方式：生成新的结果 Excel，不覆盖原文件
+- CLI：
+
+```bash
+python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py input.xlsx \
+  -s Sheet1 \
+  -c A \
+  -t B \
+  --start-row 2 \
+  --token-type angle \
+  --token-type brace \
+  --token-type newline
+```
+
+- GUI：
+
+```bash
+python3 tools/tag_placeholder_checker/check_tags_and_placeholders_gui.py
+```
+
+详情见 `tools/tag_placeholder_checker/README.md`。
+
 ## 依赖安装
 
 ```bash
 pip install -r requirements.txt
 ```
+
+## 文档导航
+
+- Agent / 脚本调用请看：[CLI 使用指南](docs/cli-usage.md)
+- 术语对检查详细说明：`tools/term_pair_checker/README.md`
+- 术语表命中检查详细说明：`tools/term_glossary_checker/README.md`
+- Tag / Placeholder 检查详细说明：`tools/tag_placeholder_checker/README.md`
+- Excel 分行拆列详细说明：`tools/excel_line_splitter/README.md`
 
 ## 统一 GUI 入口
 
@@ -88,4 +140,4 @@ pip install -r requirements.txt
 python3 toolshub_gui.py
 ```
 
-会打开一个统一窗口，使用标签页管理这三个工具；原有各自的 GUI 入口仍然保留。
+会打开一个统一窗口，使用标签页管理这些工具；原有各自的 GUI 入口仍然保留。

@@ -25,7 +25,6 @@ from tools.term_matching import (
 
 SUPPORTED_MARKS = ("【】", "[]", "<>")
 TERM_SHEET_NAME = "术语表"
-PLAIN_TERM_SHEET_NAME = "术语表（无mark）"
 PROBLEM_SHEET_NAME = "问题列"
 DEFAULT_MARK_STYLES = ("【】",)
 DEFAULT_EXCLUSION_CONFIG_NAME = "false_positive_exclusions.json"
@@ -309,10 +308,6 @@ def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):
     return workbook.create_sheet(title=sheet_name)
 
 
-def format_term_list(terms: list[str]) -> str:
-    return "、".join(terms) if terms else "无"
-
-
 def strip_supported_marks(
     text: object,
     mark_styles: Iterable[str] | None = None,
@@ -360,16 +355,41 @@ def build_term_mapping_entries(term_pairs: Iterable[RecordedTermPair]) -> list[T
             ),
         )
         for term_pair in term_pairs
+        if term_pair.target_plain_text
     ]
     entries.sort(key=lambda entry: (len(entry.normalized_source), entry.normalized_source), reverse=True)
     return entries
 
 
+def merge_term_pair(
+    term_mapping: dict[str, RecordedTermPair],
+    term_pair: RecordedTermPair,
+) -> tuple[bool, RecordedTermPair | None]:
+    existing_term_pair = term_mapping.get(term_pair.source_plain_text)
+    if existing_term_pair is None:
+        term_mapping[term_pair.source_plain_text] = term_pair
+        return True, None
+
+    if not existing_term_pair.target_plain_text and term_pair.target_plain_text:
+        term_mapping[term_pair.source_plain_text] = term_pair
+        return True, None
+
+    if (
+        existing_term_pair.target_plain_text
+        and term_pair.target_plain_text
+        and existing_term_pair.target_plain_text != term_pair.target_plain_text
+    ):
+        return False, existing_term_pair
+
+    return True, existing_term_pair
+
+
 def append_problem(
-    problem_entries: list[tuple[int, str, str, str, str]],
+    problem_entries: list[tuple[int, str, str, str, str, str]],
     problem_row_set: set[int],
     row_index: int,
-    problem_type: str,
+    problem_source_term: str,
+    expected_target_term: str,
     problem_description: str,
     source_snapshot: str,
     target_snapshot: str,
@@ -377,11 +397,49 @@ def append_problem(
     if row_index in problem_row_set:
         return
     problem_row_set.add(row_index)
-    problem_entries.append((row_index, problem_type, problem_description, source_snapshot, target_snapshot))
+    problem_entries.append(
+        (
+            row_index,
+            problem_source_term,
+            expected_target_term,
+            problem_description,
+            source_snapshot,
+            target_snapshot,
+        )
+    )
 
 
 def build_text_snapshot(value: object) -> str:
     return "" if value is None else str(value)
+
+
+def format_problem_term(terms: Iterable[str]) -> str:
+    unique_terms: list[str] = []
+    seen_terms: set[str] = set()
+    for term in terms:
+        normalized_term = term.strip()
+        if not normalized_term or normalized_term in seen_terms:
+            continue
+        seen_terms.add(normalized_term)
+        unique_terms.append(normalized_term)
+    return "、".join(unique_terms)
+
+
+def format_expected_target_terms(
+    source_terms: Iterable[ExtractedTerm],
+    term_mapping: dict[str, RecordedTermPair],
+) -> str:
+    expected_targets: list[str] = []
+    seen_targets: set[str] = set()
+    for source_term in source_terms:
+        mapped_term = term_mapping.get(source_term.plain_text)
+        if mapped_term is None or not mapped_term.target_plain_text:
+            continue
+        if mapped_term.target_plain_text in seen_targets:
+            continue
+        seen_targets.add(mapped_term.target_plain_text)
+        expected_targets.append(mapped_term.target_plain_text)
+    return "、".join(expected_targets)
 
 
 def row_terms_are_aligned(
@@ -449,7 +507,7 @@ def process_excel(
 
     term_mapping: dict[str, RecordedTermPair] = {}
     count_mismatch_rows: dict[int, tuple[list[ExtractedTerm], list[ExtractedTerm]]] = {}
-    problem_entries: list[tuple[int, str, str, str, str]] = []
+    problem_entries: list[tuple[int, str, str, str, str, str]] = []
     problem_row_set: set[int] = set()
 
     for row_index in range(start_row, worksheet.max_row + 1):
@@ -474,43 +532,45 @@ def process_excel(
 
         if len(source_terms) != len(target_terms):
             count_mismatch_rows[row_index] = (source_terms, target_terms)
+            for source_term in source_terms[len(target_terms) :]:
+                merge_term_pair(
+                    term_mapping,
+                    RecordedTermPair(
+                        source_display_text=source_term.display_text,
+                        target_display_text="",
+                        source_plain_text=source_term.plain_text,
+                        target_plain_text="",
+                    ),
+                )
         else:
-            pending_new_mappings: list[RecordedTermPair] = []
+            candidate_term_mapping = dict(term_mapping)
             row_has_problem = False
             for source_term, target_term in zip(source_terms, target_terms):
-                existing_term_pair = term_mapping.get(source_term.plain_text)
-                if existing_term_pair is None:
-                    pending_new_mappings.append(
-                        RecordedTermPair(
-                            source_display_text=source_term.display_text,
-                            target_display_text=target_term.display_text,
-                            source_plain_text=source_term.plain_text,
-                            target_plain_text=target_term.plain_text,
-                        )
-                    )
-                elif existing_term_pair.target_plain_text != target_term.plain_text:
+                merged, existing_term_pair = merge_term_pair(
+                    candidate_term_mapping,
+                    RecordedTermPair(
+                        source_display_text=source_term.display_text,
+                        target_display_text=target_term.display_text,
+                        source_plain_text=source_term.plain_text,
+                        target_plain_text=target_term.plain_text,
+                    ),
+                )
+                if not merged:
                     row_has_problem = True
                     append_problem(
                         problem_entries,
                         problem_row_set,
                         row_index,
-                        "术语未对齐",
-                        (
-                            f"术语未对齐：source={source_term.plain_text}；"
-                            f"预期target={existing_term_pair.target_plain_text}；"
-                            f"实际target={target_term.plain_text}；"
-                            "术语对示例="
-                            f"{existing_term_pair.source_display_text} -> "
-                            f"{existing_term_pair.target_display_text}"
-                        ),
+                        source_term.plain_text,
+                        existing_term_pair.target_plain_text,
+                        f"target术语不匹配：实际术语 - {target_term.plain_text}",
                         source_snapshot,
                         target_snapshot,
                     )
                     break
 
             if not row_has_problem:
-                for term_pair in pending_new_mappings:
-                    term_mapping.setdefault(term_pair.source_plain_text, term_pair)
+                term_mapping = candidate_term_mapping
 
     matcher = None
     if term_mapping:
@@ -524,11 +584,11 @@ def process_excel(
                     problem_entries,
                     problem_row_set,
                     row_index,
-                    "术语数量不一致",
+                    format_problem_term(term.plain_text for term in source_terms),
+                    format_expected_target_terms(source_terms, term_mapping),
                     (
-                        "术语数量不一致："
-                        f"source={format_term_list([term.display_text for term in source_terms])}；"
-                        f"target={format_term_list([term.display_text for term in target_terms])}"
+                        f"source/target术语数量不一致：{len(source_terms)}（预期数量）- "
+                        f"{len(target_terms)}（实际数量）"
                     ),
                     build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                     build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
@@ -556,11 +616,11 @@ def process_excel(
                     problem_entries,
                     problem_row_set,
                     row_index,
-                    "术语数量不一致",
+                    format_problem_term(term.plain_text for term in source_terms),
+                    format_expected_target_terms(source_terms, term_mapping),
                     (
-                        "术语数量不一致："
-                        f"source={format_term_list([term.display_text for term in source_terms])}；"
-                        f"target={format_term_list([term.display_text for term in target_terms])}"
+                        f"source/target术语数量不一致：{len(source_terms)}（预期数量）- "
+                        f"{len(target_terms)}（实际数量）"
                     ),
                     build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                     build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
@@ -581,11 +641,11 @@ def process_excel(
                 problem_entries,
                 problem_row_set,
                 row_index,
-                "术语数量不一致",
+                format_problem_term(term.plain_text for term in source_terms),
+                format_expected_target_terms(source_terms, term_mapping),
                 (
-                    "术语数量不一致："
-                    f"source={format_term_list([term.display_text for term in source_terms])}；"
-                    f"target={format_term_list([term.display_text for term in target_terms])}"
+                    f"source/target术语数量不一致：{len(source_terms)}（预期数量）- "
+                    f"{len(target_terms)}（实际数量）"
                 ),
                 build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                 build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
@@ -596,18 +656,14 @@ def process_excel(
             if text_contains_term(normalized_target_text, entry.normalized_target, match_mode=PAIR_CHECK_MATCH_MODE):
                 continue
 
-            example_term_pair = term_mapping[entry.source_term]
             append_problem(
                 problem_entries,
                 problem_row_set,
                 row_index,
-                "术语未对齐",
+                entry.source_term,
+                entry.target_term,
                 (
-                    f"术语未对齐：source={entry.source_term}；"
-                    f"预期target={entry.target_term}；"
-                    "术语对示例="
-                    f"{example_term_pair.source_display_text} -> "
-                    f"{example_term_pair.target_display_text}"
+                    "target缺少预期术语"
                 ),
                 build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                 build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
@@ -617,33 +673,49 @@ def process_excel(
     term_sheet = rebuild_output_sheet(workbook, worksheet.title, TERM_SHEET_NAME)
     term_sheet["A1"] = "source术语"
     term_sheet["B1"] = "target术语"
+    term_sheet["C1"] = "source术语（无mark）"
+    term_sheet["D1"] = "target术语（无mark）"
     for row_index, term_pair in enumerate(term_mapping.values(), start=2):
         term_sheet[f"A{row_index}"] = term_pair.source_display_text
         term_sheet[f"B{row_index}"] = term_pair.target_display_text
-
-    plain_term_sheet = rebuild_output_sheet(workbook, worksheet.title, PLAIN_TERM_SHEET_NAME)
-    plain_term_sheet["A1"] = "source术语"
-    plain_term_sheet["B1"] = "target术语"
-    for row_index, term_pair in enumerate(term_mapping.values(), start=2):
-        plain_term_sheet[f"A{row_index}"] = term_pair.source_plain_text
-        plain_term_sheet[f"B{row_index}"] = term_pair.target_plain_text
+        term_sheet[f"C{row_index}"] = term_pair.source_plain_text
+        term_sheet[f"D{row_index}"] = term_pair.target_plain_text
 
     problem_sheet = rebuild_output_sheet(workbook, worksheet.title, PROBLEM_SHEET_NAME)
     problem_sheet["A1"] = "问题行号"
-    problem_sheet["B1"] = "问题类型"
-    problem_sheet["C1"] = "问题简述"
-    problem_sheet["D1"] = "source原文"
-    problem_sheet["E1"] = "target原文"
-    for row_index, (excel_row, problem_type, description, source_snapshot, target_snapshot) in enumerate(
+    problem_sheet["B1"] = "问题source术语"
+    problem_sheet["C1"] = "预期target术语"
+    problem_sheet["D1"] = "问题简述"
+    problem_sheet["E1"] = "source原文"
+    problem_sheet["F1"] = "target原文"
+    sorted_problem_entries = sorted(
         problem_entries,
+        key=lambda entry: (
+            entry[1] == "",
+            normalize_text(entry[1], case_sensitive=False),
+            entry[0],
+        ),
+    )
+    for row_index, (
+        excel_row,
+        problem_source_term,
+        expected_target_term,
+        description,
+        source_snapshot,
+        target_snapshot,
+    ) in enumerate(
+        sorted_problem_entries,
         start=2,
     ):
         problem_sheet[f"A{row_index}"] = excel_row
-        problem_sheet[f"B{row_index}"] = problem_type
-        problem_sheet[f"C{row_index}"] = description
-        problem_sheet[f"D{row_index}"] = source_snapshot
-        problem_sheet[f"E{row_index}"] = target_snapshot
+        problem_sheet[f"B{row_index}"] = problem_source_term
+        problem_sheet[f"C{row_index}"] = expected_target_term
+        problem_sheet[f"D{row_index}"] = description
+        problem_sheet[f"E{row_index}"] = source_snapshot
+        problem_sheet[f"F{row_index}"] = target_snapshot
 
+    if "术语表（无mark）" in workbook.sheetnames:
+        del workbook["术语表（无mark）"]
     if "术语汇总" in workbook.sheetnames:
         del workbook["术语汇总"]
 
