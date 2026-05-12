@@ -6,6 +6,12 @@ from pathlib import Path
 from typing import Iterable
 
 from .errors import ConfigError, PhraseLoomError
+from .entity_workflow import (
+    fill_entity_workbook,
+    merge_entity_workbooks,
+    prefill_entity_workbook,
+    split_entity_workbook,
+)
 from .excel_io import (
     _default_extract_output_path,
     _default_fill_output_path,
@@ -55,6 +61,14 @@ def _dispatch(argv: list[str] | None = None) -> int:
         return _main_extract(argv[1:])
     if argv[0] == "fill":
         return _main_fill(argv[1:])
+    if argv[0] == "entity-split":
+        return _main_entity_split(argv[1:])
+    if argv[0] == "entity-prefill":
+        return _main_entity_prefill(argv[1:])
+    if argv[0] == "entity-fill":
+        return _main_entity_fill(argv[1:])
+    if argv[0] == "entity-merge":
+        return _main_entity_merge(argv[1:])
     return _main_legacy(argv)
 
 
@@ -192,6 +206,81 @@ def _main_fill(argv: list[str]) -> int:
     return 0
 
 
+def _main_entity_split(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Split a preprocessed todo workbook into entity and non-entity workbooks."
+    )
+    parser.add_argument("input", type=Path, help="Translator todo .xlsx file")
+    parser.add_argument("--entity-output", type=Path, help="Entity-related output .xlsx")
+    parser.add_argument(
+        "--non-entity-output",
+        type=Path,
+        help="Non-entity output .xlsx",
+    )
+    parser.add_argument("--min-group-size", type=int, default=3)
+    args = parser.parse_args(argv)
+    entity_output = args.entity_output or args.input.with_name(
+        f"{args.input.stem}_entity_related.xlsx"
+    )
+    non_entity_output = args.non_entity_output or args.input.with_name(
+        f"{args.input.stem}_not_entity_related.xlsx"
+    )
+    stats = split_entity_workbook(
+        args.input,
+        entity_output,
+        non_entity_output,
+        min_group_size=args.min_group_size,
+    )
+    _print_entity_split_stats(stats)
+    return 0
+
+
+def _main_entity_prefill(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Prefill entity structures and terms from an entity TM workbook."
+    )
+    parser.add_argument("input", type=Path, help="Entity-related workbook")
+    parser.add_argument("--tm", required=True, type=Path, help="Entity TM workbook")
+    parser.add_argument("-o", "--output", type=Path, help="Prefilled entity workbook")
+    args = parser.parse_args(argv)
+    output = args.output or args.input.with_name(f"{args.input.stem}_prefilled.xlsx")
+    stats = prefill_entity_workbook(args.input, args.tm, output)
+    _print_entity_prefill_stats(stats)
+    return 0
+
+
+def _main_entity_fill(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Fill ready entity rows back into an entity-related todo workbook."
+    )
+    parser.add_argument("input", type=Path, help="Entity-related workbook")
+    parser.add_argument("-o", "--output", type=Path, help="Filled entity workbook")
+    args = parser.parse_args(argv)
+    output = args.output or args.input.with_name(f"{args.input.stem}_filled.xlsx")
+    stats = fill_entity_workbook(args.input, output)
+    _print_entity_fill_stats(stats)
+    return 0
+
+
+def _main_entity_merge(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Merge filled entity rows and non-entity rows into a todo workbook."
+    )
+    parser.add_argument("--entity", required=True, type=Path, help="Filled entity workbook")
+    parser.add_argument(
+        "--non-entity",
+        required=True,
+        type=Path,
+        help="Non-entity workbook",
+    )
+    parser.add_argument("-o", "--output", type=Path, help="Merged todo workbook")
+    args = parser.parse_args(argv)
+    output = args.output or args.entity.with_name(f"{args.entity.stem}_merged_todo.xlsx")
+    stats = merge_entity_workbooks(args.entity, args.non_entity, output)
+    _print_entity_merge_stats(stats)
+    return 0
+
+
 def _main_legacy(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description="Extract or fill reusable localization templates from an Excel source column."
@@ -262,6 +351,31 @@ def _print_tm_stats(output: Path, stats: dict[str, int]) -> None:
     print(f"Segment pairs: {stats['segment_pair_count']}")
 
 
+def _print_entity_split_stats(stats: dict[str, int | str]) -> None:
+    print(f"Entity workbook: {stats['entity_output_path']}")
+    print(f"Non-entity workbook: {stats['non_entity_output_path']}")
+    print(f"Entity units: {stats['entity_unit_count']}")
+    print(f"Non-entity units: {stats['non_entity_unit_count']}")
+    print(f"Entity structures: {stats['entity_structure_count']}")
+    print(f"Entity terms: {stats['entity_term_count']}")
+
+
+def _print_entity_prefill_stats(stats: dict[str, int | str]) -> None:
+    print(f"Wrote: {stats['output_path']}")
+    print(f"Prefilled structures: {stats['prefilled_structure_count']}")
+    print(f"Prefilled terms: {stats['prefilled_term_count']}")
+
+
+def _print_entity_fill_stats(stats: dict[str, int | str]) -> None:
+    print(f"Wrote: {stats['output_path']}")
+    print(f"Filled entity units: {stats['filled_entity_unit_count']}")
+
+
+def _print_entity_merge_stats(stats: dict[str, int | str]) -> None:
+    print(f"Wrote: {stats['output_path']}")
+    print(f"Merged units: {stats['merged_unit_count']}")
+
+
 def _print_top_level_help() -> None:
     print("Localization Workflow")
     print()
@@ -278,6 +392,10 @@ def _print_top_level_help() -> None:
     print("  phraseloom tm-extract COMPLETED_TM.xlsx [options]")
     print("  phraseloom extract SOURCE.xlsx [options]")
     print("  phraseloom fill SOURCE.xlsx --templates TEMPLATE_PACK.xlsx [options]")
+    print("  phraseloom entity-split TODO.xlsx [options]")
+    print("  phraseloom entity-prefill ENTITY.xlsx --tm ENTITY_TM.xlsx [options]")
+    print("  phraseloom entity-fill ENTITY.xlsx [options]")
+    print("  phraseloom entity-merge --entity ENTITY.xlsx --non-entity NON_ENTITY.xlsx [options]")
     print()
     print("Legacy:")
     print("  python template_demo.py tm-extract COMPLETED_TM.xlsx [options]")
@@ -291,6 +409,10 @@ __all__ = [
     "_parse_examples",
     "_main_tm_extract",
     "_main_extract",
+    "_main_entity_fill",
+    "_main_entity_merge",
+    "_main_entity_prefill",
+    "_main_entity_split",
     "_main_fill",
     "_main_legacy",
     "_print_stats",
