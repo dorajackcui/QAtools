@@ -66,10 +66,14 @@ def generate_workbook(
         tag_rules=tag_rules,
     )
 
-    _write_output_workbook(output_path, input_path, units, result_rows)
+    _write_output_workbook(
+        output_path, input_path, units, result_rows, tag_rules=tag_rules
+    )
     to_translate_path = _default_to_translate_output_path(input_path)
     if not template_workbook or Path(template_workbook).resolve() != to_translate_path.resolve():
-        _write_to_translate_workbook(to_translate_path, input_path, units)
+        _write_to_translate_workbook(
+            to_translate_path, input_path, units, tag_rules=tag_rules
+        )
 
     stats = _workbook_stats(rows, units, autofilled_count)
     stats["to_translate_path"] = str(to_translate_path)
@@ -227,7 +231,7 @@ def generate_tm_pairs(
         provided_sources={},
         use_existing_targets=True,
     )
-    _write_tm_workbook(output_path, input_path, units, rows)
+    _write_tm_workbook(output_path, input_path, units, rows, tag_rules=tag_rules)
 
     template_pairs = [unit for unit in units if unit.unit_type == "template"]
     segment_pairs = [unit for unit in units if unit.unit_type == "segment"]
@@ -363,13 +367,15 @@ def _build_provided_units(
     sources: dict[tuple[str, str], str] = {}
 
     if tm_workbook:
-        for key, target_unit in _load_translated_units(Path(tm_workbook)).items():
+        for key, target_unit in _load_translated_units(
+            Path(tm_workbook), tag_rules=tag_rules
+        ).items():
             provided[key] = target_unit
             sources[key] = "tm_pairs"
 
     if template_workbook:
         for key, target_unit in _load_translated_units(
-            Path(template_workbook)
+            Path(template_workbook), tag_rules=tag_rules
         ).items():
             provided[key] = target_unit
             sources[key] = "translation_units"

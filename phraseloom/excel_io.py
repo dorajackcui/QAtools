@@ -8,10 +8,10 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from . import workbook_schema as schema
-from .errors import ColumnNotFoundError, TranslationUnitLoadError
+from .errors import ColumnNotFoundError, ConfigError, TranslationUnitLoadError
 from .models import RowFillResult, RowItem, TranslationUnit
 from .tag_engine import extract_tags, is_tag_placeholder, serialize_known_tags
-from .tag_rules import TagRules, default_tag_rules
+from .tag_rules import TagRules, default_tag_rules, normalized_tag_rules_hash
 from .template_engine import PLACEHOLDER_RE, parse_template
 
 
@@ -71,9 +71,13 @@ def _read_source_rows(
         wb.close()
 
 
-def _load_translated_units(path: Path) -> dict[tuple[str, str], str]:
+def _load_translated_units(
+    path: Path, *, tag_rules: TagRules | None = None
+) -> dict[tuple[str, str], str]:
     wb = load_workbook(path, read_only=True, data_only=True)
     try:
+        _validate_tag_rules_metadata(wb, path, tag_rules)
+
         if schema.TM_PAIRS_SHEET in wb.sheetnames:
             return _load_unit_sheet(wb[schema.TM_PAIRS_SHEET], schema.TM_PAIRS_SHEET)
 
@@ -232,11 +236,47 @@ def _append_schema_version(summary) -> None:
     summary.append([schema.SCHEMA_VERSION_KEY, schema.SCHEMA_VERSION])
 
 
-def _add_metadata_sheet(wb) -> None:
+def _add_metadata_sheet(wb, tag_rules: TagRules | None = None) -> None:
     metadata = wb.create_sheet(schema.METADATA_SHEET)
     metadata.append(schema.METADATA_COLUMNS)
-    metadata.append([schema.SCHEMA_VERSION_KEY, schema.SCHEMA_VERSION])
+    _append_metadata_rows(metadata, tag_rules)
     metadata.sheet_state = "hidden"
+
+
+def _append_metadata_rows(ws, tag_rules: TagRules | None = None) -> None:
+    ws.append([schema.SCHEMA_VERSION_KEY, schema.SCHEMA_VERSION])
+    active_rules = default_tag_rules() if tag_rules is None else tag_rules
+    ws.append([schema.TAG_RULES_VERSION_KEY, active_rules.version])
+    ws.append([schema.TAG_RULES_HASH_KEY, normalized_tag_rules_hash(active_rules)])
+    ws.append([schema.TAG_RULES_SOURCE_KEY, active_rules.source])
+
+
+def _workbook_metadata(wb) -> dict[str, object]:
+    if schema.METADATA_SHEET not in wb.sheetnames:
+        return {}
+    ws = wb[schema.METADATA_SHEET]
+    return {
+        row[0]: row[1]
+        for row in ws.iter_rows(min_row=2, max_col=2, values_only=True)
+        if row and row[0] is not None
+    }
+
+
+def _validate_tag_rules_metadata(
+    wb, path: Path, tag_rules: TagRules | None
+) -> None:
+    if tag_rules is None:
+        return
+    metadata = _workbook_metadata(wb)
+    actual_hash = metadata.get(schema.TAG_RULES_HASH_KEY)
+    if actual_hash is None:
+        return
+    expected_hash = normalized_tag_rules_hash(tag_rules)
+    if str(actual_hash) != expected_hash:
+        raise ConfigError(
+            f"Workbook {path} tag config mismatch. "
+            f"Expected {expected_hash}, found {actual_hash}."
+        )
 
 
 def _default_work_dir(input_path: Path) -> Path:
@@ -268,6 +308,8 @@ def _write_output_workbook(
     input_path: Path,
     units: list[TranslationUnit],
     result_rows: list[RowFillResult],
+    *,
+    tag_rules: TagRules | None = None,
 ) -> None:
     wb = Workbook()
     summary = wb.active
@@ -443,6 +485,8 @@ def _write_output_workbook(
     qa.append(["template_units", len(template_units)])
     qa.append(["segment_units", len(segment_units)])
 
+    _add_metadata_sheet(wb, tag_rules)
+
     for ws in wb.worksheets:
         _style_sheet(ws)
 
@@ -451,7 +495,11 @@ def _write_output_workbook(
 
 
 def _write_to_translate_workbook(
-    output_path: Path, input_path: Path, units: list[TranslationUnit]
+    output_path: Path,
+    input_path: Path,
+    units: list[TranslationUnit],
+    *,
+    tag_rules: TagRules | None = None,
 ) -> None:
     wb = Workbook()
     todo = wb.active
@@ -490,7 +538,7 @@ def _write_to_translate_workbook(
             ]
         )
     prefilled.sheet_state = "hidden"
-    _add_metadata_sheet(wb)
+    _add_metadata_sheet(wb, tag_rules)
 
     for ws in wb.worksheets:
         _style_sheet(ws)
@@ -539,6 +587,8 @@ def _write_tm_workbook(
     input_path: Path,
     units: list[TranslationUnit],
     rows: list[RowItem],
+    *,
+    tag_rules: TagRules | None = None,
 ) -> None:
     wb = Workbook()
     summary = wb.active
@@ -613,6 +663,8 @@ def _write_tm_workbook(
     qa.append(["template_pairs", len(template_units)])
     qa.append(["segment_pairs", len(segment_units)])
     qa.append(["warning_pairs", sum(1 for unit in units if unit.warning)])
+
+    _add_metadata_sheet(wb, tag_rules)
 
     for ws in wb.worksheets:
         _style_sheet(ws)

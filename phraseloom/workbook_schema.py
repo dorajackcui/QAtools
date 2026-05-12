@@ -1,5 +1,8 @@
 SCHEMA_VERSION = "1.0"
 SCHEMA_VERSION_KEY = "schema_version"
+TAG_RULES_VERSION_KEY = "tag_rules_version"
+TAG_RULES_HASH_KEY = "tag_rules_hash"
+TAG_RULES_SOURCE_KEY = "tag_rules_source"
 
 SUMMARY_SHEET = "summary"
 METADATA_SHEET = "_metadata"

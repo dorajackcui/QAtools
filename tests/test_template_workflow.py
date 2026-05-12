@@ -1134,6 +1134,149 @@ class TemplateDemoTests(unittest.TestCase):
             }
             self.assertEqual(tm_summary[SCHEMA_VERSION_KEY], SCHEMA_VERSION)
 
+    def test_generated_workbooks_record_tag_rules_metadata(self):
+        from phraseloom.tag_rules import default_tag_rules, normalized_tag_rules_hash
+        from phraseloom.workflow import generate_tm_pairs, generate_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            source_input = tmp_path / "source.xlsx"
+            pack_output = tmp_path / "pack.xlsx"
+            tm_input = tmp_path / "tm.xlsx"
+            tm_output = tmp_path / "tm_pairs.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["<color=#123>Source</>", ""])
+            wb.save(source_input)
+
+            generate_workbook(
+                source_input,
+                pack_output,
+                source_col="source",
+                target_col="target",
+                use_existing_targets=False,
+            )
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["<color=#123>Source</>", "<color=#123>Target</>"])
+            wb.save(tm_input)
+
+            generate_tm_pairs(
+                tm_input,
+                tm_output,
+                source_col="source",
+                target_col="target",
+            )
+
+            expected_hash = normalized_tag_rules_hash(default_tag_rules())
+            pack = load_workbook(pack_output, data_only=True)
+            tm = load_workbook(tm_output, data_only=True)
+
+            pack_metadata = {
+                row[0]: row[1]
+                for row in pack["_metadata"].iter_rows(min_row=2, values_only=True)
+            }
+            tm_metadata = {
+                row[0]: row[1]
+                for row in tm["_metadata"].iter_rows(min_row=2, values_only=True)
+            }
+            pack.close()
+            tm.close()
+
+        self.assertEqual(pack_metadata["tag_rules_version"], 1)
+        self.assertEqual(pack_metadata["tag_rules_hash"], expected_hash)
+        self.assertEqual(pack_metadata["tag_rules_source"], "default")
+        self.assertEqual(tm_metadata["tag_rules_hash"], expected_hash)
+
+    def test_tag_config_mismatch_reports_user_facing_error(self):
+        from phraseloom.errors import ConfigError
+        from phraseloom.workflow import generate_tm_pairs, generate_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            first_config = tmp_path / "first.toml"
+            second_config = tmp_path / "second.toml"
+            tm_input = tmp_path / "tm.xlsx"
+            tm_pairs = tmp_path / "tm_pairs.xlsx"
+            source_input = tmp_path / "source.xlsx"
+            pack_output = tmp_path / "pack.xlsx"
+
+            first_config.write_text(
+                "\n".join(
+                    [
+                        "version = 1",
+                        "",
+                        "[angle_tags]",
+                        'mode = "allowlist"',
+                        'allowed = ["color"]',
+                        "",
+                        "[bbcode_tags]",
+                        'mode = "allowlist"',
+                        'allowed = ["color"]',
+                        "",
+                        "[raw_braces]",
+                        "protect_all = true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            second_config.write_text(
+                "\n".join(
+                    [
+                        "version = 1",
+                        "",
+                        "[angle_tags]",
+                        'mode = "allowlist"',
+                        'allowed = ["foo"]',
+                        "",
+                        "[bbcode_tags]",
+                        'mode = "allowlist"',
+                        'allowed = ["color"]',
+                        "",
+                        "[raw_braces]",
+                        "protect_all = true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["<color=#123>Source</>", "<color=#123>Target</>"])
+            wb.save(tm_input)
+
+            generate_tm_pairs(
+                tm_input,
+                tm_pairs,
+                source_col="source",
+                target_col="target",
+                tag_config=first_config,
+            )
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["<color=#333>Source</>", ""])
+            wb.save(source_input)
+
+            with self.assertRaises(ConfigError) as raised:
+                generate_workbook(
+                    source_input,
+                    pack_output,
+                    source_col="source",
+                    target_col="target",
+                    tm_workbook=tm_pairs,
+                    use_existing_targets=False,
+                    tag_config=second_config,
+                )
+
+        self.assertIn("tag config mismatch", str(raised.exception))
+
     def test_cli_reports_phraseloom_errors_without_traceback(self):
         from phraseloom.cli import main
 
