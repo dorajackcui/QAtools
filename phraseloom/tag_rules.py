@@ -53,8 +53,13 @@ def default_tag_rules() -> TagRules:
 @lru_cache(maxsize=1)
 def _default_tag_rules() -> TagRules:
     path = resources.files("phraseloom").joinpath("tag_rules.toml")
-    with path.open("rb") as handle:
-        data = tomllib.load(handle)
+    try:
+        with path.open("rb") as handle:
+            data = tomllib.load(handle)
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError(f"could not read default tag rules: {exc}") from exc
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"default tag rules contain invalid TOML: {exc}") from exc
     return _parse_tag_rules(data, source="default")
 
 
@@ -64,7 +69,12 @@ def load_tag_rules(path: str | Path | None = None) -> TagRules:
 
     tag_rules_path = Path(path)
     try:
-        data = tomllib.loads(tag_rules_path.read_text(encoding="utf-8"))
+        raw_config = tag_rules_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError(f"{tag_rules_path}: could not read tag rules: {exc}") from exc
+
+    try:
+        data = tomllib.loads(raw_config)
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"{tag_rules_path}: invalid TOML: {exc}") from exc
 
@@ -83,7 +93,8 @@ def normalized_tag_rules_hash(rules: TagRules) -> str:
 
 
 def _parse_tag_rules(data: dict[str, Any], *, source: str) -> TagRules:
-    if data.get("version") != 1:
+    version = data.get("version")
+    if type(version) is not int or version != 1:
         raise ConfigError("tag rules version must be exactly 1")
 
     angle_allowed = _read_allowlist_section(data, "angle_tags")
