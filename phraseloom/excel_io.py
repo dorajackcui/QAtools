@@ -643,7 +643,12 @@ def _variables_summary(unit: TranslationUnit) -> str | None:
 
 
 def _merge_warnings(*warnings: str) -> str:
-    return "; ".join(warning for warning in warnings if warning)
+    parts = []
+    for warning in warnings:
+        if not warning:
+            continue
+        parts.extend(part.strip() for part in str(warning).split(";") if part.strip())
+    return "; ".join(dict.fromkeys(parts))
 
 
 def _style_sheet(ws) -> None:
