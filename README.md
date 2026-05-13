@@ -201,7 +201,11 @@ entity_terms
 
 `_entity_map` 和 `_metadata` 是隐藏的内部 sheet，正常不需要编辑。
 
-把 ready 的实体结构和实体词表组合回 `related_units.target_unit`：
+译员主要填写 `entity_structures.target_structure` 和 `entity_terms.target_entity`。
+`confidence`、`risk` 会隐藏，`status` 不需要填写；目标列非空就代表可用于回填，留空就表示该结构或实体暂不通过。
+`entity_structures` 和 `entity_terms` 都会带 `sample_sources` / `sample_context`，方便回看来源上下文。
+
+把已填写的实体结构和实体词表组合回 `related_units.target_unit`：
 
 ```bash
 phraseloom entity-fill-pack '/path/to/source_translator_todo_l10n/source_translator_todo_entity_pack.xlsx'
@@ -263,7 +267,7 @@ docs/entity-engine-flow.html
 
 `*_entity_pack_filled.xlsx`
 
-`entity-fill-pack` 把 ready 的实体结构和实体词表组合回 `related_units.target_unit` 后的 pack。
+`entity-fill-pack` 把已填写的实体结构和实体词表组合回 `related_units.target_unit` 后的 pack。
 
 `*_merged_todo.xlsx`
 
@@ -309,7 +313,7 @@ Entity engine 额外会自动：
 1. 从预处理后的 TM 中创建 entity memory
 2. 从预处理后的 todo 中创建单一 entity pack，内含 related_units / non_related_units
 3. 可用 entity memory 预填 entity_structures / entity_terms
-4. 只在结构和所有实体都 ready 时，组合出 related_units.target_unit
+4. 只在结构和所有实体都有非空目标值时，组合出 related_units.target_unit
 5. 按 original_index 把 related_units 和 non_related_units 合并回完整 todo
 ```
 

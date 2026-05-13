@@ -51,8 +51,11 @@ existing `fill` command.
 - `phraseloom/errors.py`: user-facing structured exceptions.
 - `phraseloom/cli.py`: argparse CLI and command dispatch.
 - `phraseloom/interactive.py`: interactive three-step prompt flow.
-- `phraseloom/entity_workflow.py`: independent entity workflow for splitting
+- `phraseloom/entity_workflow.py`: public entity workflow facade for splitting
   preprocessed todo workbooks, extracting entity TM, prefill/fill, and merge.
+- `phraseloom/_entity_types.py`, `_entity_extract.py`, `_entity_io.py`,
+  `_entity_prefill.py`, `_entity_fill.py`: internal entity workflow modules
+  split by data contracts, entity discovery, workbook I/O, prefill, and fill/merge.
 - `phraseloom/entity_cluster.py`: public facade for the experimental entity
   cluster probe used by the first entity extraction strategy.
 - `tests/test_template_workflow.py`: main regression tests for workflow, CLI,
@@ -172,8 +175,8 @@ Known sample stats from `testfiles/`:
 - Recent entity sample run: target split produced 1,621 entity units, 16,598
   non-entity units, 144 entity structures, and 911 entity terms; entity TM
   extraction produced 121 structures and 587 terms; prefill filled 4 structures
-  and 31 terms; entity fill produced 0 ready rows until manual review marks
-  structures/terms as `ready`.
+  and 31 terms; entity fill produced 0 rows until manual review fills the
+  missing `target_structure` and `target_entity` values.
 
 ## Important Engineering Notes
 
@@ -199,7 +202,7 @@ Known sample stats from `testfiles/`:
   `entity_terms.target_entity`; it does not directly write full todo
   `target_unit` values.
 - Entity fill writes `target_unit` only when the structure and every referenced
-  entity term are translated and marked `ready`.
+  entity term have non-empty target values.
 - Entity extraction is strategy-based. The first strategy wraps the existing
   cluster probe logic, but future strategies should plug into
   `phraseloom.entity_workflow` without reshaping split/prefill/fill/merge.

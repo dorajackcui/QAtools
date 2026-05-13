@@ -15,7 +15,7 @@ from .models import EntityCluster, EntityOccurrence
 
 
 TOKEN_RE = re.compile(
-    r"<[^>]*>|\{[^{}]+\}|[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]|[A-Za-zÀ-ÖØ-öø-ÿ]+(?:[-'][A-Za-zÀ-ÖØ-öø-ÿ]+)*|\d+(?:[./:-]\d+)*|[^\w\s]",
+    r"<[^>]*>|\{[^{}]+\}|[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]|[A-Za-zÀ-ÖØ-öø-ÿ]+(?:-[A-Za-zÀ-ÖØ-öø-ÿ]+)*|\d+(?:[./:-]\d+)*|[^\w\s]",
     re.UNICODE,
 )
 ALPHA_RE = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]")
@@ -28,6 +28,8 @@ STOPWORD_RE = re.compile(
 )
 NO_SPACE_BEFORE = set(".,!?;:%)]}。，、！？；：）」》】")
 NO_SPACE_AFTER = set("([{「《【")
+POSSESSIVE_MARKERS = {"'", "’"}
+BALANCED_DELIMITER_PAIRS = (("[", "]"), ("(", ")"))
 
 
 def find_entity_clusters(
@@ -53,7 +55,10 @@ def find_entity_clusters(
                 literal_tokens = tokens[:start] + tokens[end:]
                 if _literal_word_count(literal_tokens) < min_literal_tokens:
                     continue
-                pattern = _detokenize(tokens[:start] + ["{entity1}"] + tokens[end:])
+                pattern_tokens = tokens[:start] + ["{entity1}"] + tokens[end:]
+                if not _has_valid_entity_boundaries(entity_tokens, pattern_tokens):
+                    continue
+                pattern = _detokenize(pattern_tokens)
                 entity = _detokenize(entity_tokens)
                 grouped[pattern][(index, entity)] = EntityOccurrence(
                     row_number=index,
@@ -132,6 +137,8 @@ def _detokenize(tokens: list[str] | tuple[str, ...]) -> str:
 def _joins_without_space(previous: str, token: str) -> bool:
     if token in NO_SPACE_BEFORE or previous in NO_SPACE_AFTER:
         return True
+    if token in POSSESSIVE_MARKERS or previous in POSSESSIVE_MARKERS:
+        return True
     if token.startswith("<") or previous.startswith("<"):
         return True
     if CJK_RE.match(previous) or CJK_RE.match(token):
@@ -154,6 +161,29 @@ def _is_entity_candidate(tokens: list[str]) -> bool:
     if all(STOPWORD_RE.match(word) for word in words):
         return False
     return True
+
+
+def _has_valid_entity_boundaries(
+    entity_tokens: list[str],
+    pattern_tokens: list[str],
+) -> bool:
+    if _has_possessive_marker(entity_tokens):
+        return False
+    return not (
+        _has_unbalanced_delimiter(entity_tokens)
+        or _has_unbalanced_delimiter(pattern_tokens)
+    )
+
+
+def _has_possessive_marker(tokens: list[str] | tuple[str, ...]) -> bool:
+    return any(token in POSSESSIVE_MARKERS for token in tokens)
+
+
+def _has_unbalanced_delimiter(tokens: list[str] | tuple[str, ...]) -> bool:
+    return any(
+        tokens.count(left) != tokens.count(right)
+        for left, right in BALANCED_DELIMITER_PAIRS
+    )
 
 
 def _literal_word_count(tokens: list[str]) -> int:
@@ -332,6 +362,7 @@ def _cluster_sort_key(cluster: EntityCluster) -> tuple[object, ...]:
     median_entity_len = median(len(_tokenize(value)) for value in cluster.entity_values)
     compression_score = cluster.coverage_count * cluster.confidence
     return (
+        _cluster_boundary_penalty(cluster),
         -compression_score,
         -cluster.coverage_count,
         -cluster.confidence,
@@ -339,6 +370,30 @@ def _cluster_sort_key(cluster: EntityCluster) -> tuple[object, ...]:
         median_entity_len,
         cluster.source_pattern,
     )
+
+
+def _cluster_boundary_penalty(cluster: EntityCluster) -> int:
+    pattern_tokens = _tokenize(cluster.source_pattern)
+    penalty = 0
+    if _has_unbalanced_delimiter(pattern_tokens):
+        penalty += 20
+    entity_penalties = [
+        _entity_value_boundary_penalty(entity)
+        for entity in cluster.entity_values
+    ]
+    return penalty + (max(entity_penalties) if entity_penalties else 0)
+
+
+def _entity_value_boundary_penalty(entity: str) -> int:
+    tokens = _tokenize(entity)
+    penalty = 0
+    if _has_possessive_marker(tokens):
+        penalty += 8
+    if any(token in {"[", "]", "(", ")"} for token in tokens):
+        penalty += 4
+    if tokens and tokens[0].lower() in {"a", "an"}:
+        penalty += 1
+    return penalty
 
 
 def _dedupe_clusters(clusters: list[EntityCluster], top: int) -> list[EntityCluster]:

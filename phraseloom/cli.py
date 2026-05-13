@@ -339,7 +339,7 @@ def _main_entity_fill(argv: list[str]) -> int:
 
 def _main_entity_fill_pack(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
-        description="Fill ready entity structures and terms back into related_units."
+        description="Fill completed entity structures and terms back into related_units."
     )
     parser.add_argument("input", type=Path, help="Source entity pack .xlsx file")
     output_group = parser.add_mutually_exclusive_group()

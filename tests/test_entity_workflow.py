@@ -227,22 +227,16 @@ def _complete_entity_workbook(
             row=2,
             column=structure_headers.index("target_structure") + 1,
         ).value = "{entity1} launched a localized attack and dealt localized damage."
-        structures.cell(
-            row=2,
-            column=structure_headers.index("status") + 1,
-        ).value = "ready"
 
         terms = wb["entity_terms"]
         term_headers = [cell.value for cell in terms[1]]
         source_index = term_headers.index("source_entity") + 1
         target_index = term_headers.index("target_entity") + 1
-        status_index = term_headers.index("status") + 1
         for row_number in range(2, terms.max_row + 1):
             source_entity = terms.cell(row=row_number, column=source_index).value
             target_entity = term_targets.get(str(source_entity))
             if target_entity:
                 terms.cell(row=row_number, column=target_index).value = target_entity
-                terms.cell(row=row_number, column=status_index).value = "ready"
         wb.save(path)
     finally:
         wb.close()
@@ -261,22 +255,16 @@ def _complete_entity_tables(
             row=2,
             column=structure_headers.index(schema.TARGET_STRUCTURE_COLUMN) + 1,
         ).value = "{entity1} launched a localized attack and dealt localized damage."
-        structures.cell(
-            row=2,
-            column=structure_headers.index(schema.STATUS_COLUMN) + 1,
-        ).value = "ready"
 
         terms = wb[schema.ENTITY_TERMS_SHEET]
         term_headers = [cell.value for cell in terms[1]]
         source_index = term_headers.index(schema.SOURCE_ENTITY_COLUMN) + 1
         target_index = term_headers.index(schema.TARGET_ENTITY_COLUMN) + 1
-        status_index = term_headers.index(schema.STATUS_COLUMN) + 1
         for row_number in range(2, terms.max_row + 1):
             source_entity = terms.cell(row=row_number, column=source_index).value
             target_entity = term_targets.get(str(source_entity))
             if target_entity:
                 terms.cell(row=row_number, column=target_index).value = target_entity
-                terms.cell(row=row_number, column=status_index).value = "ready"
         wb.save(path)
     finally:
         wb.close()
@@ -738,6 +726,7 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                         schema.UNIT_TYPE_COLUMN: "segment",
                         schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
                         schema.TARGET_UNIT_COLUMN: None,
+                        schema.CONTEXT_COLUMN: "battle starter context",
                         schema.COVERAGE_COUNT_COLUMN: 1,
                     },
                     {
@@ -745,6 +734,7 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                         schema.UNIT_TYPE_COLUMN: "segment",
                         schema.SOURCE_UNIT_COLUMN: "Login failed.",
                         schema.TARGET_UNIT_COLUMN: None,
+                        schema.CONTEXT_COLUMN: "login menu context",
                         schema.COVERAGE_COUNT_COLUMN: 1,
                     },
                     {
@@ -752,6 +742,7 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                         schema.UNIT_TYPE_COLUMN: "segment",
                         schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
                         schema.TARGET_UNIT_COLUMN: None,
+                        schema.CONTEXT_COLUMN: "electric starter context",
                         schema.COVERAGE_COUNT_COLUMN: 1,
                     },
                 ],
@@ -824,6 +815,27 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                 [row[schema.UNIT_ID_COLUMN] for row in non_related_rows],
                 ["U0002"],
             )
+            structure_headers = _headers(pack_path, schema.ENTITY_STRUCTURES_SHEET)
+            self.assertNotIn(schema.STATUS_COLUMN, structure_headers)
+            self.assertIn(schema.SAMPLE_CONTEXT_COLUMN, structure_headers)
+            self.assertTrue(
+                _is_column_hidden(
+                    pack_path,
+                    schema.ENTITY_STRUCTURES_SHEET,
+                    schema.CONFIDENCE_COLUMN,
+                )
+            )
+            self.assertTrue(
+                _is_column_hidden(
+                    pack_path,
+                    schema.ENTITY_STRUCTURES_SHEET,
+                    schema.RISK_COLUMN,
+                )
+            )
+            term_headers = _headers(pack_path, schema.ENTITY_TERMS_SHEET)
+            self.assertNotIn(schema.STATUS_COLUMN, term_headers)
+            self.assertIn(schema.SAMPLE_SOURCES_COLUMN, term_headers)
+            self.assertIn(schema.SAMPLE_CONTEXT_COLUMN, term_headers)
             for sheet_name in [
                 schema.RELATED_UNITS_SHEET,
                 schema.NON_RELATED_UNITS_SHEET,
@@ -865,6 +877,14 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                 structures[0][schema.TARGET_STRUCTURE_COLUMN],
                 "{entity1} launched a localized attack and dealt localized damage.",
             )
+            self.assertIn(
+                "battle starter context",
+                structures[0][schema.SAMPLE_CONTEXT_COLUMN],
+            )
+            self.assertIn(
+                "electric starter context",
+                structures[0][schema.SAMPLE_CONTEXT_COLUMN],
+            )
             terms = _rows_by_header(pack_path, schema.ENTITY_TERMS_SHEET)
             self.assertEqual(
                 {
@@ -872,6 +892,15 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                     for row in terms
                 },
                 {"Pikachu": "Pikachu", "Squirtle": "Carapuce"},
+            )
+            terms_by_source = {row[schema.SOURCE_ENTITY_COLUMN]: row for row in terms}
+            self.assertEqual(
+                terms_by_source["Squirtle"][schema.SAMPLE_SOURCES_COLUMN],
+                "Squirtle launched an attack and dealt damage.",
+            )
+            self.assertEqual(
+                terms_by_source["Squirtle"][schema.SAMPLE_CONTEXT_COLUMN],
+                "battle starter context",
             )
 
     def test_entity_fill_pack_cli_writes_targets_to_related_units(self):

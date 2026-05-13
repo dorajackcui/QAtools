@@ -91,6 +91,85 @@ class EntityClusterProbeTests(unittest.TestCase):
             patterns,
         )
 
+    def test_keeps_bracketed_stat_ability_suffix_outside_entity(self):
+        from phraseloom.entity_cluster import find_entity_clusters
+
+        rows = [
+            ("All-Out Attack [P. ATK SS Ability]", ""),
+            ("Battle Focus [P. ATK SS Ability]", ""),
+            ("Survival Instinct [P. ATK SS Ability]", ""),
+            ("Baton Pass [S. ATK SS Ability]", ""),
+            ("Competitive [S. ATK SS Ability]", ""),
+            ("Swagger [S. ATK SS Ability]", ""),
+        ]
+
+        clusters = find_entity_clusters(rows, min_group_size=3)
+        by_pattern = {cluster.source_pattern: cluster for cluster in clusters}
+
+        self.assertIn("{entity1} [P. ATK SS Ability]", by_pattern)
+        self.assertIn("{entity1} [S. ATK SS Ability]", by_pattern)
+        self.assertNotIn("{entity1}. ATK SS Ability]", by_pattern)
+        self.assertEqual(
+            by_pattern["{entity1} [P. ATK SS Ability]"].entity_values,
+            ("All-Out Attack", "Battle Focus", "Survival Instinct"),
+        )
+        self.assertEqual(
+            by_pattern["{entity1} [S. ATK SS Ability]"].entity_values,
+            ("Baton Pass", "Competitive", "Swagger"),
+        )
+
+    def test_prefers_balanced_square_bracket_boundaries(self):
+        from phraseloom.entity_cluster import find_entity_clusters
+
+        rows = [
+            ("DMG dealt by [Balanced] Pokémon on both sides is increased by 30%", ""),
+            ("DMG dealt by [Fighter] Pokémon on both sides is increased by 30%", ""),
+            ("DMG dealt by [Supporter] Pokémon on both sides is increased by 30%", ""),
+            ("DMG dealt by [Divinity] faction Pokémon on both sides is increased by 30%", ""),
+            ("DMG dealt by [Order] faction Pokémon on both sides is increased by 30%", ""),
+            ("DMG dealt by [Origin] faction Pokémon on both sides is increased by 30%", ""),
+        ]
+
+        clusters = find_entity_clusters(rows, min_group_size=3)
+        by_pattern = {cluster.source_pattern: cluster for cluster in clusters}
+
+        self.assertIn(
+            "DMG dealt by [{entity1}] Pokémon on both sides is increased by 30%",
+            by_pattern,
+        )
+        self.assertIn(
+            "DMG dealt by [{entity1}] faction Pokémon on both sides is increased by 30%",
+            by_pattern,
+        )
+        self.assertNotIn(
+            "DMG dealt by [{entity1} Pokémon on both sides is increased by 30%",
+            by_pattern,
+        )
+        self.assertEqual(
+            by_pattern[
+                "DMG dealt by [{entity1}] Pokémon on both sides is increased by 30%"
+            ].entity_values,
+            ("Balanced", "Fighter", "Supporter"),
+        )
+
+    def test_keeps_english_possessive_suffix_outside_entity(self):
+        from phraseloom.entity_cluster import find_entity_clusters
+
+        rows = [
+            ("Alakazam's ATK increased by 6%", ""),
+            ("Arcanine's ATK increased by 6%", ""),
+            ("Cresselia's ATK increased by 6%", ""),
+        ]
+
+        clusters = find_entity_clusters(rows, min_group_size=3)
+        by_pattern = {cluster.source_pattern: cluster for cluster in clusters}
+
+        self.assertIn("{entity1}'s ATK increased by 6%", by_pattern)
+        self.assertEqual(
+            by_pattern["{entity1}'s ATK increased by 6%"].entity_values,
+            ("Alakazam", "Arcanine", "Cresselia"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

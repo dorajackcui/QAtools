@@ -148,14 +148,15 @@ target_structure
 coverage_count
 confidence
 risk
-status
 sample_sources
+sample_context
 row_numbers
 warning
 ```
 
-Users fill `target_structure` and set `status` to `ready` when a structure is
-approved. Only `ready` structures can fill related units.
+`confidence` and `risk` are hidden in the translator-facing entity pack. Users
+fill `target_structure` when a structure is approved. A non-empty target value is
+treated as ready; a blank target means the structure is not used for fill.
 
 `entity_terms`:
 
@@ -165,13 +166,14 @@ source_entity
 target_entity
 occurrence_count
 structure_ids
-status
+sample_sources
+sample_context
 warning
 ```
 
-Users fill `target_entity` and set `status` to `ready` when a term is approved.
-Terms prefilled from entity memory may be marked ready automatically when the
-match is unambiguous.
+Users fill `target_entity` when a term is approved. A non-empty target value is
+treated as ready; a blank target blocks related unit fill for rows referencing
+that term.
 
 `_entity_map`:
 
