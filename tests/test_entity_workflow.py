@@ -554,6 +554,62 @@ class EntityWorkflowTests(unittest.TestCase):
             )
 
 
+class EntityPackWorkflowCliTests(unittest.TestCase):
+    def test_entity_tm_cli_writes_memory_workbook_to_l10n(self):
+        from phraseloom.cli import _dispatch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            tm_pairs_path = tmp_path / "tm_pairs.xlsx"
+            _write_tm_pairs_workbook(tm_pairs_path)
+
+            self.assertEqual(
+                _dispatch(
+                    [
+                        "entity-tm",
+                        str(tm_pairs_path),
+                        "--min-group-size",
+                        "2",
+                    ]
+                ),
+                0,
+            )
+
+            entity_memory_path = (
+                tmp_path
+                / "tm_pairs_l10n"
+                / "tm_pairs_entity_memory.xlsx"
+            )
+            self.assertTrue(entity_memory_path.exists())
+            self.assertEqual(
+                _headers(entity_memory_path, schema.ENTITY_STRUCTURES_SHEET),
+                [
+                    schema.STRUCTURE_ID_COLUMN,
+                    schema.SOURCE_STRUCTURE_COLUMN,
+                    schema.TARGET_STRUCTURE_COLUMN,
+                    schema.COVERAGE_COUNT_COLUMN,
+                    schema.CONFIDENCE_COLUMN,
+                    schema.RISK_COLUMN,
+                    schema.STATUS_COLUMN,
+                    schema.SAMPLE_SOURCES_COLUMN,
+                    schema.ROW_NUMBERS_COLUMN,
+                    schema.WARNING_COLUMN,
+                ],
+            )
+            self.assertEqual(
+                _headers(entity_memory_path, schema.ENTITY_TERMS_SHEET),
+                [
+                    schema.TERM_ID_COLUMN,
+                    schema.SOURCE_ENTITY_COLUMN,
+                    schema.TARGET_ENTITY_COLUMN,
+                    schema.OCCURRENCE_COUNT_COLUMN,
+                    schema.STRUCTURE_IDS_COLUMN,
+                    schema.STATUS_COLUMN,
+                    schema.WARNING_COLUMN,
+                ],
+            )
+
+
 class EntityWorkflowCliTests(unittest.TestCase):
     def test_entity_extract_tm_cli_reads_tm_pairs(self):
         from phraseloom.cli import _dispatch

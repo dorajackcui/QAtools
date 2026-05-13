@@ -97,6 +97,45 @@ class ClusterProbeStrategy:
         )
 
 
+def _default_entity_work_dir(input_path: Path) -> Path:
+    return input_path.parent / f"{input_path.stem}_l10n"
+
+
+def default_entity_memory_output_path(input_path: str | Path) -> Path:
+    input_path = Path(input_path)
+    return _default_entity_work_dir(input_path) / f"{input_path.stem}_entity_memory.xlsx"
+
+
+def default_entity_pack_output_path(input_path: str | Path) -> Path:
+    input_path = Path(input_path)
+    return _default_entity_work_dir(input_path) / f"{input_path.stem}_entity_pack.xlsx"
+
+
+def default_entity_filled_pack_output_path(input_path: str | Path) -> Path:
+    input_path = Path(input_path)
+    return input_path.with_name(f"{input_path.stem}_filled.xlsx")
+
+
+def default_entity_merged_todo_output_path(input_path: str | Path) -> Path:
+    input_path = Path(input_path)
+    return input_path.with_name(f"{input_path.stem}_merged_todo.xlsx")
+
+
+def extract_entity_memory_workbook(
+    input_path: str | Path,
+    output_path: str | Path,
+    *,
+    min_group_size: int = 3,
+    strategy: EntityExtractionStrategy | None = None,
+) -> dict[str, int | str]:
+    return extract_entity_tm_workbook(
+        input_path,
+        output_path,
+        min_group_size=min_group_size,
+        strategy=strategy,
+    )
+
+
 def split_entity_workbook(
     input_path: str | Path,
     entity_output_path: str | Path,
@@ -944,6 +983,11 @@ def _merge_warnings(*warnings: object) -> str | None:
 __all__ = [
     "ClusterProbeStrategy",
     "EntityExtractionStrategy",
+    "default_entity_filled_pack_output_path",
+    "default_entity_memory_output_path",
+    "default_entity_merged_todo_output_path",
+    "default_entity_pack_output_path",
+    "extract_entity_memory_workbook",
     "extract_entity_tm_workbook",
     "fill_entity_workbook",
     "merge_entity_workbooks",

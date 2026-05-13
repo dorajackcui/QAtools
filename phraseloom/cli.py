@@ -7,6 +7,8 @@ from typing import Iterable
 
 from .errors import ConfigError, PhraseLoomError
 from .entity_workflow import (
+    default_entity_memory_output_path,
+    extract_entity_memory_workbook,
     extract_entity_tm_workbook,
     fill_entity_workbook,
     merge_entity_workbooks,
@@ -62,6 +64,8 @@ def _dispatch(argv: list[str] | None = None) -> int:
         return _main_extract(argv[1:])
     if argv[0] == "fill":
         return _main_fill(argv[1:])
+    if argv[0] == "entity-tm":
+        return _main_entity_tm(argv[1:])
     if argv[0] == "entity-split":
         return _main_entity_split(argv[1:])
     if argv[0] == "entity-prefill":
@@ -206,6 +210,24 @@ def _main_fill(argv: list[str]) -> int:
             tag_config=args.tag_config,
         )
     _print_stats(output, stats)
+    return 0
+
+
+def _main_entity_tm(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Build reusable entity memory from a TM reusable-units workbook."
+    )
+    parser.add_argument("input", type=Path, help="TM reusable units .xlsx file")
+    parser.add_argument("-o", "--output", type=Path, help="Entity memory output .xlsx")
+    parser.add_argument("--min-group-size", type=int, default=3)
+    args = parser.parse_args(argv)
+    output = args.output or default_entity_memory_output_path(args.input)
+    stats = extract_entity_memory_workbook(
+        args.input,
+        output,
+        min_group_size=args.min_group_size,
+    )
+    _print_entity_extract_tm_stats(stats)
     return 0
 
 
@@ -442,6 +464,7 @@ __all__ = [
     "_main_entity_merge",
     "_main_entity_prefill",
     "_main_entity_split",
+    "_main_entity_tm",
     "_main_fill",
     "_main_legacy",
     "_print_stats",
