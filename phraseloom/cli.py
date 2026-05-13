@@ -9,11 +9,13 @@ from .errors import ConfigError, PhraseLoomError
 from .entity_workflow import (
     default_entity_filled_pack_output_path,
     default_entity_memory_output_path,
+    default_entity_merged_todo_output_path,
     default_entity_pack_output_path,
     extract_entity_memory_workbook,
     extract_entity_tm_workbook,
     fill_entity_pack_workbook,
     fill_entity_workbook,
+    merge_entity_pack_workbook,
     merge_entity_workbooks,
     prepare_entity_pack_workbook,
     prefill_entity_workbook,
@@ -82,6 +84,8 @@ def _dispatch(argv: list[str] | None = None) -> int:
         return _main_entity_fill(argv[1:])
     if argv[0] == "entity-fill-pack":
         return _main_entity_fill_pack(argv[1:])
+    if argv[0] == "entity-merge-pack":
+        return _main_entity_merge_pack(argv[1:])
     if argv[0] == "entity-merge":
         return _main_entity_merge(argv[1:])
     return _main_legacy(argv)
@@ -359,6 +363,19 @@ def _main_entity_fill_pack(argv: list[str]) -> int:
     return 0
 
 
+def _main_entity_merge_pack(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Merge related_units and non_related_units into a normal translator todo."
+    )
+    parser.add_argument("input", type=Path, help="Filled source entity pack .xlsx file")
+    parser.add_argument("-o", "--output", type=Path, help="Merged todo output .xlsx")
+    args = parser.parse_args(argv)
+    output = args.output or default_entity_merged_todo_output_path(args.input)
+    stats = merge_entity_pack_workbook(args.input, output)
+    _print_entity_merge_stats(stats)
+    return 0
+
+
 def _main_entity_merge(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description="Merge filled entity rows and non-entity rows into a todo workbook."
@@ -527,6 +544,7 @@ __all__ = [
     "_main_entity_fill",
     "_main_entity_fill_pack",
     "_main_entity_merge",
+    "_main_entity_merge_pack",
     "_main_entity_prefill",
     "_main_entity_prepare",
     "_main_entity_split",

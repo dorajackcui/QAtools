@@ -418,12 +418,96 @@ def merge_entity_workbooks(
     }
 
 
+def merge_entity_pack_workbook(
+    pack_path: str | Path,
+    output_path: str | Path,
+) -> dict[str, int | str]:
+    pack_path = Path(pack_path)
+    output_path = Path(output_path)
+    related_rows, related_headers = _read_pack_unit_rows(
+        pack_path,
+        schema.RELATED_UNITS_SHEET,
+        schema.TO_TRANSLATE_SHEET,
+    )
+    non_related_rows, non_related_headers = _read_pack_unit_rows(
+        pack_path,
+        schema.NON_RELATED_UNITS_SHEET,
+    )
+    headers = [
+        header
+        for header in (related_headers or non_related_headers)
+        if header != schema.ORIGINAL_INDEX_COLUMN
+    ]
+    merged_rows = _merge_unit_rows(related_rows + non_related_rows)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = schema.TO_TRANSLATE_SHEET
+    ws.append(headers)
+    for row in merged_rows:
+        ws.append([row.values.get(header) for header in headers])
+    _copy_support_sheets(
+        pack_path,
+        wb,
+        exclude={
+            schema.RELATED_UNITS_SHEET,
+            schema.NON_RELATED_UNITS_SHEET,
+            schema.ENTITY_STRUCTURES_SHEET,
+            schema.ENTITY_TERMS_SHEET,
+            schema.ENTITY_MAP_SHEET,
+            schema.TO_TRANSLATE_SHEET,
+            schema.ENTITY_SOURCE_MAP_SHEET,
+        },
+    )
+    _save_workbook(wb, output_path)
+    return {
+        "merged_unit_count": len(merged_rows),
+        "output_path": str(output_path),
+    }
+
+
 def _read_unit_rows(path: Path, sheet_name: str) -> tuple[list[UnitRow], list[str]]:
     wb = load_workbook(path, read_only=True, data_only=True)
     try:
         ws = wb[sheet_name]
         headers = _header_values(ws)
         rows = []
+        for sequence_index, row in enumerate(
+            ws.iter_rows(min_row=2, values_only=True),
+            start=1,
+        ):
+            values = {
+                header: row[index] if index < len(row) else None
+                for index, header in enumerate(headers)
+                if header
+            }
+            original_index = int(
+                values.get(schema.ORIGINAL_INDEX_COLUMN) or sequence_index
+            )
+            if values.get(schema.SOURCE_UNIT_COLUMN):
+                rows.append(UnitRow(original_index, values))
+        return rows, headers
+    finally:
+        wb.close()
+
+
+def _read_pack_unit_rows(
+    path: Path,
+    preferred_sheet_name: str,
+    fallback_sheet_name: str | None = None,
+) -> tuple[list[UnitRow], list[str]]:
+    wb = load_workbook(path, read_only=True, data_only=True)
+    try:
+        sheet_name = preferred_sheet_name
+        if sheet_name not in wb.sheetnames:
+            if fallback_sheet_name is None or fallback_sheet_name not in wb.sheetnames:
+                raise WorkflowError(
+                    f"Workbook is missing required sheet: {preferred_sheet_name}"
+                )
+            sheet_name = fallback_sheet_name
+        ws = wb[sheet_name]
+        headers = _header_values(ws)
+        rows: list[UnitRow] = []
         for sequence_index, row in enumerate(
             ws.iter_rows(min_row=2, values_only=True),
             start=1,
@@ -1171,6 +1255,7 @@ __all__ = [
     "extract_entity_tm_workbook",
     "fill_entity_pack_workbook",
     "fill_entity_workbook",
+    "merge_entity_pack_workbook",
     "merge_entity_workbooks",
     "prepare_entity_pack_workbook",
     "prefill_entity_workbook",

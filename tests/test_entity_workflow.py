@@ -79,6 +79,20 @@ def _set_first_todo_target(path: Path, target: str) -> None:
         wb.close()
 
 
+def _set_first_non_related_target(path: Path, target: str) -> None:
+    wb = load_workbook(path)
+    try:
+        ws = wb[schema.NON_RELATED_UNITS_SHEET]
+        headers = [cell.value for cell in ws[1]]
+        ws.cell(
+            row=2,
+            column=headers.index(schema.TARGET_UNIT_COLUMN) + 1,
+        ).value = target
+        wb.save(path)
+    finally:
+        wb.close()
+
+
 def _write_entity_tm_workbook(path: Path) -> None:
     wb = Workbook()
     structures = wb.active
@@ -879,6 +893,75 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
             self.assertEqual(
                 [row[schema.FILL_STATUS_COLUMN] for row in map_rows],
                 ["filled", "filled"],
+            )
+
+    def test_entity_merge_pack_cli_restores_full_todo_order(self):
+        from phraseloom.entity_workflow import (
+            fill_entity_pack_workbook,
+            prepare_entity_pack_workbook,
+        )
+        from phraseloom.cli import _dispatch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "source_translator_todo.xlsx"
+            pack_path = tmp_path / "source_entity_pack.xlsx"
+            filled_pack_path = tmp_path / "source_entity_pack_filled.xlsx"
+            _write_todo_workbook(
+                todo_path,
+                [
+                    {
+                        schema.UNIT_ID_COLUMN: "U0001",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0002",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Login failed.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0003",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                ],
+            )
+            prepare_entity_pack_workbook(
+                todo_path,
+                pack_path,
+                min_group_size=2,
+            )
+            _complete_entity_tables(
+                pack_path,
+                term_targets={"Squirtle": "Carapuce", "Pikachu": "Pikachu"},
+            )
+            _set_first_non_related_target(pack_path, "Login failed localized.")
+            fill_entity_pack_workbook(pack_path, filled_pack_path)
+
+            self.assertEqual(_dispatch(["entity-merge-pack", str(filled_pack_path)]), 0)
+
+            merged_path = tmp_path / "source_entity_pack_filled_merged_todo.xlsx"
+            self.assertTrue(merged_path.exists())
+            self.assertNotIn(
+                schema.ORIGINAL_INDEX_COLUMN,
+                _headers(merged_path, schema.TO_TRANSLATE_SHEET),
+            )
+            merged_rows = _rows_by_header(merged_path, schema.TO_TRANSLATE_SHEET)
+            self.assertEqual(
+                [row[schema.UNIT_ID_COLUMN] for row in merged_rows],
+                ["U0001", "U0002", "U0003"],
+            )
+            self.assertEqual(
+                [row[schema.TARGET_UNIT_COLUMN] for row in merged_rows],
+                [
+                    "Carapuce launched a localized attack and dealt localized damage.",
+                    "Login failed localized.",
+                    "Pikachu launched a localized attack and dealt localized damage.",
+                ],
             )
 
     def test_entity_fill_pack_cli_rejects_output_with_in_place(self):
