@@ -623,6 +623,22 @@ class EntityWorkflowTests(unittest.TestCase):
 
 
 class EntityPackWorkflowCliTests(unittest.TestCase):
+    def test_top_level_help_lists_simplified_entity_commands(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+
+        from phraseloom.cli import _dispatch
+
+        stream = StringIO()
+        with redirect_stdout(stream):
+            self.assertEqual(_dispatch(["--help"]), 0)
+
+        help_text = stream.getvalue()
+        self.assertIn("phraseloom entity-tm TM_REUSABLE_UNITS.xlsx", help_text)
+        self.assertIn("phraseloom entity-prepare TRANSLATOR_WORKBOOK.xlsx", help_text)
+        self.assertIn("phraseloom entity-fill-pack ENTITY_PACK.xlsx", help_text)
+        self.assertIn("phraseloom entity-merge-pack FILLED_ENTITY_PACK.xlsx", help_text)
+
     def test_entity_tm_cli_writes_memory_workbook_to_l10n(self):
         from phraseloom.cli import _dispatch
 
