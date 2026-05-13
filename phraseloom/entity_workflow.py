@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -370,7 +371,10 @@ def fill_entity_pack_workbook(
             structures,
             terms,
         )
-        _save_workbook(wb, output_path)
+        if output_path.resolve() == pack_input_path.resolve():
+            _replace_workbook_atomically(wb, output_path)
+        else:
+            _save_workbook(wb, output_path)
     finally:
         wb.close()
 
@@ -1129,6 +1133,23 @@ def _save_workbook(wb, output_path: Path) -> None:
         _style_sheet(ws)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_path)
+
+
+def _replace_workbook_atomically(wb, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = tempfile.NamedTemporaryFile(
+        delete=False,
+        dir=output_path.parent,
+        suffix=output_path.suffix,
+    )
+    temp_path = Path(temp_file.name)
+    temp_file.close()
+    try:
+        _save_workbook(wb, temp_path)
+        temp_path.replace(output_path)
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
 
 
 def _merge_warnings(*warnings: object) -> str | None:

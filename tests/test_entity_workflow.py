@@ -837,6 +837,12 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                         schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
                         schema.TARGET_UNIT_COLUMN: None,
                     },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0003",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Login failed.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
                 ],
             )
             prepare_entity_pack_workbook(
@@ -861,10 +867,87 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                     "Pikachu launched a localized attack and dealt localized damage.",
                 ],
             )
+            non_related_rows = _rows_by_header(
+                filled_pack_path,
+                schema.NON_RELATED_UNITS_SHEET,
+            )
+            self.assertEqual(
+                [row[schema.TARGET_UNIT_COLUMN] for row in non_related_rows],
+                [None],
+            )
             map_rows = _rows_by_header(filled_pack_path, schema.ENTITY_MAP_SHEET)
             self.assertEqual(
                 [row[schema.FILL_STATUS_COLUMN] for row in map_rows],
                 ["filled", "filled"],
+            )
+
+    def test_entity_fill_pack_cli_rejects_output_with_in_place(self):
+        from phraseloom.cli import _dispatch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            pack_path = tmp_path / "source_entity_pack.xlsx"
+            output_path = tmp_path / "source_entity_pack_filled.xlsx"
+
+            with self.assertRaises(SystemExit) as raised:
+                _dispatch(
+                    [
+                        "entity-fill-pack",
+                        str(pack_path),
+                        "--in-place",
+                        "-o",
+                        str(output_path),
+                    ]
+                )
+            self.assertEqual(raised.exception.code, 2)
+
+    def test_entity_fill_pack_cli_in_place_updates_input_pack(self):
+        from phraseloom.entity_workflow import prepare_entity_pack_workbook
+        from phraseloom.cli import _dispatch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "source_translator_todo.xlsx"
+            pack_path = tmp_path / "source_entity_pack.xlsx"
+            _write_todo_workbook(
+                todo_path,
+                [
+                    {
+                        schema.UNIT_ID_COLUMN: "U0001",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0002",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                ],
+            )
+            prepare_entity_pack_workbook(
+                todo_path,
+                pack_path,
+                min_group_size=2,
+            )
+            _complete_entity_tables(
+                pack_path,
+                term_targets={"Squirtle": "Carapuce", "Pikachu": "Pikachu"},
+            )
+
+            self.assertEqual(
+                _dispatch(["entity-fill-pack", str(pack_path), "--in-place"]),
+                0,
+            )
+
+            related_rows = _rows_by_header(pack_path, schema.RELATED_UNITS_SHEET)
+            self.assertEqual(
+                [row[schema.TARGET_UNIT_COLUMN] for row in related_rows],
+                [
+                    "Carapuce launched a localized attack and dealt localized damage.",
+                    "Pikachu launched a localized attack and dealt localized damage.",
+                ],
             )
 
 

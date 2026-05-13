@@ -338,8 +338,14 @@ def _main_entity_fill_pack(argv: list[str]) -> int:
         description="Fill ready entity structures and terms back into related_units."
     )
     parser.add_argument("input", type=Path, help="Source entity pack .xlsx file")
-    parser.add_argument("-o", "--output", type=Path, help="Filled entity pack output .xlsx")
-    parser.add_argument(
+    output_group = parser.add_mutually_exclusive_group()
+    output_group.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        help="Filled entity pack output .xlsx",
+    )
+    output_group.add_argument(
         "--in-place",
         action="store_true",
         help="Update the input pack instead of writing a new file",
