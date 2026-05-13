@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Iterable
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -312,6 +313,8 @@ def _write_output_workbook(
     tag_rules: TagRules | None = None,
 ) -> None:
     wb = Workbook()
+    source_headers = _read_headers(input_path)
+    context_index = _context_column_index(source_headers)
     summary = wb.active
     summary.title = schema.SUMMARY_SHEET
 
@@ -347,7 +350,7 @@ def _write_output_workbook(
                 unit.unique_source_count,
                 _variables_summary(unit),
                 "ready" if unit.target_unit else None,
-                "\n".join(dict.fromkeys(item.source for item in unit.items[:10])),
+                _sample_sources(unit, 10),
                 ",".join(str(item.row_number) for item in unit.items),
                 unit.target_unit_source or None,
                 unit.suggested_target_unit or None,
@@ -358,7 +361,7 @@ def _write_output_workbook(
 
     todo = wb.create_sheet(schema.TO_TRANSLATE_SHEET)
     todo.append(schema.TO_TRANSLATE_COLUMNS)
-    for unit in units:
+    for unit in _units_in_source_order(units):
         if unit.target_unit:
             continue
         todo.append(
@@ -367,8 +370,10 @@ def _write_output_workbook(
                 unit.unit_type,
                 unit.source_unit,
                 None,
+                _sample_sources(unit, 1),
+                _context_value(unit, context_index),
+                _first_row_number(unit),
                 unit.coverage_count,
-                "\n".join(dict.fromkeys(item.source for item in unit.items[:5])),
                 _variables_summary(unit),
                 unit.warning or None,
                 None,
@@ -412,8 +417,7 @@ def _write_output_workbook(
         )
 
     filled = wb.create_sheet(schema.FILLED_WORKBOOK_SHEET)
-    headers = _read_headers(input_path)
-    filled.append(headers + schema.FILLED_WORKBOOK_EXTRA_COLUMNS)
+    filled.append(source_headers + schema.FILLED_WORKBOOK_EXTRA_COLUMNS)
     for result_row in result_rows:
         row = result_row.row
         unit = result_row.unit
@@ -429,10 +433,10 @@ def _write_output_workbook(
             fill_status = "filled"
         warning = _merge_warnings(warning, result_row.warning)
         original = list(row.original_values)
-        if len(original) < len(headers):
-            original.extend([None] * (len(headers) - len(original)))
+        if len(original) < len(source_headers):
+            original.extend([None] * (len(source_headers) - len(original)))
         filled.append(
-            original[: len(headers)]
+            original[: len(source_headers)]
             + [
                 auto_target,
                 fill_status,
@@ -502,10 +506,12 @@ def _write_to_translate_workbook(
     tag_rules: TagRules | None = None,
 ) -> None:
     wb = Workbook()
+    source_headers = _read_headers(input_path)
+    context_index = _context_column_index(source_headers)
     todo = wb.active
     todo.title = schema.TO_TRANSLATE_SHEET
     todo.append(schema.TO_TRANSLATE_COLUMNS)
-    for unit in units:
+    for unit in _units_in_source_order(units):
         if unit.target_unit:
             continue
         todo.append(
@@ -514,8 +520,10 @@ def _write_to_translate_workbook(
                 unit.unit_type,
                 unit.source_unit,
                 None,
+                _sample_sources(unit, 1),
+                _context_value(unit, context_index),
+                _first_row_number(unit),
                 unit.coverage_count,
-                "\n".join(dict.fromkeys(item.source for item in unit.items[:5])),
                 _variables_summary(unit),
                 unit.warning or None,
                 None,
@@ -692,6 +700,46 @@ def _variables_summary(unit: TranslationUnit) -> str | None:
     return "; ".join(
         f"{placeholder}={','.join(values[:5])}" for placeholder, values in samples.items()
     )
+
+
+def _units_in_source_order(units: Iterable[TranslationUnit]) -> list[TranslationUnit]:
+    return sorted(units, key=_source_order_key)
+
+
+def _source_order_key(unit: TranslationUnit) -> tuple[int, str, str]:
+    first_row_number = _first_row_number(unit)
+    return (
+        first_row_number if first_row_number is not None else 0,
+        unit.unit_type,
+        unit.source_unit,
+    )
+
+
+def _first_row_item(unit: TranslationUnit) -> RowItem | None:
+    return min(unit.items, key=lambda item: item.row_number) if unit.items else None
+
+
+def _first_row_number(unit: TranslationUnit) -> int | None:
+    first = _first_row_item(unit)
+    return first.row_number if first else None
+
+
+def _context_column_index(headers: list[str]) -> int | None:
+    for index, header in enumerate(headers):
+        if header.strip().lower() == schema.CONTEXT_COLUMN:
+            return index
+    return None
+
+
+def _context_value(unit: TranslationUnit, context_index: int | None) -> object | None:
+    first = _first_row_item(unit)
+    if first is None or context_index is None or context_index >= len(first.original_values):
+        return None
+    return first.original_values[context_index]
+
+
+def _sample_sources(unit: TranslationUnit, limit: int) -> str:
+    return "\n".join(dict.fromkeys(item.source for item in unit.items[:limit]))
 
 
 def _merge_warnings(*warnings: str) -> str:

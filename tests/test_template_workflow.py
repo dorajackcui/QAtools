@@ -702,6 +702,70 @@ class TemplateDemoTests(unittest.TestCase):
             ]
             self.assertEqual([row["source_unit"] for row in todo_rows], ["New text"])
 
+    def test_translator_todo_orders_units_by_first_source_row_and_includes_context(self):
+        from phraseloom.workflow import generate_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "source.xlsx"
+            output_path = Path(tmp) / "pack.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "context"])
+            ws.append(["Intro line", "Opening scene"])
+            ws.append(["VIP10 Pack", "Shop scene"])
+            ws.append(["Later line", "Battle scene"])
+            ws.append(["VIP20 Pack", "Shop scene"])
+            wb.save(input_path)
+
+            generate_workbook(
+                input_path,
+                output_path,
+                source_col="source",
+                target_col=None,
+                min_group_size=2,
+                use_existing_targets=False,
+            )
+
+            todo_path = input_path.parent / "source_l10n" / "source_translator_todo.xlsx"
+            todo_book = load_workbook(todo_path, data_only=True)
+            try:
+                todo = todo_book["to_translate"]
+                headers = [cell.value for cell in todo[1]]
+                rows = [
+                    dict(zip(headers, row))
+                    for row in todo.iter_rows(min_row=2, values_only=True)
+                ]
+            finally:
+                todo_book.close()
+
+            self.assertEqual(
+                headers,
+                [
+                    "unit_id",
+                    "unit_type",
+                    "source_unit",
+                    "target_unit",
+                    "sample_sources",
+                    "context",
+                    "row_number",
+                    "coverage_count",
+                    "variables",
+                    "warning",
+                    "translator_note",
+                ],
+            )
+            self.assertEqual(
+                [row["source_unit"] for row in rows],
+                ["Intro line", "VIP{num1} Pack", "Later line"],
+            )
+            self.assertEqual([row["row_number"] for row in rows], [2, 3, 4])
+            self.assertEqual(
+                [row["context"] for row in rows],
+                ["Opening scene", "Shop scene", "Battle scene"],
+            )
+            self.assertEqual(rows[1]["sample_sources"], "VIP10 Pack")
+
     def test_translated_to_translate_can_fill_target_column_in_output_copy(self):
         from phraseloom.workflow import (
             fill_target_column_workbook,
