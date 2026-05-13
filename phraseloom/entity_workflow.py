@@ -983,6 +983,7 @@ def _merge_warnings(*warnings: object) -> str | None:
 __all__ = [
     "ClusterProbeStrategy",
     "EntityExtractionStrategy",
+    "_default_entity_work_dir",
     "default_entity_filled_pack_output_path",
     "default_entity_memory_output_path",
     "default_entity_merged_todo_output_path",
