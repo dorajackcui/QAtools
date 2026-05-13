@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Protocol
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.utils import get_column_letter
 
 from . import workbook_schema as schema
 from ._entity_cluster_probe import find_entity_clusters
@@ -1046,8 +1047,11 @@ def _append_unit_rows(ws, headers: list[str], rows: list[UnitRow], *, include_or
 
 def _hide_original_index_column(ws) -> None:
     headers = _header_values(ws)
-    if headers and headers[0] == schema.ORIGINAL_INDEX_COLUMN:
-        ws.column_dimensions["A"].hidden = True
+    if schema.ORIGINAL_INDEX_COLUMN in headers:
+        column_letter = get_column_letter(
+            headers.index(schema.ORIGINAL_INDEX_COLUMN) + 1
+        )
+        ws.column_dimensions[column_letter].hidden = True
 
 
 def _append_dict_sheet(ws, headers: list[str], rows: list[dict[str, object]]) -> None:

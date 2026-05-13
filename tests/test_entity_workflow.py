@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.utils import get_column_letter
 
 from phraseloom import workbook_schema as schema
 
@@ -49,6 +50,17 @@ def _sheet_state(path: Path, sheet_name: str) -> str:
     wb = load_workbook(path, data_only=True)
     try:
         return wb[sheet_name].sheet_state
+    finally:
+        wb.close()
+
+
+def _is_column_hidden(path: Path, sheet_name: str, header: str) -> bool:
+    wb = load_workbook(path, data_only=True)
+    try:
+        ws = wb[sheet_name]
+        headers = [cell.value for cell in ws[1]]
+        column_letter = get_column_letter(headers.index(header) + 1)
+        return bool(ws.column_dimensions[column_letter].hidden)
     finally:
         wb.close()
 
@@ -651,6 +663,22 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                 ],
             )
             _write_entity_tm_workbook(entity_memory_path)
+            wb = load_workbook(todo_path)
+            try:
+                ws = wb[schema.TO_TRANSLATE_SHEET]
+                original_index_column = ws.max_column + 1
+                ws.cell(
+                    row=1,
+                    column=original_index_column,
+                ).value = schema.ORIGINAL_INDEX_COLUMN
+                for row_number, original_index in enumerate([1, 2, 3], start=2):
+                    ws.cell(
+                        row=row_number,
+                        column=original_index_column,
+                    ).value = original_index
+                wb.save(todo_path)
+            finally:
+                wb.close()
 
             self.assertEqual(
                 _dispatch(
@@ -701,6 +729,42 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
             self.assertEqual(
                 [row[schema.UNIT_ID_COLUMN] for row in non_related_rows],
                 ["U0002"],
+            )
+            for sheet_name in [
+                schema.RELATED_UNITS_SHEET,
+                schema.NON_RELATED_UNITS_SHEET,
+            ]:
+                self.assertIn(schema.ORIGINAL_INDEX_COLUMN, _headers(pack_path, sheet_name))
+                self.assertTrue(
+                    _is_column_hidden(
+                        pack_path,
+                        sheet_name,
+                        schema.ORIGINAL_INDEX_COLUMN,
+                    )
+                )
+            entity_map = _rows_by_header(pack_path, schema.ENTITY_MAP_SHEET)
+            self.assertEqual(
+                [
+                    (
+                        row[schema.ORIGINAL_INDEX_COLUMN],
+                        row[schema.UNIT_ID_COLUMN],
+                        row[schema.STRUCTURE_ID_COLUMN],
+                        row[schema.ENTITIES_JSON_COLUMN],
+                    )
+                    for row in entity_map
+                ],
+                [
+                    (1, "U0001", "ES0001", '{"entity1": "Squirtle"}'),
+                    (3, "U0003", "ES0001", '{"entity1": "Pikachu"}'),
+                ],
+            )
+            metadata = _rows_by_header(pack_path, schema.METADATA_SHEET)
+            self.assertIn(
+                {
+                    schema.KEY_COLUMN: schema.SCHEMA_VERSION_KEY,
+                    schema.VALUE_COLUMN: schema.SCHEMA_VERSION,
+                },
+                metadata,
             )
             structures = _rows_by_header(pack_path, schema.ENTITY_STRUCTURES_SHEET)
             self.assertEqual(
