@@ -93,6 +93,34 @@ def _set_first_non_related_target(path: Path, target: str) -> None:
         wb.close()
 
 
+def _set_first_related_original_index(path: Path, value: object) -> None:
+    wb = load_workbook(path)
+    try:
+        ws = wb[schema.RELATED_UNITS_SHEET]
+        headers = [cell.value for cell in ws[1]]
+        ws.cell(
+            row=2,
+            column=headers.index(schema.ORIGINAL_INDEX_COLUMN) + 1,
+        ).value = value
+        wb.save(path)
+    finally:
+        wb.close()
+
+
+def _set_first_entity_map_original_index(path: Path, value: object) -> None:
+    wb = load_workbook(path)
+    try:
+        ws = wb[schema.ENTITY_MAP_SHEET]
+        headers = [cell.value for cell in ws[1]]
+        ws.cell(
+            row=2,
+            column=headers.index(schema.ORIGINAL_INDEX_COLUMN) + 1,
+        ).value = value
+        wb.save(path)
+    finally:
+        wb.close()
+
+
 def _write_entity_tm_workbook(path: Path) -> None:
     wb = Workbook()
     structures = wb.active
@@ -1043,6 +1071,140 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                 "missing required original_index",
             ):
                 merge_entity_pack_workbook(pack_path, merged_path)
+
+    def test_entity_merge_pack_reports_invalid_related_original_index(self):
+        from phraseloom.entity_workflow import (
+            merge_entity_pack_workbook,
+            prepare_entity_pack_workbook,
+        )
+        from phraseloom.errors import WorkflowError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "source_translator_todo.xlsx"
+            pack_path = tmp_path / "source_entity_pack.xlsx"
+            merged_path = tmp_path / "source_merged_todo.xlsx"
+            _write_todo_workbook(
+                todo_path,
+                [
+                    {
+                        schema.UNIT_ID_COLUMN: "U0001",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0002",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                ],
+            )
+            prepare_entity_pack_workbook(
+                todo_path,
+                pack_path,
+                min_group_size=2,
+            )
+            _set_first_related_original_index(pack_path, "oops")
+
+            with self.assertRaisesRegex(
+                WorkflowError,
+                "invalid original_index",
+            ):
+                merge_entity_pack_workbook(pack_path, merged_path)
+
+    def test_entity_fill_pack_reports_invalid_related_original_index(self):
+        from phraseloom.entity_workflow import (
+            fill_entity_pack_workbook,
+            prepare_entity_pack_workbook,
+        )
+        from phraseloom.errors import WorkflowError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "source_translator_todo.xlsx"
+            pack_path = tmp_path / "source_entity_pack.xlsx"
+            filled_path = tmp_path / "source_entity_pack_filled.xlsx"
+            _write_todo_workbook(
+                todo_path,
+                [
+                    {
+                        schema.UNIT_ID_COLUMN: "U0001",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0002",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                ],
+            )
+            prepare_entity_pack_workbook(
+                todo_path,
+                pack_path,
+                min_group_size=2,
+            )
+            _set_first_related_original_index(pack_path, "oops")
+            _complete_entity_tables(
+                pack_path,
+                term_targets={"Squirtle": "Carapuce", "Pikachu": "Pikachu"},
+            )
+
+            with self.assertRaisesRegex(
+                WorkflowError,
+                "invalid original_index",
+            ):
+                fill_entity_pack_workbook(pack_path, filled_path)
+
+    def test_entity_fill_pack_reports_invalid_entity_map_original_index(self):
+        from phraseloom.entity_workflow import (
+            fill_entity_pack_workbook,
+            prepare_entity_pack_workbook,
+        )
+        from phraseloom.errors import WorkflowError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "source_translator_todo.xlsx"
+            pack_path = tmp_path / "source_entity_pack.xlsx"
+            filled_path = tmp_path / "source_entity_pack_filled.xlsx"
+            _write_todo_workbook(
+                todo_path,
+                [
+                    {
+                        schema.UNIT_ID_COLUMN: "U0001",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0002",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                ],
+            )
+            prepare_entity_pack_workbook(
+                todo_path,
+                pack_path,
+                min_group_size=2,
+            )
+            _complete_entity_tables(
+                pack_path,
+                term_targets={"Squirtle": "Carapuce", "Pikachu": "Pikachu"},
+            )
+            _set_first_entity_map_original_index(pack_path, "oops")
+
+            with self.assertRaisesRegex(
+                WorkflowError,
+                "invalid original_index",
+            ):
+                fill_entity_pack_workbook(pack_path, filled_path)
 
     def test_entity_fill_pack_cli_rejects_output_with_in_place(self):
         from phraseloom.cli import _dispatch

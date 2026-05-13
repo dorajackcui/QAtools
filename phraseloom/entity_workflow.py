@@ -491,6 +491,21 @@ def _read_unit_rows(path: Path, sheet_name: str) -> tuple[list[UnitRow], list[st
         wb.close()
 
 
+def _parse_original_index(value: object, *, sheet_name: str, row_number: int) -> int:
+    if value in (None, ""):
+        raise WorkflowError(
+            f"Workbook sheet {sheet_name!r} row {row_number} is missing required "
+            f"{schema.ORIGINAL_INDEX_COLUMN}"
+        )
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise WorkflowError(
+            f"Workbook sheet {sheet_name!r} row {row_number} has invalid "
+            f"{schema.ORIGINAL_INDEX_COLUMN}: {value!r}"
+        ) from exc
+
+
 def _read_pack_unit_rows(
     path: Path,
     preferred_sheet_name: str,
@@ -524,13 +539,11 @@ def _read_pack_unit_rows(
             }
             if values.get(schema.SOURCE_UNIT_COLUMN):
                 original_index_value = values.get(schema.ORIGINAL_INDEX_COLUMN)
-                if original_index_value in (None, ""):
-                    row_number = sequence_index + 1
-                    raise WorkflowError(
-                        f"Workbook sheet {sheet_name!r} row {row_number} is "
-                        f"missing required {schema.ORIGINAL_INDEX_COLUMN}"
-                    )
-                original_index = int(original_index_value)
+                original_index = _parse_original_index(
+                    original_index_value,
+                    sheet_name=sheet_name,
+                    row_number=sequence_index + 1,
+                )
                 rows.append(UnitRow(original_index, values))
         return rows, headers
     finally:
@@ -725,7 +738,13 @@ def _todo_rows_by_original_index(ws) -> dict[int, int]:
     for row_number in range(2, ws.max_row + 1):
         original_index = ws.cell(row=row_number, column=original_index_column).value
         if original_index is not None:
-            rows[int(original_index)] = row_number
+            rows[
+                _parse_original_index(
+                    original_index,
+                    sheet_name=ws.title,
+                    row_number=row_number,
+                )
+            ] = row_number
     return rows
 
 
@@ -771,11 +790,13 @@ def _fill_source_map_rows(
     filled_count = 0
 
     for row_number in range(2, source_map_ws.max_row + 1):
-        original_index = int(
+        original_index = _parse_original_index(
             source_map_ws.cell(
                 row=row_number,
                 column=map_columns[schema.ORIGINAL_INDEX_COLUMN],
-            ).value
+            ).value,
+            sheet_name=source_map_ws.title,
+            row_number=row_number,
         )
         unit_id = str(
             source_map_ws.cell(row=row_number, column=map_columns[schema.UNIT_ID_COLUMN]).value
