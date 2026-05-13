@@ -338,6 +338,48 @@ def fill_entity_workbook(
     }
 
 
+def fill_entity_pack_workbook(
+    pack_input_path: str | Path,
+    output_path: str | Path,
+) -> dict[str, int | str]:
+    pack_input_path = Path(pack_input_path)
+    output_path = Path(output_path)
+    wb = load_workbook(pack_input_path)
+    try:
+        structures = _load_rows_by_key(
+            wb[schema.ENTITY_STRUCTURES_SHEET],
+            schema.STRUCTURE_ID_COLUMN,
+        )
+        terms = _load_rows_by_key(
+            wb[schema.ENTITY_TERMS_SHEET],
+            schema.SOURCE_ENTITY_COLUMN,
+        )
+        related_ws = _worksheet_by_name(
+            wb,
+            [schema.RELATED_UNITS_SHEET, schema.TO_TRANSLATE_SHEET],
+        )
+        entity_map_ws = _worksheet_by_name(
+            wb,
+            [schema.ENTITY_MAP_SHEET, schema.ENTITY_SOURCE_MAP_SHEET],
+        )
+        related_by_original_index = _todo_rows_by_original_index(related_ws)
+        filled_count = _fill_source_map_rows(
+            entity_map_ws,
+            related_ws,
+            related_by_original_index,
+            structures,
+            terms,
+        )
+        _save_workbook(wb, output_path)
+    finally:
+        wb.close()
+
+    return {
+        "filled_entity_unit_count": filled_count,
+        "output_path": str(output_path),
+    }
+
+
 def merge_entity_workbooks(
     entity_path: str | Path,
     non_entity_path: str | Path,
@@ -752,6 +794,14 @@ def _one_based_columns(headers: list[str]) -> dict[str, int]:
     return {header: index + 1 for index, header in enumerate(headers) if header}
 
 
+def _worksheet_by_name(wb, names: list[str]):
+    for name in names:
+        if name in wb.sheetnames:
+            return wb[name]
+    expected = " or ".join(names)
+    raise WorkflowError(f"Workbook is missing required sheet: {expected}")
+
+
 def _load_unique_prefills(
     path: Path,
     sheet_name: str,
@@ -1098,6 +1148,7 @@ __all__ = [
     "default_entity_pack_output_path",
     "extract_entity_memory_workbook",
     "extract_entity_tm_workbook",
+    "fill_entity_pack_workbook",
     "fill_entity_workbook",
     "merge_entity_workbooks",
     "prepare_entity_pack_workbook",

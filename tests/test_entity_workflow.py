@@ -206,6 +206,40 @@ def _complete_entity_workbook(
         wb.close()
 
 
+def _complete_entity_tables(
+    path: Path,
+    *,
+    term_targets: dict[str, str],
+) -> None:
+    wb = load_workbook(path)
+    try:
+        structures = wb[schema.ENTITY_STRUCTURES_SHEET]
+        structure_headers = [cell.value for cell in structures[1]]
+        structures.cell(
+            row=2,
+            column=structure_headers.index(schema.TARGET_STRUCTURE_COLUMN) + 1,
+        ).value = "{entity1} launched a localized attack and dealt localized damage."
+        structures.cell(
+            row=2,
+            column=structure_headers.index(schema.STATUS_COLUMN) + 1,
+        ).value = "ready"
+
+        terms = wb[schema.ENTITY_TERMS_SHEET]
+        term_headers = [cell.value for cell in terms[1]]
+        source_index = term_headers.index(schema.SOURCE_ENTITY_COLUMN) + 1
+        target_index = term_headers.index(schema.TARGET_ENTITY_COLUMN) + 1
+        status_index = term_headers.index(schema.STATUS_COLUMN) + 1
+        for row_number in range(2, terms.max_row + 1):
+            source_entity = terms.cell(row=row_number, column=source_index).value
+            target_entity = term_targets.get(str(source_entity))
+            if target_entity:
+                terms.cell(row=row_number, column=target_index).value = target_entity
+                terms.cell(row=row_number, column=status_index).value = "ready"
+        wb.save(path)
+    finally:
+        wb.close()
+
+
 class EntityWorkflowTests(unittest.TestCase):
     def test_split_creates_parallel_entity_and_non_entity_workbooks(self):
         from phraseloom.entity_workflow import split_entity_workbook
@@ -778,6 +812,59 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                     for row in terms
                 },
                 {"Pikachu": "Pikachu", "Squirtle": "Carapuce"},
+            )
+
+    def test_entity_fill_pack_cli_writes_targets_to_related_units(self):
+        from phraseloom.entity_workflow import prepare_entity_pack_workbook
+        from phraseloom.cli import _dispatch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "source_translator_todo.xlsx"
+            pack_path = tmp_path / "source_entity_pack.xlsx"
+            _write_todo_workbook(
+                todo_path,
+                [
+                    {
+                        schema.UNIT_ID_COLUMN: "U0001",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0002",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                ],
+            )
+            prepare_entity_pack_workbook(
+                todo_path,
+                pack_path,
+                min_group_size=2,
+            )
+            _complete_entity_tables(
+                pack_path,
+                term_targets={"Squirtle": "Carapuce", "Pikachu": "Pikachu"},
+            )
+
+            self.assertEqual(_dispatch(["entity-fill-pack", str(pack_path)]), 0)
+
+            filled_pack_path = tmp_path / "source_entity_pack_filled.xlsx"
+            self.assertTrue(filled_pack_path.exists())
+            related_rows = _rows_by_header(filled_pack_path, schema.RELATED_UNITS_SHEET)
+            self.assertEqual(
+                [row[schema.TARGET_UNIT_COLUMN] for row in related_rows],
+                [
+                    "Carapuce launched a localized attack and dealt localized damage.",
+                    "Pikachu launched a localized attack and dealt localized damage.",
+                ],
+            )
+            map_rows = _rows_by_header(filled_pack_path, schema.ENTITY_MAP_SHEET)
+            self.assertEqual(
+                [row[schema.FILL_STATUS_COLUMN] for row in map_rows],
+                ["filled", "filled"],
             )
 
 

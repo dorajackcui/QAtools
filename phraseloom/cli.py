@@ -7,10 +7,12 @@ from typing import Iterable
 
 from .errors import ConfigError, PhraseLoomError
 from .entity_workflow import (
+    default_entity_filled_pack_output_path,
     default_entity_memory_output_path,
     default_entity_pack_output_path,
     extract_entity_memory_workbook,
     extract_entity_tm_workbook,
+    fill_entity_pack_workbook,
     fill_entity_workbook,
     merge_entity_workbooks,
     prepare_entity_pack_workbook,
@@ -78,6 +80,8 @@ def _dispatch(argv: list[str] | None = None) -> int:
         return _main_entity_extract_tm(argv[1:])
     if argv[0] == "entity-fill":
         return _main_entity_fill(argv[1:])
+    if argv[0] == "entity-fill-pack":
+        return _main_entity_fill_pack(argv[1:])
     if argv[0] == "entity-merge":
         return _main_entity_merge(argv[1:])
     return _main_legacy(argv)
@@ -329,6 +333,26 @@ def _main_entity_fill(argv: list[str]) -> int:
     return 0
 
 
+def _main_entity_fill_pack(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Fill ready entity structures and terms back into related_units."
+    )
+    parser.add_argument("input", type=Path, help="Source entity pack .xlsx file")
+    parser.add_argument("-o", "--output", type=Path, help="Filled entity pack output .xlsx")
+    parser.add_argument(
+        "--in-place",
+        action="store_true",
+        help="Update the input pack instead of writing a new file",
+    )
+    args = parser.parse_args(argv)
+    output = args.input if args.in_place else (
+        args.output or default_entity_filled_pack_output_path(args.input)
+    )
+    stats = fill_entity_pack_workbook(args.input, output)
+    _print_entity_fill_stats(stats)
+    return 0
+
+
 def _main_entity_merge(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description="Merge filled entity rows and non-entity rows into a todo workbook."
@@ -495,6 +519,7 @@ __all__ = [
     "_main_extract",
     "_main_entity_extract_tm",
     "_main_entity_fill",
+    "_main_entity_fill_pack",
     "_main_entity_merge",
     "_main_entity_prefill",
     "_main_entity_prepare",
