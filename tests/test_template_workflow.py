@@ -345,7 +345,7 @@ class TemplateDemoTests(unittest.TestCase):
             wb = Workbook()
             ws = wb.active
             ws.title = "Sheet2"
-            ws.append(["中文", "英語", "target"])
+            ws.append(["中文", "source", "target"])
             ws.append(["VIP0付费礼包", "VIP0 Paid Pack", ""])
             ws.append(["VIP10付费礼包", "VIP10 Paid Pack", ""])
             ws.append(["登录游戏3天", "Sign in for 3 days", ""])
@@ -354,7 +354,7 @@ class TemplateDemoTests(unittest.TestCase):
             stats = generate_workbook(
                 input_path,
                 output_path,
-                source_col="英語",
+                source_col="source",
                 target_col="target",
                 examples=[("VIP10 Paid Pack", "VIP10pack")],
                 min_group_size=2,
@@ -467,7 +467,7 @@ class TemplateDemoTests(unittest.TestCase):
             wb = Workbook()
             ws = wb.active
             ws.title = "Sheet1"
-            ws.append(["英語", "target"])
+            ws.append(["source", "target"])
             ws.append(["Obtain 3 stars in Chapter 1", ""])
             ws.append(["Obtain 3 stars in Chapter 1", ""])
             ws.append(["Obtain 3 stars in Chapter 2", ""])
@@ -478,7 +478,7 @@ class TemplateDemoTests(unittest.TestCase):
             stats = generate_workbook(
                 input_path,
                 pack_path,
-                source_col="英語",
+                source_col="source",
                 target_col="target",
                 min_group_size=2,
                 use_existing_targets=False,
@@ -504,7 +504,7 @@ class TemplateDemoTests(unittest.TestCase):
             fill_stats = generate_workbook(
                 input_path,
                 filled_path,
-                source_col="英語",
+                source_col="source",
                 target_col="target",
                 template_workbook=pack_path,
                 min_group_size=2,
@@ -1344,7 +1344,7 @@ class TemplateDemoTests(unittest.TestCase):
 
             wb = Workbook()
             ws = wb.active
-            ws.append(["英語"])
+            ws.append(["source"])
             ws.append(["VIP10 Paid Pack"])
             ws.append(["VIP10 Paid Pack"])
             ws.append(["VIP10 Paid Pack"])
@@ -1353,7 +1353,7 @@ class TemplateDemoTests(unittest.TestCase):
             generate_workbook(
                 input_path,
                 output_path,
-                source_col="英語",
+                source_col="source",
                 target_col=None,
                 min_group_size=2,
                 use_existing_targets=False,
@@ -1396,7 +1396,7 @@ class TemplateDemoTests(unittest.TestCase):
             wb = Workbook()
             ws = wb.active
             ws.title = "Sheet2"
-            ws.append(["中文", "英語", "target"])
+            ws.append(["中文", "source", "target"])
             ws.append(["VIP0付费礼包", "VIP0 Paid Pack", ""])
             ws.append(["VIP10付费礼包", "VIP10 Paid Pack", ""])
             wb.save(input_path)

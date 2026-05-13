@@ -40,7 +40,7 @@ def run_interactive() -> int:
 
 def _interactive_tm_extract() -> int:
     input_path = _user_path(_prompt_text("Completed Excel path", required=True))
-    source_col = _prompt_text("Source column in completed Excel", default="英語")
+    source_col = _prompt_text("Source column in completed Excel", default="source")
     target_col = _prompt_text("Target column in completed Excel", default="target")
     output_path = _user_path(
         _prompt_text("Output tm_pairs workbook", default=str(_default_tm_output_path(input_path)))
@@ -60,7 +60,7 @@ def _interactive_tm_extract() -> int:
 
 def _interactive_extract() -> int:
     input_path = _user_path(_prompt_text("New source Excel path", required=True))
-    source_col = _prompt_text("Source column in new file", default="英語")
+    source_col = _prompt_text("Source column in new file", default="source")
     target_col = _normalize_optional_column(
         _prompt_text("Existing target column (- for none)", default="target")
     )
@@ -101,7 +101,7 @@ def _interactive_fill() -> int:
     template_workbook = _user_path(
         _prompt_text("Translated to_translate file path", required=True)
     )
-    source_col = _prompt_text("Source column in original file", default="英語")
+    source_col = _prompt_text("Source column in original file", default="source")
     target_col = _normalize_optional_column(
         _prompt_text("Target column to write/check", default="target")
     )

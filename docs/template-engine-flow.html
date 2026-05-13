@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PhraseLoom Tag + Template Flow</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #5c6673;
+      --line: #d7e0e8;
+      --paper: #f6f8fb;
+      --panel: #ffffff;
+      --tag: #1d8a83;
+      --tag-soft: #dff3f0;
+      --template: #6e5aa8;
+      --template-soft: #ebe6f7;
+      --output: #278350;
+      --output-soft: #e3f4ea;
+      --warn: #b07a18;
+      --warn-soft: #f8ecd4;
+      --shadow: 0 12px 30px rgba(26, 42, 58, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    main {
+      width: min(1080px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 34px 0 48px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 22px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.12;
+      font-weight: 780;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 780px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    .nav-link {
+      display: inline-block;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 12px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 13px;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .nav-link:hover {
+      color: var(--ink);
+      border-color: #9aa9b7;
+    }
+
+    .plain-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0 18px;
+    }
+
+    .summary-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 15px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .summary-card strong {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 15px;
+    }
+
+    .summary-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .demo {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
+
+    .demo-title {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #eef3f7;
+      font-weight: 760;
+    }
+
+    .demo-body {
+      display: grid;
+      grid-template-columns: 1fr 52px 1fr 52px 1fr;
+      align-items: stretch;
+      gap: 0;
+      padding: 16px;
+    }
+
+    .demo-box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+      min-height: 126px;
+    }
+
+    .demo-box h2 {
+      margin: 0 0 10px;
+      font-size: 14px;
+    }
+
+    .demo-box code {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: normal;
+    }
+
+    .demo-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #7a8897;
+      font-weight: 800;
+      font-size: 20px;
+    }
+
+    .story {
+      display: grid;
+      gap: 14px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 70px minmax(0, 1fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .step-number {
+      display: flex;
+      justify-content: center;
+      padding-top: 8px;
+    }
+
+    .step-number span {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--ink);
+      color: #fff;
+      font-weight: 800;
+      box-shadow: var(--shadow);
+    }
+
+    .step-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .step-card h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .step-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    .tag-label,
+    .template-label,
+    .output-label,
+    .warn-label {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 9px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      font-weight: 740;
+    }
+
+    .tag-label {
+      background: var(--tag-soft);
+      color: #12635e;
+    }
+
+    .template-label {
+      background: var(--template-soft);
+      color: #514082;
+    }
+
+    .output-label {
+      background: var(--output-soft);
+      color: #1e6b42;
+    }
+
+    .warn-label {
+      background: var(--warn-soft);
+      color: #875c12;
+    }
+
+    .example-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 42px minmax(0, 1fr);
+      align-items: stretch;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .example-box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfe;
+    }
+
+    .example-box strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .example-box code {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: normal;
+    }
+
+    .arrow {
+      display: grid;
+      place-items: center;
+      color: #7a8897;
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .takeaways {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .takeaway {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 15px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .takeaway h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .takeaway p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    code {
+      font-family: Consolas, "Cascadia Mono", monospace;
+    }
+
+    @media (max-width: 820px) {
+      main {
+        width: min(100% - 22px, 720px);
+      }
+
+      header,
+      .plain-summary,
+      .takeaways {
+        grid-template-columns: 1fr;
+      }
+
+      .demo-body {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .demo-arrow {
+        min-height: 24px;
+        transform: rotate(90deg);
+      }
+
+      .step {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .step-number {
+        justify-content: start;
+        padding-top: 0;
+      }
+
+      .example-row {
+        grid-template-columns: 1fr;
+      }
+
+      .arrow {
+        min-height: 24px;
+        transform: rotate(90deg);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>PhraseLoom 怎么把重复文案变少，还不弄坏格式？</h1>
+        <p class="subtitle">
+          你可以把主流程理解成两个小帮手：第一个先把不能翻坏的格式锁起来，
+          第二个把大量相似句子合并成少量翻译任务。译员翻完后，系统再把格式还原并写回 Excel。
+        </p>
+      </div>
+      <a class="nav-link" href="entity-engine-flow.html">看 Entity Engine</a>
+    </header>
+
+    <section class="plain-summary" aria-label="Plain language summary">
+      <article class="summary-card">
+        <strong>先锁格式</strong>
+        <p>标签、换行、图片、占位符先变成临时编号，避免翻译时被误删或改坏。</p>
+      </article>
+      <article class="summary-card">
+        <strong>再合并重复</strong>
+        <p>只差数字或颜色的句子合并成一条模板，译员不用重复翻很多遍。</p>
+      </article>
+      <article class="summary-card">
+        <strong>最后写回</strong>
+        <p>系统把每行自己的数字填回去，再把临时编号还原成原始格式。</p>
+      </article>
+    </section>
+
+    <section class="demo" aria-label="Before and after example">
+      <div class="demo-title">先看一个完整例子</div>
+      <div class="demo-body">
+        <div class="demo-box">
+          <h2>Excel 里原本长这样</h2>
+          <code>&lt;color=#ff0&gt;VIP10 Pack&lt;/&gt;</code>
+          <code>&lt;color=#ff0&gt;VIP20 Pack&lt;/&gt;</code>
+        </div>
+        <div class="demo-arrow">→</div>
+        <div class="demo-box">
+          <h2>译员只需要处理模板</h2>
+          <code>{1&gt;VIP{num1} Pack&lt;2}</code>
+          <code>翻成：{1&gt;Pack VIP{num1}&lt;2}</code>
+        </div>
+        <div class="demo-arrow">→</div>
+        <div class="demo-box">
+          <h2>系统自动生成每一行</h2>
+          <code>&lt;color=#ff0&gt;Pack VIP10&lt;/&gt;</code>
+          <code>&lt;color=#ff0&gt;Pack VIP20&lt;/&gt;</code>
+        </div>
+      </div>
+    </section>
+
+    <section class="story" aria-label="Simple flow">
+      <article class="step">
+        <div class="step-number"><span>1</span></div>
+        <div class="step-card">
+          <span class="output-label">用户看到的开始</span>
+          <h2>把源 Excel 交给 PhraseLoom</h2>
+          <p>
+            文件里有 source 列，也可能已经有一部分 target 列。PhraseLoom 先逐行读取原文，
+            记住每一行来自 Excel 的哪一行，后面才能准确写回去。
+          </p>
+          <div class="example-row">
+            <div class="example-box">
+              <strong>原文</strong>
+              <code>&lt;color=#ff0&gt;VIP10 Pack&lt;/&gt;</code>
+              <code>Buy 200 coins</code>
+            </div>
+            <div class="arrow">→</div>
+            <div class="example-box">
+              <strong>PhraseLoom 记住</strong>
+              <code>第 2 行是什么文案</code>
+              <code>第 3 行是什么文案</code>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step">
+        <div class="step-number"><span>2</span></div>
+        <div class="step-card">
+          <span class="tag-label">Tag Engine：保护格式</span>
+          <h2>先给不能翻坏的东西贴临时号码牌</h2>
+          <p>
+            颜色标签、图片标签、换行、原始占位符这些内容通常不应该被翻译。
+            所以系统先把它们换成短编号。译员看到编号，但不用碰原始标签。
+          </p>
+          <div class="example-row">
+            <div class="example-box">
+              <strong>原始格式</strong>
+              <code>&lt;color=#ff0&gt;VIP10&lt;/&gt;</code>
+              <code>Hit deals {0} damage</code>
+            </div>
+            <div class="arrow">→</div>
+            <div class="example-box">
+              <strong>临时号码牌</strong>
+              <code>{1&gt;VIP10&lt;2}</code>
+              <code>Hit deals {1} damage</code>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step">
+        <div class="step-number"><span>3</span></div>
+        <div class="step-card">
+          <span class="template-label">Template Engine：减少重复</span>
+          <h2>再把相似句子合并成一条模板</h2>
+          <p>
+            很多文案只是数字不同，例如 VIP10、VIP20、VIP30。系统会把变化的数字抽出来，
+            变成一个变量。这样译员只翻一个句式，系统负责替换每一行自己的数字。
+          </p>
+          <div class="example-row">
+            <div class="example-box">
+              <strong>很多相似句</strong>
+              <code>VIP10 Paid Pack</code>
+              <code>VIP20 Paid Pack</code>
+              <code>VIP30 Paid Pack</code>
+            </div>
+            <div class="arrow">→</div>
+            <div class="example-box">
+              <strong>一条模板</strong>
+              <code>VIP{num1} Paid Pack</code>
+              <code>{num1} 代表每行自己的数字</code>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step">
+        <div class="step-number"><span>4</span></div>
+        <div class="step-card">
+          <span class="output-label">译员真正要处理的文件</span>
+          <h2>生成 translator todo，译员只填 target_unit</h2>
+          <p>
+            PhraseLoom 会输出一个给译员用的 workbook。译员不需要管每一行 Excel，
+            只需要翻译去重后的 unit。能从 TM 或 existing target 推断出来的内容，会先预填好。
+          </p>
+          <div class="example-row">
+            <div class="example-box">
+              <strong>译员看到</strong>
+              <code>source_unit: VIP{num1} Paid Pack</code>
+              <code>target_unit: ______</code>
+            </div>
+            <div class="arrow">→</div>
+            <div class="example-box">
+              <strong>译员填写</strong>
+              <code>target_unit: Pack VIP{num1}</code>
+              <code>变量名保留，不要翻译</code>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step">
+        <div class="step-number"><span>5</span></div>
+        <div class="step-card">
+          <span class="output-label">系统自动回填</span>
+          <h2>把模板套回每一行，再恢复原始格式</h2>
+          <p>
+            回填时系统先把每行自己的数字填进译文模板，再检查临时编号有没有丢，
+            最后把编号换回原始标签和占位符。
+          </p>
+          <div class="example-row">
+            <div class="example-box">
+              <strong>中间结果</strong>
+              <code>{1&gt;Pack VIP10&lt;2}</code>
+              <code>{1&gt;Pack VIP20&lt;2}</code>
+            </div>
+            <div class="arrow">→</div>
+            <div class="example-box">
+              <strong>写回 Excel</strong>
+              <code>&lt;color=#ff0&gt;Pack VIP10&lt;/&gt;</code>
+              <code>&lt;color=#ff0&gt;Pack VIP20&lt;/&gt;</code>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step">
+        <div class="step-number"><span>6</span></div>
+        <div class="step-card">
+          <span class="warn-label">人工检查点</span>
+          <h2>有风险的地方会写 warning，不会偷偷吞掉</h2>
+          <p>
+            如果目标译文少了一个临时编号、多了一个不存在的编号、模板缺变量，或者某些句子涉及价格和单复数，
+            PhraseLoom 会在报告里提示 PM 或译员检查。
+          </p>
+          <div class="example-row">
+            <div class="example-box">
+              <strong>可能的风险</strong>
+              <code>target_unit 少了 {num1}</code>
+              <code>译文少了 {1&gt; 或 &lt;2}</code>
+            </div>
+            <div class="arrow">→</div>
+            <div class="example-box">
+              <strong>用户动作</strong>
+              <code>看 warning</code>
+              <code>确认是否需要手动修正</code>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="takeaways" aria-label="Takeaways">
+      <article class="takeaway">
+        <h2>Tag Engine 是保险箱</h2>
+        <p>它只负责保护和恢复格式，不负责判断译文好不好。</p>
+      </article>
+      <article class="takeaway">
+        <h2>Template Engine 是复用器</h2>
+        <p>它把重复句式变少，不代替译员做语言判断。</p>
+      </article>
+      <article class="takeaway">
+        <h2>translator todo 是工作台</h2>
+        <p>译员主要填这里的 <code>target_unit</code>；最终写回由系统完成。</p>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

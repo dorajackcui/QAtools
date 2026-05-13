@@ -606,8 +606,8 @@ Keep existing `python3 template_demo.py ...` examples as compatibility notes, an
 
 ```bash
 phraseloom tm-extract '/path/to/tm.xlsx' --source-col en --target-col fr
-phraseloom extract '/path/to/source.xlsx' --source-col '英語' --target-col - --tm '/path/to/tm_l10n/tm_tm_pairs.xlsx' --no-existing-targets
-phraseloom fill '/path/to/source.xlsx' --templates '/path/to/source_l10n/source_to_translate.xlsx' --source-col '英語' --target-col '法语' --mode target-column
+phraseloom extract '/path/to/source.xlsx' --source-col 'source' --target-col - --tm '/path/to/tm_l10n/tm_tm_pairs.xlsx' --no-existing-targets
+phraseloom fill '/path/to/source.xlsx' --templates '/path/to/source_l10n/source_to_translate.xlsx' --source-col 'source' --target-col '法语' --mode target-column
 ```
 
 - [ ] **Step 3: Add architecture note**

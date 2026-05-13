@@ -81,7 +81,7 @@ def _main_tm_extract(argv: list[str]) -> int:
     )
     parser.add_argument("input", type=Path, help="Completed TM .xlsx file")
     parser.add_argument("-o", "--output", type=Path, help="Output TM pairs .xlsx file")
-    parser.add_argument("--source-col", default="英語", help="Header name or 1-based index")
+    parser.add_argument("--source-col", default="source", help="Header name or 1-based index")
     parser.add_argument("--target-col", default="target", help="Header name or 1-based index")
     parser.add_argument("--min-group-size", type=int, default=2)
     parser.add_argument(
@@ -110,7 +110,7 @@ def _main_extract(argv: list[str]) -> int:
     )
     parser.add_argument("input", type=Path, help="Input .xlsx file")
     parser.add_argument("-o", "--output", type=Path, help="Output .xlsx file")
-    parser.add_argument("--source-col", default="英語", help="Header name or 1-based index")
+    parser.add_argument("--source-col", default="source", help="Header name or 1-based index")
     parser.add_argument("--target-col", default="target", help="Header name or 1-based index")
     parser.add_argument(
         "--tm",
@@ -164,7 +164,7 @@ def _main_fill(argv: list[str]) -> int:
         help="Translated template pack workbook",
     )
     parser.add_argument("-o", "--output", type=Path, help="Output .xlsx file")
-    parser.add_argument("--source-col", default="英語", help="Header name or 1-based index")
+    parser.add_argument("--source-col", default="source", help="Header name or 1-based index")
     parser.add_argument("--target-col", default="target", help="Header name or 1-based index")
     parser.add_argument("--min-group-size", type=int, default=2)
     parser.add_argument(
@@ -308,7 +308,7 @@ def _main_legacy(argv: list[str]) -> int:
     )
     parser.add_argument("input", type=Path, help="Input .xlsx file")
     parser.add_argument("-o", "--output", type=Path, help="Output .xlsx file")
-    parser.add_argument("--source-col", default="英語", help="Header name or 1-based index")
+    parser.add_argument("--source-col", default="source", help="Header name or 1-based index")
     parser.add_argument("--target-col", default="target", help="Header name or 1-based index")
     parser.add_argument(
         "--templates",
