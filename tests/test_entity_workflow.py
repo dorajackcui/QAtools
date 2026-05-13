@@ -638,6 +638,8 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
         self.assertIn("phraseloom entity-prepare TRANSLATOR_WORKBOOK.xlsx", help_text)
         self.assertIn("phraseloom entity-fill-pack ENTITY_PACK.xlsx", help_text)
         self.assertIn("phraseloom entity-merge-pack FILLED_ENTITY_PACK.xlsx", help_text)
+        self.assertIn("Advanced entity commands:", help_text)
+        self.assertIn("phraseloom entity-split TRANSLATOR_WORKBOOK.xlsx", help_text)
 
     def test_entity_tm_cli_writes_memory_workbook_to_l10n(self):
         from phraseloom.cli import _dispatch

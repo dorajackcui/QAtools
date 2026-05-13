@@ -145,24 +145,24 @@ phraseloom fill '/path/to/source.xlsx' \
 
 ## 独立 Entity Engine
 
-Entity engine 是 translator todo 的二次处理工具，不属于主 tag/template 流水线。推荐使用四步简化流程：
+Entity engine 是 translator todo 的二次处理工具，不属于主 tag/template 流水线。推荐使用四步简化流程；下面展示的是默认输出路径：
 
 ```text
-TM_reusable_units.xlsx
+/path/to/TM_reusable_units.xlsx
 -> entity-tm
-   -> TM_entity_memory.xlsx
+   -> /path/to/TM_reusable_units_l10n/TM_reusable_units_entity_memory.xlsx
 
-source_translator_todo.xlsx + 可选 TM_entity_memory.xlsx
+/path/to/source_translator_todo.xlsx + 可选 /path/to/TM_reusable_units_l10n/TM_reusable_units_entity_memory.xlsx
 -> entity-prepare
-   -> source_entity_pack.xlsx
+   -> /path/to/source_translator_todo_l10n/source_translator_todo_entity_pack.xlsx
 
-人工确认 source_entity_pack.xlsx 里的 entity_structures / entity_terms
+人工确认 source_translator_todo_entity_pack.xlsx 里的 entity_structures / entity_terms
 -> entity-fill-pack
-   -> source_entity_pack_filled.xlsx
+   -> /path/to/source_translator_todo_l10n/source_translator_todo_entity_pack_filled.xlsx
 
-source_entity_pack_filled.xlsx
+/path/to/source_translator_todo_l10n/source_translator_todo_entity_pack_filled.xlsx
 -> entity-merge-pack
-   -> source_merged_todo.xlsx
+   -> /path/to/source_translator_todo_l10n/source_translator_todo_entity_pack_filled_merged_todo.xlsx
 ```
 
 从预处理过的 TM workbook 中创建 entity memory：
@@ -171,14 +171,26 @@ source_entity_pack_filled.xlsx
 phraseloom entity-tm '/path/to/TM_reusable_units.xlsx'
 ```
 
+默认输出：
+
+```text
+/path/to/TM_reusable_units_l10n/TM_reusable_units_entity_memory.xlsx
+```
+
 准备本轮 source entity pack，并可选用 entity memory 预填：
 
 ```bash
 phraseloom entity-prepare '/path/to/source_translator_todo.xlsx' \
-  --tm '/path/to/TM_entity_memory.xlsx'
+  --tm '/path/to/TM_reusable_units_l10n/TM_reusable_units_entity_memory.xlsx'
 ```
 
-译员或 PM 主要处理 `source_entity_pack.xlsx` 里的可见 sheet：
+默认输出：
+
+```text
+/path/to/source_translator_todo_l10n/source_translator_todo_entity_pack.xlsx
+```
+
+译员或 PM 主要处理 `source_translator_todo_entity_pack.xlsx` 里的可见 sheet：
 
 ```text
 related_units
@@ -192,13 +204,25 @@ entity_terms
 把 ready 的实体结构和实体词表组合回 `related_units.target_unit`：
 
 ```bash
-phraseloom entity-fill-pack '/path/to/source_entity_pack.xlsx'
+phraseloom entity-fill-pack '/path/to/source_translator_todo_l10n/source_translator_todo_entity_pack.xlsx'
+```
+
+默认输出：
+
+```text
+/path/to/source_translator_todo_l10n/source_translator_todo_entity_pack_filled.xlsx
 ```
 
 把 `related_units` 和 `non_related_units` 合并回完整 translator todo：
 
 ```bash
-phraseloom entity-merge-pack '/path/to/source_entity_pack_filled.xlsx'
+phraseloom entity-merge-pack '/path/to/source_translator_todo_l10n/source_translator_todo_entity_pack_filled.xlsx'
+```
+
+默认输出：
+
+```text
+/path/to/source_translator_todo_l10n/source_translator_todo_entity_pack_filled_merged_todo.xlsx
 ```
 
 最后继续使用现有 `fill` 命令，把 merged todo 回填到目标文件。
@@ -229,29 +253,43 @@ docs/entity-engine-flow.html
 
 回填后的交付文件，`target-column` 模式会把译文写进指定 target 列。
 
-`*_entity_related.xlsx`
+`*_entity_memory.xlsx`
 
-Entity engine 拆出的实体相关 todo 子集，包含 `entity_structures`、`entity_terms` 和内部映射表。
+`entity-tm` 从预处理过的 `*_reusable_units.xlsx` 中创建的 entity memory。默认输出到 `*_l10n/` 工作目录。
 
-`*_not_entity_related.xlsx`
+`*_entity_pack.xlsx`
 
-Entity engine 拆出的非实体相关 todo 子集，可交给普通翻译流程或其他 workflow 并行处理。
+`entity-prepare` 创建的单一 entity pack，包含 `related_units`、`non_related_units`、`entity_structures`、`entity_terms`，以及隐藏的内部 sheet。
 
-`*_entity_tm.xlsx`
+`*_entity_pack_filled.xlsx`
 
-从预处理过的 `tm_pairs` 中抽出的 entity structure / entity term 复用表。
-
-`*_entity_prefilled.xlsx`
-
-用 entity TM 预填后的实体相关 workbook。TM prefill 只填结构表和实体表，不直接写完整 todo 的 `target_unit`。
-
-`*_entity_filled.xlsx`
-
-把 ready 的结构和实体组合回 `target_unit` 后的实体相关 workbook。
+`entity-fill-pack` 把 ready 的实体结构和实体词表组合回 `related_units.target_unit` 后的 pack。
 
 `*_merged_todo.xlsx`
 
-entity-related 和 not-entity 两条线合并后的完整 translator todo，可继续交给现有 `fill` 命令。
+`entity-merge-pack` 把 `related_units` 和 `non_related_units` 合并后的完整 translator todo，可继续交给现有 `fill` 命令。
+
+高级或调试命令可能产生下面这些底层中间文件：
+
+`*_entity_related.xlsx`
+
+`entity-split` 拆出的实体相关 todo 子集，包含 `entity_structures`、`entity_terms` 和内部映射表。
+
+`*_not_entity_related.xlsx`
+
+`entity-split` 拆出的非实体相关 todo 子集，可交给普通翻译流程或其他 workflow 并行处理。
+
+`*_entity_tm.xlsx`
+
+`entity-extract-tm` 从预处理过的 `tm_pairs` 中抽出的 entity structure / entity term 复用表。
+
+`*_entity_prefilled.xlsx`
+
+`entity-prefill` 用 entity TM 预填后的实体相关 workbook。TM prefill 只填结构表和实体表，不直接写完整 todo 的 `target_unit`。
+
+`*_entity_filled.xlsx`
+
+`entity-fill` 把 ready 的结构和实体组合回 `target_unit` 后的实体相关 workbook。
 
 ## 自动处理规则
 
@@ -268,12 +306,14 @@ entity-related 和 not-entity 两条线合并后的完整 translator todo，可�
 Entity engine 额外会自动：
 
 ```text
-1. 从预处理后的 todo 中拆出 entity-related / not-entity 两个文件
-2. 从预处理后的 TM 中抽取 entity structures / entity terms
-3. 用 entity TM 预填目标 entity workbook 的结构表和实体表
-4. 只在结构和所有实体都 ready 时，组合出 entity-related 的 target_unit
-5. 按 original_index 把 entity-related 和 not-entity 合并回完整 todo
+1. 从预处理后的 TM 中创建 entity memory
+2. 从预处理后的 todo 中创建单一 entity pack，内含 related_units / non_related_units
+3. 可用 entity memory 预填 entity_structures / entity_terms
+4. 只在结构和所有实体都 ready 时，组合出 related_units.target_unit
+5. 按 original_index 把 related_units 和 non_related_units 合并回完整 todo
 ```
+
+底层调试命令也可以把这些步骤拆成 `entity-split`、`entity-extract-tm`、`entity-prefill`、`entity-fill`、`entity-merge` 的多个文件。
 
 Entity engine 不会：
 
