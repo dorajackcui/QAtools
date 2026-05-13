@@ -45,6 +45,14 @@ def _headers(path: Path, sheet_name: str) -> list[str]:
         wb.close()
 
 
+def _sheet_state(path: Path, sheet_name: str) -> str:
+    wb = load_workbook(path, data_only=True)
+    try:
+        return wb[sheet_name].sheet_state
+    finally:
+        wb.close()
+
+
 def _set_first_todo_target(path: Path, target: str) -> None:
     wb = load_workbook(path)
     try:
@@ -607,6 +615,105 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                     schema.STATUS_COLUMN,
                     schema.WARNING_COLUMN,
                 ],
+            )
+
+    def test_entity_prepare_cli_writes_single_pack_with_prefill(self):
+        from phraseloom.cli import _dispatch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "source_translator_todo.xlsx"
+            entity_memory_path = tmp_path / "tm_entity_memory.xlsx"
+            _write_todo_workbook(
+                todo_path,
+                [
+                    {
+                        schema.UNIT_ID_COLUMN: "U0001",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                        schema.COVERAGE_COUNT_COLUMN: 1,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0002",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Login failed.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                        schema.COVERAGE_COUNT_COLUMN: 1,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0003",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                        schema.COVERAGE_COUNT_COLUMN: 1,
+                    },
+                ],
+            )
+            _write_entity_tm_workbook(entity_memory_path)
+
+            self.assertEqual(
+                _dispatch(
+                    [
+                        "entity-prepare",
+                        str(todo_path),
+                        "--tm",
+                        str(entity_memory_path),
+                        "--min-group-size",
+                        "2",
+                    ]
+                ),
+                0,
+            )
+
+            pack_path = (
+                tmp_path
+                / "source_translator_todo_l10n"
+                / "source_translator_todo_entity_pack.xlsx"
+            )
+            self.assertTrue(pack_path.exists())
+            wb = load_workbook(pack_path, data_only=True)
+            try:
+                self.assertEqual(
+                    wb.sheetnames[:5],
+                    [
+                        schema.RELATED_UNITS_SHEET,
+                        schema.NON_RELATED_UNITS_SHEET,
+                        schema.ENTITY_STRUCTURES_SHEET,
+                        schema.ENTITY_TERMS_SHEET,
+                        schema.ENTITY_MAP_SHEET,
+                    ],
+                )
+            finally:
+                wb.close()
+
+            self.assertEqual(_sheet_state(pack_path, schema.ENTITY_MAP_SHEET), "hidden")
+            self.assertEqual(
+                _sheet_state(pack_path, schema.METADATA_SHEET),
+                "hidden",
+            )
+            related_rows = _rows_by_header(pack_path, schema.RELATED_UNITS_SHEET)
+            non_related_rows = _rows_by_header(pack_path, schema.NON_RELATED_UNITS_SHEET)
+            self.assertEqual(
+                [row[schema.UNIT_ID_COLUMN] for row in related_rows],
+                ["U0001", "U0003"],
+            )
+            self.assertEqual(
+                [row[schema.UNIT_ID_COLUMN] for row in non_related_rows],
+                ["U0002"],
+            )
+            structures = _rows_by_header(pack_path, schema.ENTITY_STRUCTURES_SHEET)
+            self.assertEqual(
+                structures[0][schema.TARGET_STRUCTURE_COLUMN],
+                "{entity1} launched a localized attack and dealt localized damage.",
+            )
+            terms = _rows_by_header(pack_path, schema.ENTITY_TERMS_SHEET)
+            self.assertEqual(
+                {
+                    row[schema.SOURCE_ENTITY_COLUMN]: row[schema.TARGET_ENTITY_COLUMN]
+                    for row in terms
+                },
+                {"Pikachu": "Pikachu", "Squirtle": "Carapuce"},
             )
 
 

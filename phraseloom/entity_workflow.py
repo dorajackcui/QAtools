@@ -176,6 +176,52 @@ def split_entity_workbook(
     }
 
 
+def prepare_entity_pack_workbook(
+    input_path: str | Path,
+    output_path: str | Path,
+    *,
+    tm_path: str | Path | None = None,
+    min_group_size: int = 3,
+    strategy: EntityExtractionStrategy | None = None,
+) -> dict[str, int | str]:
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+    rows, headers = _read_unit_rows(input_path, schema.TO_TRANSLATE_SHEET)
+    active_strategy = strategy or ClusterProbeStrategy(min_group_size=min_group_size)
+    clusters = active_strategy.find_clusters(
+        [(row.source_unit, row.target_unit) for row in rows]
+    )
+    entity_rows, structures, terms, source_map = _build_entity_split(rows, clusters)
+    entity_indices = {row.original_index for row in entity_rows}
+    non_entity_rows = [row for row in rows if row.original_index not in entity_indices]
+    wb = _build_entity_pack_workbook(
+        input_path,
+        headers,
+        entity_rows,
+        non_entity_rows,
+        structures,
+        terms,
+        source_map,
+    )
+    prefilled_structure_count = 0
+    prefilled_term_count = 0
+    if tm_path is not None:
+        prefilled_structure_count, prefilled_term_count = _prefill_entity_sheets(
+            wb,
+            Path(tm_path),
+        )
+    _save_workbook(wb, output_path)
+    return {
+        "related_unit_count": len(entity_rows),
+        "non_related_unit_count": len(non_entity_rows),
+        "entity_structure_count": len(structures),
+        "entity_term_count": len(terms),
+        "prefilled_structure_count": prefilled_structure_count,
+        "prefilled_term_count": prefilled_term_count,
+        "output_path": str(output_path),
+    }
+
+
 def extract_entity_tm_workbook(
     input_path: str | Path,
     output_path: str | Path,
@@ -199,14 +245,7 @@ def extract_entity_tm_workbook(
     }
 
 
-def prefill_entity_workbook(
-    entity_input_path: str | Path,
-    tm_path: str | Path,
-    output_path: str | Path,
-) -> dict[str, int | str]:
-    entity_input_path = Path(entity_input_path)
-    tm_path = Path(tm_path)
-    output_path = Path(output_path)
+def _prefill_entity_sheets(wb, tm_path: Path) -> tuple[int, int]:
     structure_prefills = _load_unique_prefills(
         tm_path,
         schema.ENTITY_STRUCTURES_SHEET,
@@ -219,22 +258,37 @@ def prefill_entity_workbook(
         schema.SOURCE_ENTITY_COLUMN,
         schema.TARGET_ENTITY_COLUMN,
     )
+    prefilled_structure_count = _apply_prefills(
+        wb[schema.ENTITY_STRUCTURES_SHEET],
+        source_column=schema.SOURCE_STRUCTURE_COLUMN,
+        target_column=schema.TARGET_STRUCTURE_COLUMN,
+        prefills=structure_prefills,
+        ready_on_prefill=False,
+    )
+    prefilled_term_count = _apply_prefills(
+        wb[schema.ENTITY_TERMS_SHEET],
+        source_column=schema.SOURCE_ENTITY_COLUMN,
+        target_column=schema.TARGET_ENTITY_COLUMN,
+        prefills=term_prefills,
+        ready_on_prefill=True,
+    )
+    return prefilled_structure_count, prefilled_term_count
+
+
+def prefill_entity_workbook(
+    entity_input_path: str | Path,
+    tm_path: str | Path,
+    output_path: str | Path,
+) -> dict[str, int | str]:
+    entity_input_path = Path(entity_input_path)
+    tm_path = Path(tm_path)
+    output_path = Path(output_path)
 
     wb = load_workbook(entity_input_path)
     try:
-        prefilled_structure_count = _apply_prefills(
-            wb[schema.ENTITY_STRUCTURES_SHEET],
-            source_column=schema.SOURCE_STRUCTURE_COLUMN,
-            target_column=schema.TARGET_STRUCTURE_COLUMN,
-            prefills=structure_prefills,
-            ready_on_prefill=False,
-        )
-        prefilled_term_count = _apply_prefills(
-            wb[schema.ENTITY_TERMS_SHEET],
-            source_column=schema.SOURCE_ENTITY_COLUMN,
-            target_column=schema.TARGET_ENTITY_COLUMN,
-            prefills=term_prefills,
-            ready_on_prefill=True,
+        prefilled_structure_count, prefilled_term_count = _prefill_entity_sheets(
+            wb,
+            tm_path,
         )
         _save_workbook(wb, output_path)
     finally:
@@ -902,6 +956,50 @@ def _write_entity_related_workbook(
     _save_workbook(wb, output_path)
 
 
+def _build_entity_pack_workbook(
+    input_path: Path,
+    headers: list[str],
+    entity_rows: list[UnitRow],
+    non_entity_rows: list[UnitRow],
+    structures: list[dict[str, object]],
+    terms: list[dict[str, object]],
+    source_map: list[dict[str, object]],
+):
+    wb = Workbook()
+    related_ws = wb.active
+    related_ws.title = schema.RELATED_UNITS_SHEET
+    _append_unit_rows(related_ws, headers, entity_rows, include_original_index=True)
+    _hide_original_index_column(related_ws)
+    non_related_ws = wb.create_sheet(schema.NON_RELATED_UNITS_SHEET)
+    _append_unit_rows(
+        non_related_ws,
+        headers,
+        non_entity_rows,
+        include_original_index=True,
+    )
+    _hide_original_index_column(non_related_ws)
+    _append_dict_sheet(
+        wb.create_sheet(schema.ENTITY_STRUCTURES_SHEET),
+        ENTITY_STRUCTURE_COLUMNS,
+        structures,
+    )
+    _append_dict_sheet(
+        wb.create_sheet(schema.ENTITY_TERMS_SHEET),
+        ENTITY_TERM_COLUMNS,
+        terms,
+    )
+    entity_map_ws = wb.create_sheet(schema.ENTITY_MAP_SHEET)
+    _append_dict_sheet(entity_map_ws, ENTITY_SOURCE_MAP_COLUMNS, source_map)
+    entity_map_ws.sheet_state = "hidden"
+    _copy_support_sheets(input_path, wb, exclude={schema.TO_TRANSLATE_SHEET})
+    if schema.METADATA_SHEET not in wb.sheetnames:
+        metadata_ws = wb.create_sheet(schema.METADATA_SHEET)
+        metadata_ws.append(schema.METADATA_COLUMNS)
+        metadata_ws.append([schema.SCHEMA_VERSION_KEY, schema.SCHEMA_VERSION])
+    wb[schema.METADATA_SHEET].sheet_state = "hidden"
+    return wb
+
+
 def _write_non_entity_workbook(
     output_path: Path,
     input_path: Path,
@@ -944,6 +1042,12 @@ def _append_unit_rows(ws, headers: list[str], rows: list[UnitRow], *, include_or
             else:
                 values.append(row.values.get(header))
         ws.append(values)
+
+
+def _hide_original_index_column(ws) -> None:
+    headers = _header_values(ws)
+    if headers and headers[0] == schema.ORIGINAL_INDEX_COLUMN:
+        ws.column_dimensions["A"].hidden = True
 
 
 def _append_dict_sheet(ws, headers: list[str], rows: list[dict[str, object]]) -> None:
@@ -992,6 +1096,7 @@ __all__ = [
     "extract_entity_tm_workbook",
     "fill_entity_workbook",
     "merge_entity_workbooks",
+    "prepare_entity_pack_workbook",
     "prefill_entity_workbook",
     "split_entity_workbook",
 ]

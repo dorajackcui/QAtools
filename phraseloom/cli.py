@@ -8,10 +8,12 @@ from typing import Iterable
 from .errors import ConfigError, PhraseLoomError
 from .entity_workflow import (
     default_entity_memory_output_path,
+    default_entity_pack_output_path,
     extract_entity_memory_workbook,
     extract_entity_tm_workbook,
     fill_entity_workbook,
     merge_entity_workbooks,
+    prepare_entity_pack_workbook,
     prefill_entity_workbook,
     split_entity_workbook,
 )
@@ -66,6 +68,8 @@ def _dispatch(argv: list[str] | None = None) -> int:
         return _main_fill(argv[1:])
     if argv[0] == "entity-tm":
         return _main_entity_tm(argv[1:])
+    if argv[0] == "entity-prepare":
+        return _main_entity_prepare(argv[1:])
     if argv[0] == "entity-split":
         return _main_entity_split(argv[1:])
     if argv[0] == "entity-prefill":
@@ -228,6 +232,26 @@ def _main_entity_tm(argv: list[str]) -> int:
         min_group_size=args.min_group_size,
     )
     _print_entity_extract_tm_stats(stats)
+    return 0
+
+
+def _main_entity_prepare(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Prepare one source entity pack with related and non-related units."
+    )
+    parser.add_argument("input", type=Path, help="Translator todo .xlsx file")
+    parser.add_argument("-o", "--output", type=Path, help="Entity pack output .xlsx")
+    parser.add_argument("--tm", type=Path, help="Entity memory workbook used to prefill the pack")
+    parser.add_argument("--min-group-size", type=int, default=3)
+    args = parser.parse_args(argv)
+    output = args.output or default_entity_pack_output_path(args.input)
+    stats = prepare_entity_pack_workbook(
+        args.input,
+        output,
+        tm_path=args.tm,
+        min_group_size=args.min_group_size,
+    )
+    _print_entity_prepare_stats(stats)
     return 0
 
 
@@ -409,6 +433,16 @@ def _print_entity_prefill_stats(stats: dict[str, int | str]) -> None:
     print(f"Prefilled terms: {stats['prefilled_term_count']}")
 
 
+def _print_entity_prepare_stats(stats: dict[str, int | str]) -> None:
+    print(f"Wrote: {stats['output_path']}")
+    print(f"Related units: {stats['related_unit_count']}")
+    print(f"Non-related units: {stats['non_related_unit_count']}")
+    print(f"Entity structures: {stats['entity_structure_count']}")
+    print(f"Entity terms: {stats['entity_term_count']}")
+    print(f"Prefilled structures: {stats['prefilled_structure_count']}")
+    print(f"Prefilled terms: {stats['prefilled_term_count']}")
+
+
 def _print_entity_extract_tm_stats(stats: dict[str, int | str]) -> None:
     print(f"Wrote: {stats['output_path']}")
     print(f"Entity structures: {stats['entity_structure_count']}")
@@ -463,10 +497,12 @@ __all__ = [
     "_main_entity_fill",
     "_main_entity_merge",
     "_main_entity_prefill",
+    "_main_entity_prepare",
     "_main_entity_split",
     "_main_entity_tm",
     "_main_fill",
     "_main_legacy",
+    "_print_entity_prepare_stats",
     "_print_stats",
     "_print_tm_stats",
     "_print_top_level_help",
