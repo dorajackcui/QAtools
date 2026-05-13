@@ -507,6 +507,11 @@ def _read_pack_unit_rows(
             sheet_name = fallback_sheet_name
         ws = wb[sheet_name]
         headers = _header_values(ws)
+        if schema.ORIGINAL_INDEX_COLUMN not in headers:
+            raise WorkflowError(
+                f"Workbook sheet {sheet_name!r} is missing required column: "
+                f"{schema.ORIGINAL_INDEX_COLUMN}"
+            )
         rows: list[UnitRow] = []
         for sequence_index, row in enumerate(
             ws.iter_rows(min_row=2, values_only=True),
@@ -517,10 +522,15 @@ def _read_pack_unit_rows(
                 for index, header in enumerate(headers)
                 if header
             }
-            original_index = int(
-                values.get(schema.ORIGINAL_INDEX_COLUMN) or sequence_index
-            )
             if values.get(schema.SOURCE_UNIT_COLUMN):
+                original_index_value = values.get(schema.ORIGINAL_INDEX_COLUMN)
+                if original_index_value in (None, ""):
+                    row_number = sequence_index + 1
+                    raise WorkflowError(
+                        f"Workbook sheet {sheet_name!r} row {row_number} is "
+                        f"missing required {schema.ORIGINAL_INDEX_COLUMN}"
+                    )
+                original_index = int(original_index_value)
                 rows.append(UnitRow(original_index, values))
         return rows, headers
     finally:

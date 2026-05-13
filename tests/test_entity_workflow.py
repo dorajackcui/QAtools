@@ -946,6 +946,16 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
 
             merged_path = tmp_path / "source_entity_pack_filled_merged_todo.xlsx"
             self.assertTrue(merged_path.exists())
+            wb = load_workbook(merged_path, data_only=True)
+            try:
+                self.assertIn(schema.METADATA_SHEET, wb.sheetnames)
+                self.assertNotIn(schema.RELATED_UNITS_SHEET, wb.sheetnames)
+                self.assertNotIn(schema.NON_RELATED_UNITS_SHEET, wb.sheetnames)
+                self.assertNotIn(schema.ENTITY_STRUCTURES_SHEET, wb.sheetnames)
+                self.assertNotIn(schema.ENTITY_TERMS_SHEET, wb.sheetnames)
+                self.assertNotIn(schema.ENTITY_MAP_SHEET, wb.sheetnames)
+            finally:
+                wb.close()
             self.assertNotIn(
                 schema.ORIGINAL_INDEX_COLUMN,
                 _headers(merged_path, schema.TO_TRANSLATE_SHEET),
@@ -963,6 +973,58 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                     "Pikachu launched a localized attack and dealt localized damage.",
                 ],
             )
+
+    def test_entity_merge_pack_requires_original_index_values(self):
+        from phraseloom.entity_workflow import (
+            merge_entity_pack_workbook,
+            prepare_entity_pack_workbook,
+        )
+        from phraseloom.errors import WorkflowError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "source_translator_todo.xlsx"
+            pack_path = tmp_path / "source_entity_pack.xlsx"
+            merged_path = tmp_path / "source_merged_todo.xlsx"
+            _write_todo_workbook(
+                todo_path,
+                [
+                    {
+                        schema.UNIT_ID_COLUMN: "U0001",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0002",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                ],
+            )
+            prepare_entity_pack_workbook(
+                todo_path,
+                pack_path,
+                min_group_size=2,
+            )
+            wb = load_workbook(pack_path)
+            try:
+                ws = wb[schema.RELATED_UNITS_SHEET]
+                headers = [cell.value for cell in ws[1]]
+                ws.cell(
+                    row=2,
+                    column=headers.index(schema.ORIGINAL_INDEX_COLUMN) + 1,
+                ).value = None
+                wb.save(pack_path)
+            finally:
+                wb.close()
+
+            with self.assertRaisesRegex(
+                WorkflowError,
+                "missing required original_index",
+            ):
+                merge_entity_pack_workbook(pack_path, merged_path)
 
     def test_entity_fill_pack_cli_rejects_output_with_in_place(self):
         from phraseloom.cli import _dispatch
