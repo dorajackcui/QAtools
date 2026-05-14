@@ -12,9 +12,10 @@
 - 用途：从 Excel 的 `source` / `target` 列提取术语并检查是否对齐
 - tag 支持：`【】`、`[]`、`<>`，且可在 GUI 中多选组合检查
 - 检查规则：`术语表` 保留 tag，实际术语检查会忽略 tag，并回溯整表未标注出现
+- 历史 TB：可选选择历史 TB；命中历史 source 时优先使用历史 target，剩余 source 才按本批次第一次出现生成新增 TB
 - 误判排除：默认通过 `tools/term_pair_checker/false_positive_exclusions.json` 排除 `</>`、`<color=...>` 这类伪标签
-- 输出增强：结果会给出合并后的 `术语表`（同时包含保留 mark 和无 mark 列），以及带原文上下文的 `问题列`
-- GUI 增强：自动读取工作表列表，并尝试自动识别 `source` / `target` 列
+- 输出增强：结果会给出合并后的 `术语表`（同时包含保留 mark、无 mark 和术语来源列），以及带原文上下文的 `问题列`
+- GUI 增强：自动读取工作表列表，并尝试自动识别本批次和历史 TB 的 `source` / `target` 列
 - 输出方式：生成新的结果 Excel，不覆盖原文件
 - CLI：
 
@@ -25,6 +26,7 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py input.xlsx \
   -t B \
   --start-row 2 \
   --mark-style '【】' \
+  --history-tb history_tb.xlsx \
   -o output_term_pairs.xlsx
 ```
 
@@ -140,4 +142,4 @@ pip install -r requirements.txt
 python3 toolshub_gui.py
 ```
 
-会打开一个统一窗口，使用标签页管理这些工具；原有各自的 GUI 入口仍然保留。
+会打开一个统一窗口，使用标签页管理这些工具；Workflow 编排页也支持给术语对检查选择历史 TB；原有各自的 GUI 入口仍然保留。

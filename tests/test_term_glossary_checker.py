@@ -3,9 +3,11 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from openpyxl import Workbook, load_workbook
 
+from tools.term_glossary_checker import check_terms_against_glossary as glossary_module
 from tools.term_glossary_checker.check_terms_against_glossary import (
     find_row_terms,
     load_glossary_entries,
@@ -46,6 +48,31 @@ class GlossaryLoadingTests(unittest.TestCase):
             self.assertEqual(len(conflicts), 1)
             self.assertEqual(conflicts[0].source_term, "Term")
             self.assertEqual(conflicts[0].target_terms, ("译法一", "译法二"))
+
+    def test_loading_stops_after_consecutive_empty_tail_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            glossary_path = Path(tmp_dir) / "glossary.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Glossary"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "API"
+            worksheet["B2"] = "接口"
+            worksheet["A6"] = "Late"
+            worksheet["B6"] = "迟到术语"
+            workbook.save(glossary_path)
+
+            with patch.object(glossary_module, "GLOSSARY_EMPTY_ROW_STOP_THRESHOLD", 2, create=True):
+                _, entries, _ = load_glossary_entries(
+                    glossary_file=glossary_path,
+                    source_column="A",
+                    target_column="B",
+                    start_row=2,
+                    case_sensitive=False,
+                )
+
+            self.assertEqual([(entry.source_term, entry.target_term) for entry in entries], [("API", "接口")])
 
 
 class MatchingTests(unittest.TestCase):

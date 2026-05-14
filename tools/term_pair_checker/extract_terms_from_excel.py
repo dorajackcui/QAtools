@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from openpyxl import load_workbook
-from openpyxl.utils import column_index_from_string
+from openpyxl.utils import column_index_from_string, get_column_letter
 
 from tools.term_matching import (
     TermMappingEntry,
@@ -30,6 +30,25 @@ DEFAULT_MARK_STYLES = ("【】",)
 DEFAULT_EXCLUSION_CONFIG_NAME = "false_positive_exclusions.json"
 PAIR_CHECK_MATCH_MODE = "hybrid-boundary"
 PAIR_CHECK_CASE_SENSITIVE = False
+HISTORY_EMPTY_ROW_STOP_THRESHOLD = 1000
+TERM_SOURCE_HISTORY = "历史TB"
+TERM_SOURCE_BATCH = "本批次新增"
+HISTORY_SOURCE_EXACT_HEADERS = {"source"}
+HISTORY_TARGET_EXACT_HEADERS = {"target"}
+HISTORY_SOURCE_TERM_HEADERS = {"source术语"}
+HISTORY_TARGET_TERM_HEADERS = {"target术语"}
+HISTORY_SOURCE_NO_MARK_HEADERS = {
+    "source术语（无mark）",
+    "source术语(无mark)",
+    "source（无mark）",
+    "source(无mark)",
+}
+HISTORY_TARGET_NO_MARK_HEADERS = {
+    "target术语（无mark）",
+    "target术语(无mark)",
+    "target（无mark）",
+    "target(无mark)",
+}
 MARK_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
     "【】": (re.compile(r"【([^【】]+)】"),),
     "[]": (
@@ -57,6 +76,14 @@ class RecordedTermPair:
     target_display_text: str
     source_plain_text: str
     target_plain_text: str
+    term_source: str = TERM_SOURCE_BATCH
+
+
+@dataclass(frozen=True)
+class HistoryTbColumns:
+    sheet_title: str
+    source_column: str | None
+    target_column: str | None
 
 
 def normalize_mark_styles(
@@ -243,6 +270,28 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--history-tb",
+        help="历史 TB Excel 文件路径；可选，命中历史 source 时优先使用历史 target。",
+    )
+    parser.add_argument(
+        "--history-sheet",
+        help="历史 TB 工作表名称；默认优先使用“术语表”，否则使用活动工作表。",
+    )
+    parser.add_argument(
+        "--history-source-column",
+        help="历史 TB source 列；不填则自动识别 source/target 表头。",
+    )
+    parser.add_argument(
+        "--history-target-column",
+        help="历史 TB target 列；不填则自动识别 source/target 表头。",
+    )
+    parser.add_argument(
+        "--history-start-row",
+        type=int,
+        default=2,
+        help="历史 TB 开始读取行号，默认 2。",
+    )
+    parser.add_argument(
         "-o",
         "--output",
         help="输出 Excel 文件路径，默认生成 <原文件名>_term_pairs.xlsx",
@@ -294,6 +343,198 @@ def normalize_column(column_name: str) -> str:
     normalized = column_name.strip().upper()
     column_index_from_string(normalized)
     return normalized
+
+
+def normalize_header(value: object) -> str:
+    return "" if value is None else str(value).strip().casefold().replace(" ", "")
+
+
+def find_unique_header_column(header_row: tuple[object, ...], candidates: set[str]) -> str | None:
+    matches = [
+        get_column_letter(column_index)
+        for column_index, value in enumerate(header_row, start=1)
+        if normalize_header(value) in candidates
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def find_priority_header_column(header_row: tuple[object, ...], candidate_groups: tuple[set[str], ...]) -> str | None:
+    for candidates in candidate_groups:
+        column = find_unique_header_column(header_row, candidates)
+        if column:
+            return column
+    return None
+
+
+def find_two_column_header_fallback(header_row: tuple[object, ...]) -> tuple[str, str] | None:
+    nonempty_columns = [
+        get_column_letter(column_index)
+        for column_index, value in enumerate(header_row, start=1)
+        if normalize_header(value)
+    ]
+    if len(nonempty_columns) != 2:
+        return None
+    return nonempty_columns[0], nonempty_columns[1]
+
+
+def detect_history_columns_from_header(header_row: tuple[object, ...]) -> tuple[str | None, str | None]:
+    source_column = find_priority_header_column(
+        header_row,
+        (
+            HISTORY_SOURCE_EXACT_HEADERS,
+            HISTORY_SOURCE_TERM_HEADERS,
+            HISTORY_SOURCE_NO_MARK_HEADERS,
+        ),
+    )
+    target_column = find_priority_header_column(
+        header_row,
+        (
+            HISTORY_TARGET_EXACT_HEADERS,
+            HISTORY_TARGET_TERM_HEADERS,
+            HISTORY_TARGET_NO_MARK_HEADERS,
+        ),
+    )
+    if source_column and target_column:
+        return source_column, target_column
+
+    fallback_columns = find_two_column_header_fallback(header_row)
+    if fallback_columns is None:
+        return source_column, target_column
+
+    fallback_source_column, fallback_target_column = fallback_columns
+    if source_column and not target_column:
+        target_column = fallback_target_column if fallback_target_column != source_column else fallback_source_column
+    elif target_column and not source_column:
+        source_column = fallback_source_column if fallback_source_column != target_column else fallback_target_column
+    else:
+        source_column, target_column = fallback_columns
+    return source_column, target_column
+
+
+def choose_history_worksheet(workbook, sheet: str | None):
+    if sheet:
+        if sheet not in workbook.sheetnames:
+            raise ValueError(f"历史 TB 工作表不存在: {sheet}")
+        return workbook[sheet]
+    if TERM_SHEET_NAME in workbook.sheetnames:
+        return workbook[TERM_SHEET_NAME]
+    return workbook.active
+
+
+def detect_history_tb_columns(
+    history_tb_file: str | Path,
+    sheet: str | None = None,
+) -> HistoryTbColumns:
+    history_path = Path(history_tb_file).expanduser().resolve()
+    if not history_path.exists():
+        raise FileNotFoundError(f"历史 TB 文件不存在: {history_path}")
+
+    workbook = load_workbook(history_path, read_only=True)
+    try:
+        worksheet = choose_history_worksheet(workbook, sheet)
+        header_row = next(
+            worksheet.iter_rows(min_row=1, max_row=1, values_only=True),
+            (),
+        )
+        source_column, target_column = detect_history_columns_from_header(tuple(header_row))
+        return HistoryTbColumns(
+            sheet_title=worksheet.title,
+            source_column=source_column,
+            target_column=target_column,
+        )
+    finally:
+        workbook.close()
+
+
+def normalize_history_source_key(source_term: str) -> str:
+    return normalize_text(source_term, case_sensitive=PAIR_CHECK_CASE_SENSITIVE)
+
+
+def row_value(row: tuple[object, ...], column_index: int) -> object:
+    return row[column_index - 1] if len(row) >= column_index else None
+
+
+def row_values_are_empty(*values: object) -> bool:
+    return all(value is None or str(value).strip() == "" for value in values)
+
+
+def load_history_tb_mapping(
+    history_tb_file: str | Path,
+    source_column: str | None = None,
+    target_column: str | None = None,
+    sheet: str | None = None,
+    start_row: int = 2,
+    exclusion_patterns: Iterable[str] | None = None,
+) -> dict[str, RecordedTermPair]:
+    history_path = Path(history_tb_file).expanduser().resolve()
+    if not history_path.exists():
+        raise FileNotFoundError(f"历史 TB 文件不存在: {history_path}")
+    if start_row < 1:
+        raise ValueError("历史 TB 开始行必须大于等于 1。")
+
+    workbook = load_workbook(history_path, read_only=True)
+    try:
+        worksheet = choose_history_worksheet(workbook, sheet)
+        header_row = next(
+            worksheet.iter_rows(min_row=1, max_row=1, values_only=True),
+            (),
+        )
+        detected_source_column, detected_target_column = detect_history_columns_from_header(tuple(header_row))
+
+        source_column = normalize_column(source_column) if source_column else detected_source_column
+        target_column = normalize_column(target_column) if target_column else detected_target_column
+        if not source_column or not target_column:
+            raise ValueError(
+                "历史 TB 缺少 source/target 列，请指定 --history-source-column 和 "
+                "--history-target-column，或在第 1 行使用 source/target 表头；两列表头的 TB 会默认按第 1 列 source、第 2 列 target 读取。"
+            )
+        source_column_index = column_index_from_string(source_column)
+        target_column_index = column_index_from_string(target_column)
+        max_column_index = max(source_column_index, target_column_index)
+
+        history_mapping: dict[str, RecordedTermPair] = {}
+        consecutive_empty_rows = 0
+        for row in worksheet.iter_rows(
+            min_row=start_row,
+            max_col=max_column_index,
+            values_only=True,
+        ):
+            raw_source = row_value(row, source_column_index)
+            raw_target = row_value(row, target_column_index)
+            if row_values_are_empty(raw_source, raw_target):
+                consecutive_empty_rows += 1
+                if consecutive_empty_rows >= HISTORY_EMPTY_ROW_STOP_THRESHOLD:
+                    break
+                continue
+
+            consecutive_empty_rows = 0
+            source_plain_text = strip_supported_marks(
+                raw_source,
+                exclusion_patterns=exclusion_patterns,
+            ).strip()
+            target_plain_text = strip_supported_marks(
+                raw_target,
+                exclusion_patterns=exclusion_patterns,
+            ).strip()
+            if not source_plain_text or not target_plain_text:
+                continue
+
+            normalized_source = normalize_history_source_key(source_plain_text)
+            if not normalized_source:
+                continue
+            history_mapping.setdefault(
+                normalized_source,
+                RecordedTermPair(
+                    source_display_text=source_plain_text,
+                    target_display_text=target_plain_text,
+                    source_plain_text=source_plain_text,
+                    target_plain_text=target_plain_text,
+                    term_source=TERM_SOURCE_HISTORY,
+                ),
+            )
+        return history_mapping
+    finally:
+        workbook.close()
 
 
 def build_default_output_path(input_path: Path) -> Path:
@@ -476,6 +717,30 @@ def count_mismatch_is_resolved(
     return True
 
 
+def build_recorded_term_pair(
+    source_term: ExtractedTerm,
+    target_term: ExtractedTerm | None,
+    history_mapping: dict[str, RecordedTermPair],
+) -> RecordedTermPair:
+    history_term_pair = history_mapping.get(normalize_history_source_key(source_term.plain_text))
+    if history_term_pair is not None:
+        return RecordedTermPair(
+            source_display_text=source_term.display_text,
+            target_display_text=history_term_pair.target_plain_text,
+            source_plain_text=source_term.plain_text,
+            target_plain_text=history_term_pair.target_plain_text,
+            term_source=TERM_SOURCE_HISTORY,
+        )
+
+    return RecordedTermPair(
+        source_display_text=source_term.display_text,
+        target_display_text=target_term.display_text if target_term else "",
+        source_plain_text=source_term.plain_text,
+        target_plain_text=target_term.plain_text if target_term else "",
+        term_source=TERM_SOURCE_BATCH,
+    )
+
+
 def process_excel(
     input_file: str | Path,
     source_column: str,
@@ -486,6 +751,11 @@ def process_excel(
     mark_style: str | None = None,
     exclusion_patterns: Iterable[str] | None = None,
     exclusion_config_file: str | Path | None = None,
+    history_tb_file: str | Path | None = None,
+    history_sheet: str | None = None,
+    history_source_column: str | None = None,
+    history_target_column: str | None = None,
+    history_start_row: int = 2,
     output_file: str | Path | None = None,
 ) -> tuple[str, str, str, Path, int, int]:
     input_path = Path(input_file).expanduser().resolve()
@@ -496,6 +766,18 @@ def process_excel(
     target_column = normalize_column(target_column)
     normalized_mark_styles = normalize_mark_styles(mark_styles=mark_styles, mark_style=mark_style)
     effective_exclusion_patterns = resolve_exclusion_patterns(exclusion_patterns, exclusion_config_file)
+    history_mapping = (
+        load_history_tb_mapping(
+            history_tb_file,
+            source_column=history_source_column,
+            target_column=history_target_column,
+            sheet=history_sheet,
+            start_row=history_start_row,
+            exclusion_patterns=effective_exclusion_patterns,
+        )
+        if history_tb_file
+        else {}
+    )
     output_path = (
         Path(output_file).expanduser().resolve()
         if output_file
@@ -535,12 +817,7 @@ def process_excel(
             for source_term in source_terms[len(target_terms) :]:
                 merge_term_pair(
                     term_mapping,
-                    RecordedTermPair(
-                        source_display_text=source_term.display_text,
-                        target_display_text="",
-                        source_plain_text=source_term.plain_text,
-                        target_plain_text="",
-                    ),
+                    build_recorded_term_pair(source_term, None, history_mapping),
                 )
         else:
             candidate_term_mapping = dict(term_mapping)
@@ -548,12 +825,7 @@ def process_excel(
             for source_term, target_term in zip(source_terms, target_terms):
                 merged, existing_term_pair = merge_term_pair(
                     candidate_term_mapping,
-                    RecordedTermPair(
-                        source_display_text=source_term.display_text,
-                        target_display_text=target_term.display_text,
-                        source_plain_text=source_term.plain_text,
-                        target_plain_text=target_term.plain_text,
-                    ),
+                    build_recorded_term_pair(source_term, target_term, history_mapping),
                 )
                 if not merged:
                     row_has_problem = True
@@ -675,11 +947,13 @@ def process_excel(
     term_sheet["B1"] = "target术语"
     term_sheet["C1"] = "source术语（无mark）"
     term_sheet["D1"] = "target术语（无mark）"
+    term_sheet["E1"] = "术语来源"
     for row_index, term_pair in enumerate(term_mapping.values(), start=2):
         term_sheet[f"A{row_index}"] = term_pair.source_display_text
         term_sheet[f"B{row_index}"] = term_pair.target_display_text
         term_sheet[f"C{row_index}"] = term_pair.source_plain_text
         term_sheet[f"D{row_index}"] = term_pair.target_plain_text
+        term_sheet[f"E{row_index}"] = term_pair.term_source
 
     problem_sheet = rebuild_output_sheet(workbook, worksheet.title, PROBLEM_SHEET_NAME)
     problem_sheet["A1"] = "问题行号"
@@ -749,6 +1023,11 @@ def main() -> None:
         start_row=args.start_row,
         mark_styles=args.mark_style,
         exclusion_config_file=args.exclusion_config,
+        history_tb_file=args.history_tb,
+        history_sheet=args.history_sheet,
+        history_source_column=args.history_source_column,
+        history_target_column=args.history_target_column,
+        history_start_row=args.history_start_row,
         output_file=args.output,
     )
 
@@ -757,6 +1036,8 @@ def main() -> None:
     print(f"source 列: {source_column}")
     print(f"target 列: {target_column}")
     print(f"mark 类型: {'、'.join(args.mark_style)}")
+    if args.history_tb:
+        print(f"历史 TB: {Path(args.history_tb).expanduser().resolve()}")
     print(f"术语表条目数: {term_count}")
     print(f"问题行数: {problem_count}")
     print(f"输出文件: {output_path}")

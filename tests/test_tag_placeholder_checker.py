@@ -25,10 +25,10 @@ class ExtractTokensTests(unittest.TestCase):
             extract_tokens("任意文本", token_types=())
 
     def test_extract_tokens_only_keeps_configured_angle_tag_patterns_by_default(self) -> None:
-        text = "忽略 <apple>，保留 </text> 和 <color=red>"
+        text = "忽略 <apple>，保留 </text>、<br/>、<i>、<img src='itemsmall_%s'/>、<size={c}> 和 <color=red>"
         self.assertEqual(
             extract_tokens(text, token_types=("angle",)),
-            ["</text>", "<color=red>"],
+            ["</text>", "<br/>", "<i>", "<img src='itemsmall_%s'/>", "<size={c}>", "<color=red>"],
         )
 
 

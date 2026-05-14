@@ -8,6 +8,10 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
+from tools.term_pair_checker.extract_terms_from_excel import (
+    TERM_SHEET_NAME,
+    detect_history_tb_columns,
+)
 
 from .workflow_runner import build_default_output_path, run_workflow
 
@@ -18,6 +22,11 @@ class WorkflowRunnerApp(ttk.Frame):
         self.input_file_var = tk.StringVar()
         self.output_file_var = tk.StringVar()
         self.sheet_var = tk.StringVar()
+        self.term_history_tb_file_var = tk.StringVar()
+        self.term_history_sheet_var = tk.StringVar()
+        self.term_history_source_column_var = tk.StringVar()
+        self.term_history_target_column_var = tk.StringVar()
+        self.term_history_start_row_var = tk.StringVar(value="2")
         self.source_column_var = tk.StringVar(value="A")
         self.target_column_var = tk.StringVar(value="B")
         self.start_row_var = tk.StringVar(value="2")
@@ -51,28 +60,66 @@ class WorkflowRunnerApp(ttk.Frame):
             row=1, column=2, padx=(8, 0), pady=(0, 8)
         )
 
-        ttk.Label(self, text="检查工作表").grid(row=2, column=0, sticky="w", pady=(0, 8))
-        self.sheet_combobox = ttk.Combobox(self, textvariable=self.sheet_var, width=20, state="readonly")
-        self.sheet_combobox.grid(row=2, column=1, sticky="w", pady=(0, 8))
-        self.sheet_combobox.bind("<<ComboboxSelected>>", self.handle_sheet_selected)
-
-        ttk.Label(self, text="Source 列").grid(row=3, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.source_column_var, width=10).grid(
-            row=3, column=1, sticky="w", pady=(0, 8)
+        ttk.Label(self, text="术语历史 TB Excel").grid(row=2, column=0, sticky="w", pady=(0, 8))
+        ttk.Entry(self, textvariable=self.term_history_tb_file_var, width=42).grid(
+            row=2, column=1, sticky="ew", pady=(0, 8)
+        )
+        history_buttons = ttk.Frame(self)
+        history_buttons.grid(row=2, column=2, padx=(8, 0), pady=(0, 8), sticky="ew")
+        ttk.Button(history_buttons, text="选择", command=self.choose_term_history_tb_file).grid(
+            row=0, column=0, sticky="ew"
+        )
+        ttk.Button(history_buttons, text="清空", command=self.clear_term_history_tb_file).grid(
+            row=0, column=1, sticky="ew", padx=(6, 0)
         )
 
-        ttk.Label(self, text="Target 列").grid(row=4, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.target_column_var, width=10).grid(
+        ttk.Label(self, text="术语历史 TB 工作表").grid(row=3, column=0, sticky="w", pady=(0, 8))
+        self.term_history_sheet_combobox = ttk.Combobox(
+            self,
+            textvariable=self.term_history_sheet_var,
+            width=20,
+            state="readonly",
+        )
+        self.term_history_sheet_combobox.grid(row=3, column=1, sticky="w", pady=(0, 8))
+        self.term_history_sheet_combobox.bind("<<ComboboxSelected>>", self.handle_term_history_sheet_selected)
+
+        ttk.Label(self, text="术语历史 Source 列").grid(row=4, column=0, sticky="w", pady=(0, 8))
+        ttk.Entry(self, textvariable=self.term_history_source_column_var, width=10).grid(
             row=4, column=1, sticky="w", pady=(0, 8)
         )
 
-        ttk.Label(self, text="开始行").grid(row=5, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.start_row_var, width=10).grid(
+        ttk.Label(self, text="术语历史 Target 列").grid(row=5, column=0, sticky="w", pady=(0, 8))
+        ttk.Entry(self, textvariable=self.term_history_target_column_var, width=10).grid(
             row=5, column=1, sticky="w", pady=(0, 8)
         )
 
+        ttk.Label(self, text="术语历史开始行").grid(row=6, column=0, sticky="w", pady=(0, 8))
+        ttk.Entry(self, textvariable=self.term_history_start_row_var, width=10).grid(
+            row=6, column=1, sticky="w", pady=(0, 8)
+        )
+
+        ttk.Label(self, text="检查工作表").grid(row=7, column=0, sticky="w", pady=(0, 8))
+        self.sheet_combobox = ttk.Combobox(self, textvariable=self.sheet_var, width=20, state="readonly")
+        self.sheet_combobox.grid(row=7, column=1, sticky="w", pady=(0, 8))
+        self.sheet_combobox.bind("<<ComboboxSelected>>", self.handle_sheet_selected)
+
+        ttk.Label(self, text="Source 列").grid(row=8, column=0, sticky="w", pady=(0, 8))
+        ttk.Entry(self, textvariable=self.source_column_var, width=10).grid(
+            row=8, column=1, sticky="w", pady=(0, 8)
+        )
+
+        ttk.Label(self, text="Target 列").grid(row=9, column=0, sticky="w", pady=(0, 8))
+        ttk.Entry(self, textvariable=self.target_column_var, width=10).grid(
+            row=9, column=1, sticky="w", pady=(0, 8)
+        )
+
+        ttk.Label(self, text="开始行").grid(row=10, column=0, sticky="w", pady=(0, 8))
+        ttk.Entry(self, textvariable=self.start_row_var, width=10).grid(
+            row=10, column=1, sticky="w", pady=(0, 8)
+        )
+
         task_frame = ttk.LabelFrame(self, text="Workflow 任务", padding=10)
-        task_frame.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(4, 8))
+        task_frame.grid(row=11, column=0, columnspan=3, sticky="ew", pady=(4, 8))
 
         ttk.Checkbutton(task_frame, text="术语对检查", variable=self.run_term_pair_var).grid(
             row=0, column=0, sticky="w"
@@ -105,13 +152,13 @@ class WorkflowRunnerApp(ttk.Frame):
         )
 
         ttk.Button(self, text="开始执行 Workflow", command=self.run_selected_tasks).grid(
-            row=7, column=0, columnspan=3, sticky="ew"
+            row=12, column=0, columnspan=3, sticky="ew"
         )
 
         ttk.Label(
             self,
             text="说明：按顺序复用现有 checker，把术语对检查和 Tag检查结果写进同一份输出 Excel。",
-        ).grid(row=8, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ).grid(row=13, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.columnconfigure(1, weight=1)
 
@@ -148,6 +195,27 @@ class WorkflowRunnerApp(ttk.Frame):
         if file_path:
             self.output_file_var.set(file_path)
 
+    def choose_term_history_tb_file(self) -> None:
+        file_path = filedialog.askopenfilename(
+            title="选择术语历史 TB Excel 文件",
+            filetypes=[("Excel 文件", "*.xlsx *.xlsm"), ("所有文件", "*.*")],
+        )
+        if not file_path:
+            return
+        self.term_history_tb_file_var.set(file_path)
+        self.refresh_term_history_sheet_choices()
+
+    def clear_term_history_tb_file(self) -> None:
+        self.term_history_tb_file_var.set("")
+        self.term_history_source_column_var.set("")
+        self.term_history_target_column_var.set("")
+        self.term_history_start_row_var.set("2")
+        self.clear_term_history_sheet_choices()
+
+    def clear_term_history_sheet_choices(self) -> None:
+        self.term_history_sheet_combobox["values"] = ()
+        self.term_history_sheet_var.set("")
+
     def refresh_sheet_choices(self, show_error: bool = True) -> None:
         file_path = self.input_file_var.get().strip()
         if not file_path:
@@ -172,6 +240,32 @@ class WorkflowRunnerApp(ttk.Frame):
 
         self.handle_sheet_selected(show_error=show_error)
 
+    def refresh_term_history_sheet_choices(self, show_error: bool = True) -> None:
+        file_path = self.term_history_tb_file_var.get().strip()
+        if not file_path:
+            self.clear_term_history_sheet_choices()
+            return
+
+        try:
+            sheet_choices = list_workbook_sheets(file_path)
+        except Exception as exc:
+            self.clear_term_history_sheet_choices()
+            if show_error:
+                messagebox.showerror("读取失败", str(exc))
+            return
+
+        self.term_history_sheet_combobox["values"] = sheet_choices.sheet_names
+        selected_sheet = self.term_history_sheet_var.get().strip()
+        if selected_sheet not in sheet_choices.sheet_names:
+            selected_sheet = (
+                TERM_SHEET_NAME
+                if TERM_SHEET_NAME in sheet_choices.sheet_names
+                else sheet_choices.default_sheet or (sheet_choices.sheet_names[0] if sheet_choices.sheet_names else "")
+            )
+            self.term_history_sheet_var.set(selected_sheet)
+
+        self.handle_term_history_sheet_selected(show_error=show_error)
+
     def handle_sheet_selected(self, _event: object | None = None, show_error: bool = True) -> None:
         file_path = self.input_file_var.get().strip()
         sheet_name = self.sheet_var.get().strip() or None
@@ -189,6 +283,24 @@ class WorkflowRunnerApp(ttk.Frame):
             self.source_column_var.set(detected_columns.detected_source_column)
         if detected_columns.detected_target_column:
             self.target_column_var.set(detected_columns.detected_target_column)
+
+    def handle_term_history_sheet_selected(self, _event: object | None = None, show_error: bool = True) -> None:
+        file_path = self.term_history_tb_file_var.get().strip()
+        sheet_name = self.term_history_sheet_var.get().strip() or None
+        if not file_path or not sheet_name:
+            return
+
+        try:
+            detected_columns = detect_history_tb_columns(file_path, sheet=sheet_name)
+        except Exception as exc:
+            if show_error:
+                messagebox.showerror("读取失败", str(exc))
+            return
+
+        if detected_columns.source_column:
+            self.term_history_source_column_var.set(detected_columns.source_column)
+        if detected_columns.target_column:
+            self.term_history_target_column_var.set(detected_columns.target_column)
 
     def get_selected_term_mark_styles(self) -> tuple[str, ...]:
         return tuple(
@@ -210,6 +322,10 @@ class WorkflowRunnerApp(ttk.Frame):
     def run_selected_tasks(self) -> None:
         input_file = self.input_file_var.get().strip()
         output_file = self.output_file_var.get().strip()
+        term_history_tb_file = self.term_history_tb_file_var.get().strip()
+        term_history_sheet = self.term_history_sheet_var.get().strip() or None
+        term_history_source_column = self.term_history_source_column_var.get().strip() or None
+        term_history_target_column = self.term_history_target_column_var.get().strip() or None
         source_column = self.source_column_var.get().strip()
         target_column = self.target_column_var.get().strip()
         run_term_pair_check = self.run_term_pair_var.get()
@@ -235,6 +351,11 @@ class WorkflowRunnerApp(ttk.Frame):
         except ValueError:
             messagebox.showerror("开始行错误", "开始行必须是整数。")
             return
+        try:
+            term_history_start_row = int(self.term_history_start_row_var.get().strip() or "2")
+        except ValueError:
+            messagebox.showerror("术语历史开始行错误", "术语历史开始行必须是整数。")
+            return
 
         try:
             summary = run_workflow(
@@ -246,6 +367,11 @@ class WorkflowRunnerApp(ttk.Frame):
                 start_row=start_row,
                 run_term_pair_check=run_term_pair_check,
                 term_mark_styles=term_mark_styles,
+                term_history_tb_file=term_history_tb_file or None,
+                term_history_sheet=term_history_sheet,
+                term_history_source_column=term_history_source_column,
+                term_history_target_column=term_history_target_column,
+                term_history_start_row=term_history_start_row,
                 run_tag_check=run_tag_check,
                 tag_token_types=tag_token_types,
             )
@@ -264,6 +390,8 @@ class WorkflowRunnerApp(ttk.Frame):
         if summary.ran_term_pair_check:
             lines.append(f"术语表条目数: {summary.term_count}")
             lines.append(f"术语问题行数: {summary.term_problem_count}")
+            if term_history_tb_file:
+                lines.append(f"术语历史 TB: {term_history_tb_file}")
         if summary.ran_tag_check:
             lines.append(f"Tag问题条数: {summary.tag_problem_count}")
         lines.append(f"输出文件: {summary.output_path}")

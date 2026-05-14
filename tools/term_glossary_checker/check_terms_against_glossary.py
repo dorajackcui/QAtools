@@ -23,6 +23,7 @@ from tools.term_matching import (
 
 PROBLEM_SHEET_NAME = "术语命中问题"
 SUMMARY_SHEET_NAME = "检查汇总"
+GLOSSARY_EMPTY_ROW_STOP_THRESHOLD = 1000
 
 
 @dataclass(frozen=True)
@@ -137,6 +138,14 @@ def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):
     return workbook.create_sheet(title=sheet_name)
 
 
+def row_value(row: tuple[object, ...], column_index: int) -> object:
+    return row[column_index - 1] if len(row) >= column_index else None
+
+
+def row_values_are_empty(*values: object) -> bool:
+    return all(value is None or str(value).strip() == "" for value in values)
+
+
 def load_glossary_entries(
     glossary_file: str | Path,
     source_column: str,
@@ -153,28 +162,48 @@ def load_glossary_entries(
 
     source_column = normalize_column(source_column)
     target_column = normalize_column(target_column)
+    source_column_index = column_index_from_string(source_column)
+    target_column_index = column_index_from_string(target_column)
+    max_column_index = max(source_column_index, target_column_index)
 
     workbook = load_workbook(glossary_path, read_only=True)
-    worksheet = workbook[sheet] if sheet else workbook.active
+    try:
+        worksheet = workbook[sheet] if sheet else workbook.active
 
-    source_to_targets: dict[str, dict[str, tuple[str, str]]] = {}
+        source_to_targets: dict[str, dict[str, tuple[str, str]]] = {}
+        consecutive_empty_rows = 0
 
-    for row_index in range(start_row, worksheet.max_row + 1):
-        raw_source = worksheet[f"{source_column}{row_index}"].value
-        raw_target = worksheet[f"{target_column}{row_index}"].value
-        source_term = "" if raw_source is None else str(raw_source).strip()
-        target_term = "" if raw_target is None else str(raw_target).strip()
+        for row in worksheet.iter_rows(
+            min_row=start_row,
+            max_col=max_column_index,
+            values_only=True,
+        ):
+            raw_source = row_value(row, source_column_index)
+            raw_target = row_value(row, target_column_index)
+            if row_values_are_empty(raw_source, raw_target):
+                consecutive_empty_rows += 1
+                if consecutive_empty_rows >= GLOSSARY_EMPTY_ROW_STOP_THRESHOLD:
+                    break
+                continue
 
-        if not source_term or not target_term:
-            continue
+            consecutive_empty_rows = 0
+            source_term = "" if raw_source is None else str(raw_source).strip()
+            target_term = "" if raw_target is None else str(raw_target).strip()
 
-        normalized_source = normalize_text(source_term, case_sensitive=case_sensitive)
-        normalized_target = normalize_text(target_term, case_sensitive=case_sensitive)
-        if not normalized_source or not normalized_target:
-            continue
+            if not source_term or not target_term:
+                continue
 
-        targets = source_to_targets.setdefault(normalized_source, {})
-        targets.setdefault(normalized_target, (source_term, target_term))
+            normalized_source = normalize_text(source_term, case_sensitive=case_sensitive)
+            normalized_target = normalize_text(target_term, case_sensitive=case_sensitive)
+            if not normalized_source or not normalized_target:
+                continue
+
+            targets = source_to_targets.setdefault(normalized_source, {})
+            targets.setdefault(normalized_target, (source_term, target_term))
+
+        worksheet_title = worksheet.title
+    finally:
+        workbook.close()
 
     entries: list[GlossaryEntry] = []
     conflicts: list[GlossaryConflict] = []
@@ -197,7 +226,7 @@ def load_glossary_entries(
 
     entries.sort(key=lambda entry: (len(entry.normalized_source), entry.normalized_source), reverse=True)
     conflicts.sort(key=lambda item: item.source_term)
-    return worksheet.title, entries, conflicts
+    return worksheet_title, entries, conflicts
 
 
 def write_problem_sheet(workbook, worksheet_title: str, problem_entries: list[tuple[int, str, str, str, str, str]]):

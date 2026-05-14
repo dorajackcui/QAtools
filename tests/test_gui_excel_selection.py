@@ -49,6 +49,22 @@ class GuiSheetSelectionTests(unittest.TestCase):
         workbook.active = 1
         workbook.save(path)
 
+    def create_history_tb_workbook(self, path: Path) -> None:
+        workbook = Workbook()
+        data_sheet = workbook.active
+        data_sheet.title = "Raw"
+        data_sheet["A1"] = "source"
+        data_sheet["B1"] = "target"
+
+        term_sheet = workbook.create_sheet("术语表")
+        term_sheet["A1"] = "source术语"
+        term_sheet["B1"] = "target术语"
+        term_sheet["C1"] = "source术语（无mark）"
+        term_sheet["D1"] = "target术语（无mark）"
+
+        workbook.active = 0
+        workbook.save(path)
+
     def create_glossary_workbook(self, path: Path) -> None:
         workbook = Workbook()
         glossary_sheet = workbook.active
@@ -108,6 +124,15 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.sheet_combobox = FakeCombobox()
         return app
 
+    def build_extract_terms_app_with_history(self, history_path: Path) -> ExtractTermsApp:
+        app = ExtractTermsApp.__new__(ExtractTermsApp)
+        app.history_tb_file_var = FakeVar(str(history_path))
+        app.history_sheet_var = FakeVar("")
+        app.history_source_column_var = FakeVar("")
+        app.history_target_column_var = FakeVar("")
+        app.history_sheet_combobox = FakeCombobox()
+        return app
+
     def build_glossary_checker_app(self, glossary_path: Path, data_path: Path) -> TermGlossaryCheckerApp:
         app = TermGlossaryCheckerApp.__new__(TermGlossaryCheckerApp)
         app.glossary_file_var = FakeVar(str(glossary_path))
@@ -150,6 +175,15 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.sheet_combobox = FakeCombobox()
         return app
 
+    def build_workflow_app_with_history(self, history_path: Path) -> WorkflowRunnerApp:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        app.term_history_tb_file_var = FakeVar(str(history_path))
+        app.term_history_sheet_var = FakeVar("")
+        app.term_history_source_column_var = FakeVar("")
+        app.term_history_target_column_var = FakeVar("")
+        app.term_history_sheet_combobox = FakeCombobox()
+        return app
+
     def test_term_pair_refresh_populates_sheet_choices_and_detects_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workbook_path = Path(tmp_dir) / "terms.xlsx"
@@ -189,6 +223,19 @@ class GuiSheetSelectionTests(unittest.TestCase):
 
             self.assertEqual(app.source_column_var.get(), "X")
             self.assertEqual(app.target_column_var.get(), "Y")
+
+    def test_term_pair_history_tb_defaults_to_term_sheet_and_detects_source_target_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            history_path = Path(tmp_dir) / "history.xlsx"
+            self.create_history_tb_workbook(history_path)
+            app = self.build_extract_terms_app_with_history(history_path)
+
+            app.refresh_history_sheet_choices(show_error=False)
+
+            self.assertEqual(app.history_sheet_combobox["values"], ("Raw", "术语表"))
+            self.assertEqual(app.history_sheet_var.get(), "术语表")
+            self.assertEqual(app.history_source_column_var.get(), "A")
+            self.assertEqual(app.history_target_column_var.get(), "B")
 
     def test_glossary_checker_refreshes_each_file_independently(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -275,6 +322,19 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.sheet_var.get(), "Tags")
             self.assertEqual(app.source_column_var.get(), "D")
             self.assertEqual(app.target_column_var.get(), "F")
+
+    def test_workflow_history_tb_defaults_to_term_sheet_and_detects_source_target_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            history_path = Path(tmp_dir) / "history.xlsx"
+            self.create_history_tb_workbook(history_path)
+            app = self.build_workflow_app_with_history(history_path)
+
+            app.refresh_term_history_sheet_choices(show_error=False)
+
+            self.assertEqual(app.term_history_sheet_combobox["values"], ("Raw", "术语表"))
+            self.assertEqual(app.term_history_sheet_var.get(), "术语表")
+            self.assertEqual(app.term_history_source_column_var.get(), "A")
+            self.assertEqual(app.term_history_target_column_var.get(), "B")
 
 
 if __name__ == "__main__":

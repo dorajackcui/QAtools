@@ -4,7 +4,7 @@
 
 处理完成后会新增两个工作表：
 
-- `术语表`：A/B 列为保留 mark 的 `source术语` / `target术语`，C/D 列为去 mark 后的 `source术语（无mark）` / `target术语（无mark）`
+- `术语表`：A/B 列为保留 mark 的 `source术语` / `target术语`，C/D 列为去 mark 后的 `source术语（无mark）` / `target术语（无mark）`，E 列为 `术语来源`
 - `问题列`：A 列为问题行号，B 列为问题source术语，C 列为预期target术语，D 列为问题简述，E/F 列为有问题的 source/target 原文；默认按 `问题source术语` 排序
 
 ## 规则
@@ -17,6 +17,8 @@
 - 选择 `<>` 时，也会兼容全角尖括号 `＜＞`
 - 同一行如果两侧都提取出多个术语，按顺序一一配对
 - 术语检查时会忽略支持的 tag 外壳，按去 mark 后的纯术语进行匹配
+- 可选传入历史 TB；历史 TB 会自动识别第 1 行的 `source` / `target` 列（也兼容 `source术语` / `target术语`），读取值时会去掉支持的 mark
+- 本批次 source 如果命中历史 TB，会优先使用历史 target 作为配对和校验目标；未命中历史 TB 的 source 才按本批次第一次出现建立新增配对
 - 一旦后面某行通过 tag 学到术语对，会回溯检查整张表中更早和更晚的未标注出现
 - 回扫检查默认使用混合边界：中文按包含匹配，英文/数字按边界匹配，避免 `ACC` 命中 `account`
 - 默认会通过 `false_positive_exclusions.json` 排除 `</>`、`<color=...>`、`<outline color=...>` 这类伪标签误判
@@ -49,6 +51,7 @@ python3 tools/term_pair_checker/extract_terms_gui.py
 GUI 现在支持：
 
 - 选择 Excel 后自动读取工作表列表，用下拉框选择工作表
+- 可选选择历史 TB，并自动识别历史 TB 的工作表和 `source` / `target` 列
 - 默认输出为新的 Excel 文件，也可手动指定输出路径
 - 自动识别第 1 行表头中的 `source` / `target` 列并回填
 - 如果未识别到列，可继续手动填写列字母作为回退
@@ -67,4 +70,8 @@ python3 extract_terms_gui.py
 - `--start-row`：从第几行开始处理，默认 `2`
 - `--mark-style`：提取 tag 类型，可重复传入，例如 `--mark-style [] --mark-style <>`
 - `--exclusion-config`：误判排除 JSON 配置文件路径；默认读取工具目录下的 `false_positive_exclusions.json`
+- `--history-tb`：历史 TB Excel 文件路径，可选
+- `--history-sheet`：历史 TB 工作表名称，可选；默认优先使用 `术语表`
+- `--history-source-column` / `--history-target-column`：历史 TB source / target 列，可选；不填则自动识别表头
+- `--history-start-row`：历史 TB 开始读取行号，默认 `2`
 - `-o, --output`：输出文件路径，可选，默认生成 `<原文件名>_term_pairs.xlsx`

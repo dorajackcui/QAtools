@@ -44,6 +44,11 @@ def run_workflow(
     start_row: int = 2,
     run_term_pair_check: bool = True,
     term_mark_styles: Iterable[str] | None = None,
+    term_history_tb_file: str | Path | None = None,
+    term_history_sheet: str | None = None,
+    term_history_source_column: str | None = None,
+    term_history_target_column: str | None = None,
+    term_history_start_row: int = 2,
     run_tag_check: bool = True,
     tag_token_types: tuple[str, ...] | list[str] | None = None,
 ) -> WorkflowSummary:
@@ -80,6 +85,11 @@ def run_workflow(
             sheet=sheet,
             start_row=start_row,
             mark_styles=term_mark_styles,
+            history_tb_file=term_history_tb_file,
+            history_sheet=term_history_sheet,
+            history_source_column=term_history_source_column,
+            history_target_column=term_history_target_column,
+            history_start_row=term_history_start_row,
             output_file=output_path,
         )
         current_input_path = saved_path

@@ -17,7 +17,7 @@
 
 - `tools/term_pair_checker/extract_terms_from_excel.py`
   - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
-  - 常用可选：`-s/--sheet`、`--start-row`、`--mark-style`、`--exclusion-config`、`-o/--output`
+  - 常用可选：`-s/--sheet`、`--start-row`、`--mark-style`、`--exclusion-config`、`--history-tb`、`--history-sheet`、`--history-source-column`、`--history-target-column`、`--history-start-row`、`-o/--output`
 - `tools/term_glossary_checker/check_terms_against_glossary.py`
   - 必填：`glossary_file`、`data_file`、`--glossary-source-column`、`--glossary-target-column`、`--data-source-column`、`--data-target-column`
   - 常用可选：`--glossary-sheet`、`--data-sheet`、`--start-row`、`--case-sensitive`、`--match-mode`、`-o/--output`
@@ -71,9 +71,25 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
   -o ./artifacts/input_term_pairs.xlsx
 ```
 
+如果要优先复用历史 TB：
+
+```bash
+python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
+  -s Sheet1 \
+  -c A \
+  -t B \
+  --start-row 2 \
+  --mark-style '【】' \
+  --history-tb ./history_tb.xlsx \
+  --history-sheet Glossary \
+  -o ./artifacts/input_term_pairs.xlsx
+```
+
+历史 TB 会自动识别第 1 行的 `source` / `target` 列；也兼容本工具输出里的 `source术语` / `target术语` 表头。读取历史值时会去掉支持的 mark。命中历史 source 时优先使用历史 target，未命中的 source 才按本批次第一次出现建立新增术语对。
+
 输出结果中会新增这些工作表：
 
-- `术语表`
+- `术语表`：包含保留 mark、无 mark 和 `术语来源` 列；来源为 `历史TB` 或 `本批次新增`
 - `问题列`
 
 标准输出会打印：
