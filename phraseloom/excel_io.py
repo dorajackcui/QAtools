@@ -170,8 +170,8 @@ def _load_unit_sheet(ws, sheet_name: str | None = None) -> dict[tuple[str, str],
 
 
 def _resolve_column(ws, col: str | int | None) -> int:
-    headers = _header_values(ws, fallback=True)
     if col is None:
+        headers = _header_values(ws, fallback=True)
         raise ColumnNotFoundError(col, headers)
     if isinstance(col, int):
         return col
@@ -180,10 +180,11 @@ def _resolve_column(ws, col: str | int | None) -> int:
 
     wanted = str(col).strip()
     wanted_lower = wanted.lower()
-    for cell in ws[1]:
+    for index, cell in enumerate(ws[1], start=1):
         value = "" if cell.value is None else str(cell.value).strip()
         if value == wanted or value.lower() == wanted_lower:
-            return cell.column
+            return getattr(cell, "column", index)
+    headers = _header_values(ws, fallback=True)
     raise ColumnNotFoundError(col, headers)
 
 
@@ -205,10 +206,10 @@ def _read_headers(input_path: Path) -> list[str]:
 
 def _header_values(ws, *, fallback: bool = False) -> list[str]:
     headers: list[str] = []
-    for cell in ws[1]:
+    for index, cell in enumerate(ws[1], start=1):
         if cell.value is None or str(cell.value).strip() == "":
             if fallback:
-                headers.append(f"column_{cell.column}")
+                headers.append(f"column_{index}")
             else:
                 headers.append("")
             continue

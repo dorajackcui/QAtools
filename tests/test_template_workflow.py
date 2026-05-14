@@ -1084,6 +1084,31 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertIn("Column 'missing' not found", message)
         self.assertIn("Available columns: source, target", message)
 
+    def test_generate_workbook_handles_sparse_header_row(self):
+        from phraseloom.workflow import generate_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "input.xlsx"
+            output_path = Path(tmp) / "output.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Login failed", ""])
+            ws.cell(row=2, column=184).value = "trailing export data"
+            wb.save(input_path)
+
+            stats = generate_workbook(
+                input_path,
+                output_path,
+                source_col="source",
+                target_col="target",
+                use_existing_targets=False,
+            )
+
+            self.assertEqual(stats["row_count"], 1)
+            self.assertTrue(output_path.exists())
+
     def test_malformed_translated_workbook_reports_required_columns(self):
         from phraseloom.errors import TranslationUnitLoadError
         from phraseloom.excel_io import _load_translated_units
