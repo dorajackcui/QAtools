@@ -741,6 +741,33 @@ def build_recorded_term_pair(
     )
 
 
+def build_initial_term_mapping(history_mapping: dict[str, RecordedTermPair]) -> dict[str, RecordedTermPair]:
+    return {
+        term_pair.source_plain_text: term_pair
+        for term_pair in history_mapping.values()
+    }
+
+
+def add_matched_terms_to_output(
+    output_term_mapping: dict[str, RecordedTermPair],
+    term_mapping: dict[str, RecordedTermPair],
+    matched_entries: Iterable[TermMappingEntry],
+) -> None:
+    for entry in matched_entries:
+        term_pair = term_mapping.get(entry.source_term)
+        if term_pair is None:
+            continue
+        output_term_mapping.setdefault(term_pair.source_plain_text, term_pair)
+
+
+def term_source_sort_key(term_pair: RecordedTermPair) -> int:
+    return 0 if term_pair.term_source == TERM_SOURCE_HISTORY else 1
+
+
+def sorted_output_term_pairs(term_pairs: Iterable[RecordedTermPair]) -> list[RecordedTermPair]:
+    return sorted(term_pairs, key=term_source_sort_key)
+
+
 def process_excel(
     input_file: str | Path,
     source_column: str,
@@ -787,7 +814,8 @@ def process_excel(
     workbook = load_workbook(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
 
-    term_mapping: dict[str, RecordedTermPair] = {}
+    term_mapping = build_initial_term_mapping(history_mapping)
+    output_term_mapping: dict[str, RecordedTermPair] = {}
     count_mismatch_rows: dict[int, tuple[list[ExtractedTerm], list[ExtractedTerm]]] = {}
     problem_entries: list[tuple[int, str, str, str, str, str]] = []
     problem_row_set: set[int] = set()
@@ -815,10 +843,10 @@ def process_excel(
         if len(source_terms) != len(target_terms):
             count_mismatch_rows[row_index] = (source_terms, target_terms)
             for source_term in source_terms[len(target_terms) :]:
-                merge_term_pair(
-                    term_mapping,
-                    build_recorded_term_pair(source_term, None, history_mapping),
-                )
+                term_pair = build_recorded_term_pair(source_term, None, history_mapping)
+                _, existing_term_pair = merge_term_pair(term_mapping, term_pair)
+                if not term_pair.target_plain_text and existing_term_pair is None:
+                    merge_term_pair(output_term_mapping, term_pair)
         else:
             candidate_term_mapping = dict(term_mapping)
             row_has_problem = False
@@ -849,7 +877,7 @@ def process_excel(
         matcher = build_matcher(build_term_mapping_entries(term_mapping.values()))
 
     for row_index in range(start_row, worksheet.max_row + 1):
-        if matcher is None or row_index in problem_row_set:
+        if matcher is None:
             if row_index in count_mismatch_rows and row_index not in problem_row_set:
                 source_terms, target_terms = count_mismatch_rows[row_index]
                 append_problem(
@@ -881,6 +909,9 @@ def process_excel(
             case_sensitive=PAIR_CHECK_CASE_SENSITIVE,
             match_mode=PAIR_CHECK_MATCH_MODE,
         )
+        add_matched_terms_to_output(output_term_mapping, term_mapping, matched_entries)
+        if row_index in problem_row_set:
+            continue
         if not matched_entries:
             if row_index in count_mismatch_rows:
                 source_terms, target_terms = count_mismatch_rows[row_index]
@@ -948,7 +979,7 @@ def process_excel(
     term_sheet["C1"] = "source术语（无mark）"
     term_sheet["D1"] = "target术语（无mark）"
     term_sheet["E1"] = "术语来源"
-    for row_index, term_pair in enumerate(term_mapping.values(), start=2):
+    for row_index, term_pair in enumerate(sorted_output_term_pairs(output_term_mapping.values()), start=2):
         term_sheet[f"A{row_index}"] = term_pair.source_display_text
         term_sheet[f"B{row_index}"] = term_pair.target_display_text
         term_sheet[f"C{row_index}"] = term_pair.source_plain_text
@@ -1000,7 +1031,7 @@ def process_excel(
         source_column,
         target_column,
         output_path,
-        len(term_mapping),
+        len(output_term_mapping),
         len(problem_entries),
     )
 

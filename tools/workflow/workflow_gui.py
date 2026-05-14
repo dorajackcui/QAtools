@@ -33,9 +33,9 @@ class WorkflowRunnerApp(ttk.Frame):
         self.run_term_pair_var = tk.BooleanVar(value=True)
         self.run_tag_check_var = tk.BooleanVar(value=True)
         self.term_mark_style_vars = {
-            "【】": tk.BooleanVar(value=True),
-            "[]": tk.BooleanVar(value=False),
-            "<>": tk.BooleanVar(value=False),
+            "【】": tk.BooleanVar(value=False),
+            "[]": tk.BooleanVar(value=True),
+            "<>": tk.BooleanVar(value=True),
         }
         self.angle_var = tk.BooleanVar(value=True)
         self.brace_var = tk.BooleanVar(value=True)

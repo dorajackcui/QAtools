@@ -85,7 +85,7 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
   -o ./artifacts/input_term_pairs.xlsx
 ```
 
-历史 TB 会自动识别第 1 行的 `source` / `target` 列；也兼容本工具输出里的 `source术语` / `target术语` 表头。读取历史值时会去掉支持的 mark。命中历史 source 时优先使用历史 target，未命中的 source 才按本批次第一次出现建立新增术语对。
+历史 TB 会自动识别第 1 行的 `source` / `target` 列；也兼容本工具输出里的 `source术语` / `target术语` 表头。读取历史值时会去掉支持的 mark。传入历史 TB 后，会先把历史 TB 全量加入检查词库，再合并本批次新增术语；命中历史 source 时使用历史 target，未命中的 source 才按本批次第一次出现建立新增术语对。输出的 `术语表` 只写本次检查文本中实际涉及的历史术语和本批次新增术语。
 
 输出结果中会新增这些工作表：
 

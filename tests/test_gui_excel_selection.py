@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from openpyxl import Workbook
 
@@ -21,6 +22,17 @@ class FakeVar:
         return self.value
 
     def set(self, value: str) -> None:
+        self.value = value
+
+
+class FakeBoolVar:
+    def __init__(self, value: bool = False) -> None:
+        self.value = value
+
+    def get(self) -> bool:
+        return self.value
+
+    def set(self, value: bool) -> None:
         self.value = value
 
 
@@ -335,6 +347,34 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.term_history_sheet_var.get(), "术语表")
             self.assertEqual(app.term_history_source_column_var.get(), "A")
             self.assertEqual(app.term_history_target_column_var.get(), "B")
+
+    def test_term_pair_gui_defaults_to_square_and_angle_marks(self) -> None:
+        app = ExtractTermsApp.__new__(ExtractTermsApp)
+        with (
+            patch.object(ExtractTermsApp, "_build_ui", lambda self: None),
+            patch("tools.term_pair_checker.extract_terms_gui.ttk.Frame.__init__", lambda self, master=None, padding=None: None),
+            patch("tools.term_pair_checker.extract_terms_gui.tk.StringVar", FakeVar),
+            patch("tools.term_pair_checker.extract_terms_gui.tk.BooleanVar", FakeBoolVar),
+        ):
+            ExtractTermsApp.__init__(app, object())
+
+        self.assertFalse(app.mark_style_vars["【】"].get())
+        self.assertTrue(app.mark_style_vars["[]"].get())
+        self.assertTrue(app.mark_style_vars["<>"].get())
+
+    def test_workflow_gui_defaults_to_square_and_angle_term_marks(self) -> None:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        with (
+            patch.object(WorkflowRunnerApp, "_build_ui", lambda self: None),
+            patch("tools.workflow.workflow_gui.ttk.Frame.__init__", lambda self, master=None, padding=None: None),
+            patch("tools.workflow.workflow_gui.tk.StringVar", FakeVar),
+            patch("tools.workflow.workflow_gui.tk.BooleanVar", FakeBoolVar),
+        ):
+            WorkflowRunnerApp.__init__(app, object())
+
+        self.assertFalse(app.term_mark_style_vars["【】"].get())
+        self.assertTrue(app.term_mark_style_vars["[]"].get())
+        self.assertTrue(app.term_mark_style_vars["<>"].get())
 
 
 if __name__ == "__main__":

@@ -42,9 +42,9 @@ class ExtractTermsApp(ttk.Frame):
         self.sheet_var = tk.StringVar()
         self.start_row_var = tk.StringVar(value="2")
         self.mark_style_vars = {
-            "【】": tk.BooleanVar(value=True),
-            "[]": tk.BooleanVar(value=False),
-            "<>": tk.BooleanVar(value=False),
+            "【】": tk.BooleanVar(value=False),
+            "[]": tk.BooleanVar(value=True),
+            "<>": tk.BooleanVar(value=True),
         }
 
         self._build_ui()

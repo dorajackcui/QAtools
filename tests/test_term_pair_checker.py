@@ -346,7 +346,7 @@ class ProcessExcelTests(unittest.TestCase):
             result_workbook = load_workbook(saved_path)
             term_sheet = result_workbook["术语表"]
             self.assertEqual(term_sheet["E1"].value, "术语来源")
-            self.assertEqual(term_sheet["A2"].value, "<Apple>")
+            self.assertEqual(term_sheet["A2"].value, "Apple")
             self.assertEqual(term_sheet["B2"].value, "历史苹果")
             self.assertEqual(term_sheet["C2"].value, "Apple")
             self.assertEqual(term_sheet["D2"].value, "历史苹果")
@@ -365,6 +365,60 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A3"].value, 4)
             self.assertEqual(problem_sheet["B3"].value, "Apple")
             self.assertEqual(problem_sheet["C3"].value, "历史苹果")
+
+    def test_process_excel_checks_full_history_tb_plus_new_batch_terms(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            history_path = Path(tmp_dir) / "history.xlsx"
+
+            history_workbook = Workbook()
+            history_sheet = history_workbook.active
+            history_sheet.title = "TB"
+            history_sheet["A1"] = "source"
+            history_sheet["B1"] = "target"
+            history_sheet["A2"] = "Apple"
+            history_sheet["B2"] = "Pomme"
+            history_sheet["A3"] = "Orange"
+            history_sheet["B3"] = "Orange historique"
+            history_workbook.save(history_path)
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "本轮新增 [Banana]"
+            worksheet["B2"] = "本轮新增 [Banane]"
+            worksheet["A3"] = "未标记复用 Apple"
+            worksheet["B3"] = "未标记缺少历史译法"
+            workbook.save(input_path)
+
+            _, _, _, saved_path, term_count, problem_count = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                mark_styles=("[]",),
+                history_tb_file=history_path,
+                history_sheet="TB",
+            )
+
+            self.assertEqual(term_count, 2)
+            self.assertEqual(problem_count, 1)
+
+            result_workbook = load_workbook(saved_path)
+            term_sheet = result_workbook["术语表"]
+            self.assertEqual(term_sheet["A2"].value, "Apple")
+            self.assertEqual(term_sheet["B2"].value, "Pomme")
+            self.assertEqual(term_sheet["E2"].value, "历史TB")
+            self.assertEqual(term_sheet["A3"].value, "[Banana]")
+            self.assertEqual(term_sheet["B3"].value, "[Banane]")
+            self.assertEqual(term_sheet["E3"].value, "本批次新增")
+
+            problem_sheet = result_workbook["问题列"]
+            self.assertEqual(problem_sheet["A2"].value, 3)
+            self.assertEqual(problem_sheet["B2"].value, "Apple")
+            self.assertEqual(problem_sheet["C2"].value, "Pomme")
 
     def test_history_tb_loading_stops_after_consecutive_empty_tail_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
