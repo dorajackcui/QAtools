@@ -1,6 +1,6 @@
 # Excel Tag / Placeholder 检查工具
 
-用于读取一份双语 Excel，逐行检查 `source` / `target` 中的 `<...>`、`{...}` 和 `\n` 是否一致，并输出新的检查结果 Excel。
+用于读取一份双语 Excel，逐行检查 `source` / `target` 中的 `<...>`、`{...}`、`\n` 和数字 tag 是否一致，并输出新的检查结果 Excel。
 
 处理完成后会生成新的检查结果 Excel，并新增两个工作表：
 
@@ -10,12 +10,14 @@
 ## 规则
 
 - 输入为一份双语 Excel：`source` / `target`
-- 默认同时检查两类片段：
+- 默认同时检查四类片段：
   - `<...>`：按 tag 处理
   - `{...}`：按 placeholder 处理
   - `\n`：按独立 mark 处理
+  - `{n}`、`{n>`、`<n}`：按数字 tag 处理，其中 `n` 为数字
 - 逐行比较 source / target 中的片段集合
 - `<...>` 不会把所有尖括号内容都当成 tag
+- `{1}{2>Glace du Néant<3}` 会识别为数字 tag `{1}`、`{2>`、`<3}`，不会把整段 `{2>Glace du Néant<3}` 当成普通 `{...}` placeholder
 - 默认会读取 `tools/term_pair_checker/false_positive_exclusions.json`，只检查配置文件里定义的尖括号 tag 模式
 - 这份默认配置和术语配对工具共用同一个文件；术语配对里被 `<>` mark 排除的那批标签模式，正是这里需要检查的真正 tag
 - 会检查：
@@ -34,7 +36,8 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py input.xlsx 
   --start-row 2 \
   --token-type angle \
   --token-type brace \
-  --token-type newline
+  --token-type newline \
+  --token-type numeric
 ```
 
 如需替换尖括号 tag 识别规则：
@@ -60,7 +63,7 @@ GUI 支持：
 - 自动读取工作表列表，用下拉框选择工作表
 - 自动识别第 1 行表头中的 `source` / `target` 列并回填
 - 默认输出为新的 Excel 文件，也可手动指定输出路径
-- 可单独勾选 `<...>`、`{...}` 或 `\n` 类型进行检查
+- 可单独勾选 `<...>`、`{...}`、`\n` 或数字 tag 类型进行检查
 - `<...>` 默认使用配置文件识别真正需要校验的 tag
 
 ## 常用参数
@@ -69,7 +72,7 @@ GUI 支持：
 - `--source-column`：source 列
 - `--target-column`：target 列
 - `--start-row`：开始处理的行号，默认 `2`
-- `--token-type`：检查类型，可选 `angle`、`brace`、`newline`，可重复传入
+- `--token-type`：检查类型，可选 `angle`、`brace`、`newline`、`numeric`，可重复传入
 - `--angle-config`：尖括号 tag 配置文件路径，默认读取 `tools/term_pair_checker/false_positive_exclusions.json`
 - `-o, --output`：输出文件路径，可选，默认生成 `<原文件名>_tag_placeholder_checked.xlsx`
 
@@ -94,5 +97,6 @@ GUI 支持：
 - 含尖括号 tag 行数
 - 含花括号 placeholder 行数
 - 含 `\n` mark 行数
+- 含数字 tag 行数
 - 问题行数
 - 问题条数

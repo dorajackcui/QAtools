@@ -17,19 +17,23 @@ from openpyxl.utils import column_index_from_string
 
 PROBLEM_SHEET_NAME = "标签占位问题"
 SUMMARY_SHEET_NAME = "检查汇总"
-SUPPORTED_TOKEN_TYPES = ("angle", "brace", "newline")
+SUPPORTED_TOKEN_TYPES = ("angle", "brace", "newline", "numeric")
 DEFAULT_TOKEN_TYPES = SUPPORTED_TOKEN_TYPES
 DEFAULT_ANGLE_CONFIG_NAME = "tools/term_pair_checker/false_positive_exclusions.json"
 TOKEN_LABELS = {
     "angle": "尖括号tag",
     "brace": "花括号placeholder",
     "newline": r"\n mark",
+    "numeric": "数字tag",
 }
 TOKEN_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
     "angle": (re.compile(r"<([^<>]+)>"),),
     "brace": (re.compile(r"\{([^{}]+)\}"),),
     "newline": (re.compile(r"\\n"),),
+    "numeric": (re.compile(r"\{\d+>|<\d+\}|\{\d+\}"),),
 }
+NUMERIC_BRACE_PATTERN = re.compile(r"^\d+$")
+NUMERIC_TAG_ENVELOPE_PATTERN = re.compile(r"^\d+>.*<\d+$", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -50,6 +54,7 @@ class CheckSummary:
     angle_rows: int
     brace_rows: int
     newline_rows: int
+    numeric_rows: int
     problem_rows: int
     problem_count: int
     selected_token_types: tuple[str, ...]
@@ -139,6 +144,13 @@ def should_keep_angle_token(
     return any(regex.search(inner_text) or regex.search(display_text) for regex in angle_regexes)
 
 
+def should_keep_brace_token(inner_text: str) -> bool:
+    return not (
+        NUMERIC_BRACE_PATTERN.fullmatch(inner_text)
+        or NUMERIC_TAG_ENVELOPE_PATTERN.fullmatch(inner_text)
+    )
+
+
 def extract_token_details(
     text: object,
     token_types: tuple[str, ...] | list[str] | None = None,
@@ -163,6 +175,8 @@ def extract_token_details(
                     inner_text,
                     angle_regexes,
                 ):
+                    continue
+                if token_type == "brace" and not should_keep_brace_token(inner_text):
                     continue
                 matches.append(
                     ExtractedToken(
@@ -276,6 +290,7 @@ def write_summary_sheet(
         ("含尖括号tag行数", summary.angle_rows),
         ("含花括号placeholder行数", summary.brace_rows),
         (r"含\n mark行数", summary.newline_rows),
+        ("含数字tag行数", summary.numeric_rows),
         ("问题行数", summary.problem_rows),
         ("问题条数", summary.problem_count),
     ]
@@ -286,7 +301,7 @@ def write_summary_sheet(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="检查双语 Excel 中 source / target 的 <...> tag 和 {...} placeholder 是否一致。"
+        description="检查双语 Excel 中 source / target 的 tag、placeholder 和 mark 是否一致。"
     )
     parser.add_argument("input_file", nargs="?", help="输入 Excel 文件路径，例如 input.xlsx")
     parser.add_argument("-s", "--sheet", help="工作表名称，不填则使用活动工作表")
@@ -298,7 +313,7 @@ def parse_args() -> argparse.Namespace:
         action="append",
         choices=SUPPORTED_TOKEN_TYPES,
         default=None,
-        help="检查类型，可重复传入，例如 --token-type angle --token-type brace",
+        help="检查类型，可重复传入，例如 --token-type angle --token-type numeric",
     )
     parser.add_argument(
         "--angle-config",
@@ -378,6 +393,7 @@ def process_excel(
     angle_rows = 0
     brace_rows = 0
     newline_rows = 0
+    numeric_rows = 0
     problem_rows_set: set[int] = set()
     problem_entries: list[tuple[int, str, str, str, str]] = []
 
@@ -410,6 +426,8 @@ def process_excel(
             brace_rows += 1
         if any(token.token_type == "newline" for token in combined_tokens):
             newline_rows += 1
+        if any(token.token_type == "numeric" for token in combined_tokens):
+            numeric_rows += 1
 
         for token_type in normalized_token_types:
             source_counter = Counter(
@@ -444,6 +462,7 @@ def process_excel(
         angle_rows=angle_rows,
         brace_rows=brace_rows,
         newline_rows=newline_rows,
+        numeric_rows=numeric_rows,
         problem_rows=len(problem_rows_set),
         problem_count=len(problem_entries),
         selected_token_types=normalized_token_types,
@@ -483,6 +502,7 @@ def main() -> None:
     print(f"含尖括号tag行数: {summary.angle_rows}")
     print(f"含花括号placeholder行数: {summary.brace_rows}")
     print(rf"含\n mark行数: {summary.newline_rows}")
+    print(f"含数字tag行数: {summary.numeric_rows}")
     print(f"问题行数: {summary.problem_rows}")
     print(f"问题条数: {summary.problem_count}")
     print(f"输出文件: {summary.output_path}")

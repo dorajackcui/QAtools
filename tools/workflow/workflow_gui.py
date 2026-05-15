@@ -40,6 +40,7 @@ class WorkflowRunnerApp(ttk.Frame):
         self.angle_var = tk.BooleanVar(value=True)
         self.brace_var = tk.BooleanVar(value=True)
         self.newline_var = tk.BooleanVar(value=True)
+        self.numeric_var = tk.BooleanVar(value=True)
 
         self._build_ui()
 
@@ -149,6 +150,9 @@ class WorkflowRunnerApp(ttk.Frame):
         )
         ttk.Checkbutton(tag_type_frame, text="\\n mark", variable=self.newline_var).grid(
             row=0, column=2, sticky="w", padx=(12, 0)
+        )
+        ttk.Checkbutton(tag_type_frame, text="数字tag", variable=self.numeric_var).grid(
+            row=0, column=3, sticky="w", padx=(12, 0)
         )
 
         ttk.Button(self, text="开始执行 Workflow", command=self.run_selected_tasks).grid(
@@ -317,6 +321,8 @@ class WorkflowRunnerApp(ttk.Frame):
             token_types.append("brace")
         if self.newline_var.get():
             token_types.append("newline")
+        if self.numeric_var.get():
+            token_types.append("numeric")
         return tuple(token_types)
 
     def run_selected_tasks(self) -> None:

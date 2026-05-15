@@ -31,6 +31,15 @@ class ExtractTokensTests(unittest.TestCase):
             ["</text>", "<br/>", "<i>", "<img src='itemsmall_%s'/>", "<size={c}>", "<color=red>"],
         )
 
+    def test_extract_tokens_treats_numbered_tags_as_dedicated_tokens(self) -> None:
+        text = "{1}{2>Glace du Néant<3} 和 {name}"
+
+        self.assertEqual(
+            extract_tokens(text, token_types=("numeric", "brace")),
+            ["{1}", "{2>", "<3}", "{name}"],
+        )
+        self.assertEqual(extract_tokens(text, token_types=("brace",)), ["{name}"])
+
 
 class ProcessExcelTests(unittest.TestCase):
     def create_workbook(self, path: Path) -> None:
@@ -64,7 +73,7 @@ class ProcessExcelTests(unittest.TestCase):
                 source_column="A",
                 target_column="B",
                 start_row=2,
-                token_types=("angle", "brace", "newline"),
+                token_types=("angle", "brace", "newline", "numeric"),
             )
 
             self.assertEqual(summary.worksheet_title, "Data")
@@ -74,9 +83,10 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(summary.angle_rows, 2)
             self.assertEqual(summary.brace_rows, 3)
             self.assertEqual(summary.newline_rows, 1)
+            self.assertEqual(summary.numeric_rows, 0)
             self.assertEqual(summary.problem_rows, 4)
             self.assertEqual(summary.problem_count, 4)
-            self.assertEqual(summary.selected_token_types, ("angle", "brace", "newline"))
+            self.assertEqual(summary.selected_token_types, ("angle", "brace", "newline", "numeric"))
 
             original_workbook = load_workbook(input_path)
             self.assertEqual(original_workbook.sheetnames, ["Data"])
@@ -108,18 +118,19 @@ class ProcessExcelTests(unittest.TestCase):
             summary_sheet = workbook["检查汇总"]
             summary_values = {
                 summary_sheet.cell(row_index, 1).value: summary_sheet.cell(row_index, 2).value
-                for row_index in range(2, 14)
+                for row_index in range(2, 15)
             }
             self.assertEqual(summary_values["检查工作表"], "Data")
             self.assertEqual(summary_values["source列"], "A")
             self.assertEqual(summary_values["target列"], "B")
             self.assertEqual(summary_values["开始行"], 2)
-            self.assertEqual(summary_values["检查类型"], r"尖括号tag、花括号placeholder、\n mark")
+            self.assertEqual(summary_values["检查类型"], r"尖括号tag、花括号placeholder、\n mark、数字tag")
             self.assertEqual(summary_values["总行数"], 6)
             self.assertEqual(summary_values["命中检查类型行数"], 5)
             self.assertEqual(summary_values["含尖括号tag行数"], 2)
             self.assertEqual(summary_values["含花括号placeholder行数"], 3)
             self.assertEqual(summary_values[r"含\n mark行数"], 1)
+            self.assertEqual(summary_values["含数字tag行数"], 0)
             self.assertEqual(summary_values["问题行数"], 4)
             self.assertEqual(summary_values["问题条数"], 4)
 
@@ -140,6 +151,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(summary.angle_rows, 2)
             self.assertEqual(summary.brace_rows, 0)
             self.assertEqual(summary.newline_rows, 0)
+            self.assertEqual(summary.numeric_rows, 0)
             self.assertEqual(summary.problem_rows, 1)
             self.assertEqual(summary.problem_count, 1)
 
@@ -165,6 +177,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(summary.angle_rows, 0)
             self.assertEqual(summary.brace_rows, 0)
             self.assertEqual(summary.newline_rows, 1)
+            self.assertEqual(summary.numeric_rows, 0)
             self.assertEqual(summary.problem_rows, 1)
             self.assertEqual(summary.problem_count, 1)
 
@@ -172,6 +185,38 @@ class ProcessExcelTests(unittest.TestCase):
             problem_sheet = workbook["标签占位问题"]
             self.assertEqual(problem_sheet.max_row, 2)
             self.assertEqual(problem_sheet["B2"].value, r"\n mark不一致")
+
+    def test_process_excel_reports_numbered_tag_mismatches_separately(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "{1}{2>Glace du Néant<3}"
+            worksheet["B2"] = "{1}{2>Glace du Néant<4}"
+            workbook.save(input_path)
+
+            summary = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                token_types=("numeric", "brace"),
+            )
+
+            self.assertEqual(summary.rows_with_selected_tokens, 1)
+            self.assertEqual(summary.brace_rows, 0)
+            self.assertEqual(summary.numeric_rows, 1)
+            self.assertEqual(summary.problem_rows, 1)
+            self.assertEqual(summary.problem_count, 1)
+
+            workbook = load_workbook(summary.output_path)
+            problem_sheet = workbook["标签占位问题"]
+            self.assertEqual(problem_sheet["B2"].value, "数字tag不一致")
+            self.assertIn("target缺少=<3}", str(problem_sheet["C2"].value))
+            self.assertIn("target多出=<4}", str(problem_sheet["C2"].value))
 
 
 if __name__ == "__main__":

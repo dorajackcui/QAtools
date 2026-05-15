@@ -96,8 +96,8 @@ python3 tools/excel_line_splitter/split_excel_lines_gui.py
 ### 4. Tag / Placeholder 检查
 
 - 目录：`tools/tag_placeholder_checker`
-- 用途：逐行检查双语 Excel 中 `source` / `target` 的 `<...>`、`{...}` 和 `\n` 是否一致
-- 检查类型：支持 `<...>` tag、`{...}` placeholder 与 `\n` mark，可单独或组合检查
+- 用途：逐行检查双语 Excel 中 `source` / `target` 的 `<...>`、`{...}`、`\n` 和数字 tag 是否一致
+- 检查类型：支持 `<...>` tag、`{...}` placeholder、`\n` mark 与 `{n}` / `{n>` / `<n}` 数字 tag，可单独或组合检查
 - `<...>` 识别：默认直接复用 `tools/term_pair_checker/false_positive_exclusions.json` 识别真正需要校验的 tag，避免维护两份规则
 - GUI 增强：自动读取工作表列表，并尝试自动识别 `source` / `target` 列
 - 输出方式：生成新的结果 Excel，不覆盖原文件
@@ -111,7 +111,8 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py input.xlsx 
   --start-row 2 \
   --token-type angle \
   --token-type brace \
-  --token-type newline
+  --token-type newline \
+  --token-type numeric
 ```
 
 - GUI：

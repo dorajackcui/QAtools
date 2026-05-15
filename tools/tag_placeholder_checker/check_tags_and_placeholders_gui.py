@@ -30,6 +30,7 @@ class TagPlaceholderCheckerApp(ttk.Frame):
         self.angle_var = tk.BooleanVar(value=True)
         self.brace_var = tk.BooleanVar(value=True)
         self.newline_var = tk.BooleanVar(value=True)
+        self.numeric_var = tk.BooleanVar(value=True)
 
         self._build_ui()
 
@@ -87,12 +88,15 @@ class TagPlaceholderCheckerApp(ttk.Frame):
         ttk.Checkbutton(token_type_frame, text="\\n mark", variable=self.newline_var).grid(
             row=0, column=2, sticky="w", padx=(12, 0)
         )
+        ttk.Checkbutton(token_type_frame, text="数字tag", variable=self.numeric_var).grid(
+            row=0, column=3, sticky="w", padx=(12, 0)
+        )
 
         ttk.Button(self, text="开始检查", command=self.run_check).grid(
             row=7, column=0, columnspan=3, sticky="ew"
         )
 
-        note = r"规则：逐行比对 source / target 中的 <...>、{...} 和 \n，检查缺失、多出和数量不一致。"
+        note = r"规则：逐行比对 source / target 中的 <...>、{...}、\n 和数字tag，检查缺失、多出和数量不一致。"
         ttk.Label(self, text=note).grid(row=8, column=0, columnspan=3, sticky="w", pady=(12, 0))
         ttk.Label(
             self,
@@ -188,6 +192,8 @@ class TagPlaceholderCheckerApp(ttk.Frame):
             token_types.append("brace")
         if self.newline_var.get():
             token_types.append("newline")
+        if self.numeric_var.get():
+            token_types.append("numeric")
         return tuple(token_types)
 
     def run_check(self) -> None:
@@ -235,6 +241,8 @@ class TagPlaceholderCheckerApp(ttk.Frame):
             selected_labels.append("{...} placeholder")
         if "newline" in summary.selected_token_types:
             selected_labels.append(r"\n mark")
+        if "numeric" in summary.selected_token_types:
+            selected_labels.append("数字tag")
 
         messagebox.showinfo(
             "处理完成",
@@ -248,6 +256,7 @@ class TagPlaceholderCheckerApp(ttk.Frame):
                     f"含尖括号tag行数: {summary.angle_rows}",
                     f"含花括号placeholder行数: {summary.brace_rows}",
                     rf"含\n mark行数: {summary.newline_rows}",
+                    f"含数字tag行数: {summary.numeric_rows}",
                     f"问题行数: {summary.problem_rows}",
                     f"问题条数: {summary.problem_count}",
                     f"输出文件: {summary.output_path}",

@@ -189,6 +189,7 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
   --token-type angle \
   --token-type brace \
   --token-type newline \
+  --token-type numeric \
   -o ./artifacts/input_tag_placeholder_checked.xlsx
 ```
 
@@ -196,6 +197,7 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
 
 - `<...>` 默认不是全量检查，而是按 `tools/term_pair_checker/false_positive_exclusions.json` 中的模式识别真正需要校验的 tag
 - 这份默认模式和术语配对工具共用同一个文件，因为那批被 `<>` mark 排除的内容正是 tag 检查应该关注的对象
+- 数字 tag 会按 `{n}`、`{n>`、`<n}` 单独检查，例如 `{1}{2>Glace du Néant<3}` 会提取为 `{1}`、`{2>`、`<3}`，不会作为普通 `{...}` placeholder 检查
 
 如果只检查 `<...>` tag：
 
@@ -224,6 +226,7 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
 - 含尖括号 tag 行数
 - 含花括号 placeholder 行数
 - 含 `\n` mark 行数
+- 含数字 tag 行数
 - 问题行数 / 问题条数
 - 输出文件路径
 
