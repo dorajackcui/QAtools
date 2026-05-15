@@ -339,7 +339,7 @@ def _display_tm_stats(output: Path, stats: dict[str, int]) -> None:
 def _display_entity_prepare_stats(stats: dict[str, int | str]) -> None:
     print(f"Wrote: {stats['output_path']}")
     print(f"Related units: {stats['related_unit_count']}")
-    print(f"Non-entity units: {stats['non_entity_unit_count']}")
+    print(f"Non-related units: {stats['non_related_unit_count']}")
     print(f"Entity structures: {stats['entity_structure_count']}")
     print(f"Entity terms: {stats['entity_term_count']}")
     print(f"Prefilled structures: {stats['prefilled_structure_count']}")
