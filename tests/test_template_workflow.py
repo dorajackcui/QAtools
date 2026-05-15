@@ -1472,6 +1472,7 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertIn("1) Build TM from completed Excel", menu)
         self.assertIn("2) Prepare translator file for new source", menu)
         self.assertIn("3) Fill source from translated file", menu)
+        self.assertIn("4) Entity workflow", menu)
         self.assertNotIn("Advanced tools", menu)
         self.assertNotIn("Extract source translation units", menu)
 

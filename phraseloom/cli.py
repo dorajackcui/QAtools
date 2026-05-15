@@ -29,6 +29,7 @@ from .excel_io import (
 )
 from .interactive import (
     _normalize_optional_column,
+    run_entity_interactive,
     run_interactive,
 )
 from .workflow import (
@@ -70,6 +71,8 @@ def _dispatch(argv: list[str] | None = None) -> int:
         return _main_extract(argv[1:])
     if argv[0] == "fill":
         return _main_fill(argv[1:])
+    if argv[0] in {"entity", "entity-interactive"}:
+        return run_entity_interactive()
     if argv[0] == "entity-tm":
         return _main_entity_tm(argv[1:])
     if argv[0] == "entity-prepare":
@@ -512,6 +515,8 @@ def _print_top_level_help() -> None:
     print("Interactive:")
     print("  phraseloom")
     print("  phraseloom interactive")
+    print("  phraseloom entity")
+    print("  phraseloom entity-interactive")
     print()
     print("Steps:")
     print("  1) Build TM from completed Excel")

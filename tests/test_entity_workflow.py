@@ -657,6 +657,233 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
         self.assertIn("Advanced entity commands:", help_text)
         self.assertIn("phraseloom entity-split TRANSLATOR_WORKBOOK.xlsx", help_text)
 
+    def test_entity_interactive_aliases_open_entity_menu(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+
+        from phraseloom.cli import _dispatch
+
+        for command in ("entity", "entity-interactive"):
+            with self.subTest(command=command):
+                stream = StringIO()
+                with patch("builtins.input", side_effect=["q"]), redirect_stdout(stream):
+                    self.assertEqual(_dispatch([command]), 0)
+
+                menu = stream.getvalue()
+                self.assertIn("Entity Workflow", menu)
+                self.assertIn("1) Build entity memory from TM reusable units", menu)
+                self.assertIn("4) Merge filled entity pack back to translator todo", menu)
+
+    def test_top_level_interactive_option_opens_entity_menu(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+
+        from phraseloom.cli import _dispatch
+
+        stream = StringIO()
+        with patch("builtins.input", side_effect=["4", "q"]), redirect_stdout(stream):
+            self.assertEqual(_dispatch([]), 0)
+
+        menu = stream.getvalue()
+        self.assertIn("4) Entity workflow", menu)
+        self.assertIn("Entity Workflow", menu)
+
+    def test_entity_interactive_step_1_writes_memory_workbook(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+
+        from phraseloom.cli import _dispatch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            tm_pairs_path = tmp_path / "tm_pairs.xlsx"
+            output_path = tmp_path / "entity_memory.xlsx"
+            _write_tm_pairs_workbook(tm_pairs_path)
+
+            answers = iter(["1", str(tm_pairs_path), str(output_path), "2"])
+            with (
+                patch("builtins.input", side_effect=lambda _="": next(answers)),
+                redirect_stdout(StringIO()),
+            ):
+                self.assertEqual(_dispatch(["entity"]), 0)
+
+            self.assertTrue(output_path.exists())
+            self.assertEqual(
+                _headers(output_path, schema.ENTITY_STRUCTURES_SHEET)[0],
+                schema.STRUCTURE_ID_COLUMN,
+            )
+
+    def test_entity_interactive_step_2_writes_pack_with_optional_memory(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+
+        from phraseloom.cli import _dispatch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "source_translator_todo.xlsx"
+            memory_path = tmp_path / "entity_memory.xlsx"
+            output_path = tmp_path / "entity_pack.xlsx"
+            _write_todo_workbook(
+                todo_path,
+                [
+                    {
+                        schema.UNIT_ID_COLUMN: "U0001",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0002",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Login failed.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0003",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                ],
+            )
+            _write_entity_tm_workbook(memory_path)
+
+            answers = iter(["2", str(todo_path), str(memory_path), str(output_path), "2"])
+            with (
+                patch("builtins.input", side_effect=lambda _="": next(answers)),
+                redirect_stdout(StringIO()),
+            ):
+                self.assertEqual(_dispatch(["entity"]), 0)
+
+            self.assertTrue(output_path.exists())
+            structures = _rows_by_header(output_path, schema.ENTITY_STRUCTURES_SHEET)
+            self.assertEqual(
+                structures[0][schema.TARGET_STRUCTURE_COLUMN],
+                "{entity1} launched a localized attack and dealt localized damage.",
+            )
+
+    def test_entity_interactive_step_3_fills_entity_pack(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+
+        from phraseloom.cli import _dispatch
+        from phraseloom.entity_workflow import prepare_entity_pack_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "source_translator_todo.xlsx"
+            pack_path = tmp_path / "entity_pack.xlsx"
+            output_path = tmp_path / "entity_pack_filled.xlsx"
+            _write_todo_workbook(
+                todo_path,
+                [
+                    {
+                        schema.UNIT_ID_COLUMN: "U0001",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0002",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                ],
+            )
+            prepare_entity_pack_workbook(todo_path, pack_path, min_group_size=2)
+            _complete_entity_tables(
+                pack_path,
+                term_targets={"Squirtle": "Carapuce", "Pikachu": "Pikachu"},
+            )
+
+            answers = iter(["3", str(pack_path), str(output_path)])
+            with (
+                patch("builtins.input", side_effect=lambda _="": next(answers)),
+                redirect_stdout(StringIO()),
+            ):
+                self.assertEqual(_dispatch(["entity"]), 0)
+
+            related_rows = _rows_by_header(output_path, schema.RELATED_UNITS_SHEET)
+            self.assertEqual(
+                [row[schema.TARGET_UNIT_COLUMN] for row in related_rows],
+                [
+                    "Carapuce launched a localized attack and dealt localized damage.",
+                    "Pikachu launched a localized attack and dealt localized damage.",
+                ],
+            )
+
+    def test_entity_interactive_step_4_merges_filled_entity_pack(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+
+        from phraseloom.cli import _dispatch
+        from phraseloom.entity_workflow import (
+            fill_entity_pack_workbook,
+            prepare_entity_pack_workbook,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "source_translator_todo.xlsx"
+            pack_path = tmp_path / "entity_pack.xlsx"
+            filled_path = tmp_path / "entity_pack_filled.xlsx"
+            output_path = tmp_path / "merged_todo.xlsx"
+            _write_todo_workbook(
+                todo_path,
+                [
+                    {
+                        schema.UNIT_ID_COLUMN: "U0001",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0002",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Login failed.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0003",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                ],
+            )
+            prepare_entity_pack_workbook(todo_path, pack_path, min_group_size=2)
+            _complete_entity_tables(
+                pack_path,
+                term_targets={"Squirtle": "Carapuce", "Pikachu": "Pikachu"},
+            )
+            _set_first_non_related_target(pack_path, "Login failed localized.")
+            fill_entity_pack_workbook(pack_path, filled_path)
+
+            answers = iter(["4", str(filled_path), str(output_path)])
+            with (
+                patch("builtins.input", side_effect=lambda _="": next(answers)),
+                redirect_stdout(StringIO()),
+            ):
+                self.assertEqual(_dispatch(["entity"]), 0)
+
+            merged_rows = _rows_by_header(output_path, schema.TO_TRANSLATE_SHEET)
+            self.assertEqual(
+                [row[schema.TARGET_UNIT_COLUMN] for row in merged_rows],
+                [
+                    "Carapuce launched a localized attack and dealt localized damage.",
+                    "Login failed localized.",
+                    "Pikachu launched a localized attack and dealt localized damage.",
+                ],
+            )
+
     def test_entity_tm_cli_writes_memory_workbook_to_l10n(self):
         from phraseloom.cli import _dispatch
 

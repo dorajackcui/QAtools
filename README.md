@@ -165,6 +165,18 @@ Entity engine 是 translator todo 的二次处理工具，不属于主 tag/templ
    -> /path/to/source_translator_todo_l10n/source_translator_todo_entity_pack_filled_merged_todo.xlsx
 ```
 
+也可以用交互式菜单进入 entity workflow：
+
+```bash
+phraseloom
+# 选择 4) Entity workflow
+
+phraseloom entity
+phraseloom entity-interactive
+```
+
+交互菜单只覆盖推荐的四步主流程；底层调试命令仍通过直接 CLI 子命令使用。
+
 从预处理过的 TM workbook 中创建 entity memory：
 
 ```bash

@@ -2,6 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .entity_workflow import (
+    default_entity_filled_pack_output_path,
+    default_entity_memory_output_path,
+    default_entity_merged_todo_output_path,
+    default_entity_pack_output_path,
+    extract_entity_memory_workbook,
+    fill_entity_pack_workbook,
+    merge_entity_pack_workbook,
+    prepare_entity_pack_workbook,
+)
 from .errors import ConfigError
 from .excel_io import (
     _default_extract_output_path,
@@ -21,6 +31,7 @@ def run_interactive() -> int:
     print("1) Build TM from completed Excel")
     print("2) Prepare translator file for new source")
     print("3) Fill source from translated file")
+    print("4) Entity workflow")
     print("q) Quit")
 
     action = _prompt_text("Choose step", default="2").lower()
@@ -33,6 +44,8 @@ def run_interactive() -> int:
         return _interactive_extract()
     if action in {"3", "fill", "f"}:
         return _interactive_fill()
+    if action in {"4", "entity", "entity-workflow", "e"}:
+        return run_entity_interactive(back_returns_to_main=True)
 
     print(f"Unknown step: {action}")
     return 2
@@ -136,6 +149,113 @@ def _interactive_fill() -> int:
     return 0
 
 
+def run_entity_interactive(*, back_returns_to_main: bool = False) -> int:
+    print("Entity Workflow")
+    print()
+    print("1) Build entity memory from TM reusable units")
+    print("2) Prepare source entity pack")
+    print("3) Fill completed entity pack")
+    print("4) Merge filled entity pack back to translator todo")
+    print("b) Back")
+    print("q) Quit")
+
+    action = _prompt_text("Choose entity step", default="2").lower()
+    if action in {"q", "quit", "exit"}:
+        print("Bye.")
+        return 0
+    if action in {"b", "back"}:
+        if back_returns_to_main:
+            return run_interactive()
+        print("Bye.")
+        return 0
+    if action in {"1", "tm", "entity-tm", "memory"}:
+        return _interactive_entity_tm()
+    if action in {"2", "prepare", "pack"}:
+        return _interactive_entity_prepare()
+    if action in {"3", "fill", "fill-pack"}:
+        return _interactive_entity_fill_pack()
+    if action in {"4", "merge", "merge-pack"}:
+        return _interactive_entity_merge_pack()
+
+    print(f"Unknown entity step: {action}")
+    return 2
+
+
+def _interactive_entity_tm() -> int:
+    input_path = _user_path(_prompt_text("TM reusable units path", required=True))
+    output_path = _user_path(
+        _prompt_text(
+            "Output entity memory workbook",
+            default=str(default_entity_memory_output_path(input_path)),
+        )
+    )
+    min_group_size = _prompt_int(
+        "Minimum variants for a reusable entity structure",
+        default=3,
+    )
+
+    stats = extract_entity_memory_workbook(
+        input_path,
+        output_path,
+        min_group_size=min_group_size,
+    )
+    _display_entity_extract_tm_stats(stats)
+    return 0
+
+
+def _interactive_entity_prepare() -> int:
+    input_path = _user_path(_prompt_text("Translator todo path", required=True))
+    tm_text = _prompt_text("Entity memory path (- for none)", default="-")
+    tm_path = _user_path(tm_text) if _normalize_optional_column(tm_text) is not None else None
+    output_path = _user_path(
+        _prompt_text(
+            "Output entity pack workbook",
+            default=str(default_entity_pack_output_path(input_path)),
+        )
+    )
+    min_group_size = _prompt_int(
+        "Minimum variants for a reusable entity structure",
+        default=3,
+    )
+
+    stats = prepare_entity_pack_workbook(
+        input_path,
+        output_path,
+        tm_path=tm_path,
+        min_group_size=min_group_size,
+    )
+    _display_entity_prepare_stats(stats)
+    return 0
+
+
+def _interactive_entity_fill_pack() -> int:
+    input_path = _user_path(_prompt_text("Source entity pack path", required=True))
+    output_path = _user_path(
+        _prompt_text(
+            "Output filled entity pack workbook",
+            default=str(default_entity_filled_pack_output_path(input_path)),
+        )
+    )
+
+    stats = fill_entity_pack_workbook(input_path, output_path)
+    _display_entity_fill_stats(stats)
+    return 0
+
+
+def _interactive_entity_merge_pack() -> int:
+    input_path = _user_path(_prompt_text("Filled source entity pack path", required=True))
+    output_path = _user_path(
+        _prompt_text(
+            "Output merged translator todo workbook",
+            default=str(default_entity_merged_todo_output_path(input_path)),
+        )
+    )
+
+    stats = merge_entity_pack_workbook(input_path, output_path)
+    _display_entity_merge_stats(stats)
+    return 0
+
+
 def _prompt_text(prompt: str, *, default: str | None = None, required: bool = False) -> str:
     suffix = f" [{default}]" if default is not None else ""
     while True:
@@ -216,14 +336,49 @@ def _display_tm_stats(output: Path, stats: dict[str, int]) -> None:
     print(f"Segment pairs: {stats['segment_pair_count']}")
 
 
+def _display_entity_prepare_stats(stats: dict[str, int | str]) -> None:
+    print(f"Wrote: {stats['output_path']}")
+    print(f"Related units: {stats['related_unit_count']}")
+    print(f"Non-entity units: {stats['non_entity_unit_count']}")
+    print(f"Entity structures: {stats['entity_structure_count']}")
+    print(f"Entity terms: {stats['entity_term_count']}")
+    print(f"Prefilled structures: {stats['prefilled_structure_count']}")
+    print(f"Prefilled terms: {stats['prefilled_term_count']}")
+
+
+def _display_entity_extract_tm_stats(stats: dict[str, int | str]) -> None:
+    print(f"Wrote: {stats['output_path']}")
+    print(f"Entity structures: {stats['entity_structure_count']}")
+    print(f"Entity terms: {stats['entity_term_count']}")
+
+
+def _display_entity_fill_stats(stats: dict[str, int | str]) -> None:
+    print(f"Wrote: {stats['output_path']}")
+    print(f"Filled entity units: {stats['filled_entity_unit_count']}")
+
+
+def _display_entity_merge_stats(stats: dict[str, int | str]) -> None:
+    print(f"Wrote: {stats['output_path']}")
+    print(f"Merged units: {stats['merged_unit_count']}")
+
+
 __all__ = [
     "run_interactive",
+    "run_entity_interactive",
     "_interactive_tm_extract",
     "_interactive_extract",
     "_interactive_fill",
+    "_interactive_entity_tm",
+    "_interactive_entity_prepare",
+    "_interactive_entity_fill_pack",
+    "_interactive_entity_merge_pack",
     "_prompt_text",
     "_prompt_int",
     "_prompt_yes_no",
     "_user_path",
     "_normalize_optional_column",
+    "_display_entity_prepare_stats",
+    "_display_entity_extract_tm_stats",
+    "_display_entity_fill_stats",
+    "_display_entity_merge_stats",
 ]
