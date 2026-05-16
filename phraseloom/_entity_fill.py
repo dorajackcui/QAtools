@@ -13,6 +13,7 @@ from ._entity_io import (
     _read_unit_rows,
     _replace_workbook_atomically,
     _save_workbook,
+    _unit_row_value,
     _worksheet_by_name,
 )
 from ._entity_types import UnitRow
@@ -126,7 +127,7 @@ def merge_entity_workbooks(
     ws.title = schema.TO_TRANSLATE_SHEET
     ws.append(headers)
     for row in merged_rows:
-        ws.append([row.values.get(header) for header in headers])
+        ws.append([_unit_row_value(row, header) for header in headers])
     _copy_support_sheets(non_entity_path, wb, exclude={schema.TO_TRANSLATE_SHEET})
     _save_workbook(wb, output_path)
     return {
@@ -162,7 +163,7 @@ def merge_entity_pack_workbook(
     ws.title = schema.TO_TRANSLATE_SHEET
     ws.append(headers)
     for row in merged_rows:
-        ws.append([row.values.get(header) for header in headers])
+        ws.append([_unit_row_value(row, header) for header in headers])
     _copy_support_sheets(
         pack_path,
         wb,
@@ -400,4 +401,12 @@ def _build_entity_target(
 
 
 def _one_based_columns(headers: list[str]) -> dict[str, int]:
-    return {header: index + 1 for index, header in enumerate(headers) if header}
+    columns = {header: index + 1 for index, header in enumerate(headers) if header}
+    for canonical, aliases in schema.UNIT_COLUMN_ALIASES.items():
+        if canonical in columns:
+            continue
+        for alias in aliases:
+            if alias in columns:
+                columns[canonical] = columns[alias]
+                break
+    return columns

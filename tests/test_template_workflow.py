@@ -8,6 +8,28 @@ from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
 
 
+def _unit_header_index(headers, column):
+    aliases = {
+        "source_unit": ("source_unit", "source"),
+        "target_unit": ("target_unit", "target"),
+    }
+    for candidate in aliases.get(column, (column,)):
+        if candidate in headers:
+            return headers.index(candidate)
+    raise ValueError(f"{column!r} is not in list")
+
+
+def _unit_row_value(row, column):
+    aliases = {
+        "source_unit": ("source_unit", "source"),
+        "target_unit": ("target_unit", "target"),
+    }
+    for candidate in aliases.get(column, (column,)):
+        if candidate in row:
+            return row[candidate]
+    raise KeyError(column)
+
+
 class TemplateDemoTests(unittest.TestCase):
     def test_infers_target_template_from_one_example_and_applies_to_matching_source(self):
         from phraseloom.template_engine import (
@@ -91,8 +113,8 @@ class TemplateDemoTests(unittest.TestCase):
             pack = load_workbook(pack_path)
             units = pack["translation_units"]
             headers = [cell.value for cell in units[1]]
-            source_idx = headers.index("source_unit") + 1
-            target_idx = headers.index("target_unit") + 1
+            source_idx = _unit_header_index(headers, "source_unit") + 1
+            target_idx = _unit_header_index(headers, "target_unit") + 1
             variables_idx = headers.index("variables") + 1
             source_to_row = {
                 row[source_idx - 1].value: row
@@ -206,7 +228,7 @@ class TemplateDemoTests(unittest.TestCase):
             out = load_workbook(output_path, data_only=True)
             units = out["translation_units"]
             headers = [cell.value for cell in units[1]]
-            source_idx = headers.index("source_unit")
+            source_idx = _unit_header_index(headers, "source_unit")
             source_units = [
                 row[source_idx]
                 for row in units.iter_rows(min_row=2, values_only=True)
@@ -296,8 +318,8 @@ class TemplateDemoTests(unittest.TestCase):
             pack = load_workbook(pack_path)
             units = pack["translation_units"]
             headers = [cell.value for cell in units[1]]
-            source_idx = headers.index("source_unit") + 1
-            target_idx = headers.index("target_unit") + 1
+            source_idx = _unit_header_index(headers, "source_unit") + 1
+            target_idx = _unit_header_index(headers, "target_unit") + 1
             rows = {
                 row[source_idx - 1].value: row
                 for row in units.iter_rows(min_row=2)
@@ -388,7 +410,7 @@ class TemplateDemoTests(unittest.TestCase):
                 dict(zip(unit_headers, row))
                 for row in units.iter_rows(min_row=2, values_only=True)
             ]
-            by_source = {row["source_unit"]: row for row in unit_rows}
+            by_source = {_unit_row_value(row, "source_unit"): row for row in unit_rows}
             self.assertEqual(by_source["VIP{num1} Paid Pack"]["unit_type"], "template")
             self.assertEqual(by_source["Sign in for 3 days"]["unit_type"], "segment")
 
@@ -491,8 +513,8 @@ class TemplateDemoTests(unittest.TestCase):
             pack = load_workbook(pack_path)
             units = pack["translation_units"]
             headers = [cell.value for cell in units[1]]
-            target_idx = headers.index("target_unit") + 1
-            source_idx = headers.index("source_unit") + 1
+            target_idx = _unit_header_index(headers, "target_unit") + 1
+            source_idx = _unit_header_index(headers, "source_unit") + 1
             for row in units.iter_rows(min_row=2):
                 source_unit = row[source_idx - 1].value
                 if source_unit == "Obtain {num1} stars in Chapter {num2}":
@@ -608,18 +630,23 @@ class TemplateDemoTests(unittest.TestCase):
                 dict(zip(headers, row))
                 for row in units.iter_rows(min_row=2, values_only=True)
             ]
-            by_source = {row["source_unit"]: row for row in rows}
+            by_source = {_unit_row_value(row, "source_unit"): row for row in rows}
 
             self.assertEqual(
-                by_source["Obtain {num1} stars in Chapter {num2}"]["target_unit"],
+                _unit_row_value(by_source["Obtain {num1} stars in Chapter {num2}"], "target_unit"),
                 "第{num2}章获得{num1}颗星",
             )
             self.assertEqual(
                 by_source["Obtain {num1} stars in Chapter {num2}"]["target_unit_source"],
                 "tm_pairs",
             )
-            self.assertEqual(by_source["Login failed"]["target_unit"], "登录失败")
-            self.assertIsNone(by_source["Brand new line"]["target_unit"])
+            self.assertEqual(
+                _unit_row_value(by_source["Login failed"], "target_unit"),
+                "登录失败",
+            )
+            self.assertIsNone(
+                _unit_row_value(by_source["Brand new line"], "target_unit")
+            )
 
             todo = out["to_translate"]
             todo_headers = [cell.value for cell in todo[1]]
@@ -628,7 +655,7 @@ class TemplateDemoTests(unittest.TestCase):
                 for row in todo.iter_rows(min_row=2, values_only=True)
             ]
             self.assertEqual(len(todo_rows), 1)
-            self.assertEqual(todo_rows[0]["source_unit"], "Brand new line")
+            self.assertEqual(_unit_row_value(todo_rows[0], "source_unit"), "Brand new line")
 
             filled = out["filled_workbook"]
             filled_headers = [cell.value for cell in filled[1]]
@@ -688,10 +715,10 @@ class TemplateDemoTests(unittest.TestCase):
                 dict(zip(headers, row))
                 for row in units.iter_rows(min_row=2, values_only=True)
             ]
-            by_source = {row["source_unit"]: row for row in rows}
+            by_source = {_unit_row_value(row, "source_unit"): row for row in rows}
 
             for source in ["123", "...", "10-20", "$0.99"]:
-                self.assertEqual(by_source[source]["target_unit"], source)
+                self.assertEqual(_unit_row_value(by_source[source], "target_unit"), source)
                 self.assertEqual(by_source[source]["target_unit_source"], "non_translatable")
 
             todo = out["to_translate"]
@@ -700,7 +727,10 @@ class TemplateDemoTests(unittest.TestCase):
                 dict(zip(todo_headers, row))
                 for row in todo.iter_rows(min_row=2, values_only=True)
             ]
-            self.assertEqual([row["source_unit"] for row in todo_rows], ["New text"])
+            self.assertEqual(
+                [_unit_row_value(row, "source_unit") for row in todo_rows],
+                ["New text"],
+            )
 
     def test_translator_todo_orders_units_by_first_source_row_and_includes_context(self):
         from phraseloom.workflow import generate_workbook
@@ -744,8 +774,8 @@ class TemplateDemoTests(unittest.TestCase):
                 [
                     "unit_id",
                     "unit_type",
-                    "source_unit",
-                    "target_unit",
+                    "source",
+                    "target",
                     "sample_sources",
                     "context",
                     "row_number",
@@ -756,7 +786,7 @@ class TemplateDemoTests(unittest.TestCase):
                 ],
             )
             self.assertEqual(
-                [row["source_unit"] for row in rows],
+                [_unit_row_value(row, "source_unit") for row in rows],
                 ["Intro line", "VIP{num1} Pack", "Later line"],
             )
             self.assertEqual([row["row_number"] for row in rows], [2, 3, 4])
@@ -765,6 +795,104 @@ class TemplateDemoTests(unittest.TestCase):
                 ["Opening scene", "Shop scene", "Battle scene"],
             )
             self.assertEqual(rows[1]["sample_sources"], "VIP10 Pack")
+
+    def test_generated_unit_tables_use_source_and_target_headers(self):
+        from phraseloom.workflow import (
+            fill_target_column_workbook,
+            generate_tm_pairs,
+            generate_workbook,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            tm_input = tmp_path / "tm.xlsx"
+            tm_pairs = tmp_path / "tm_pairs.xlsx"
+            source_input = tmp_path / "source.xlsx"
+            pack_path = tmp_path / "pack.xlsx"
+            filled_path = tmp_path / "filled.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Login failed", "登录失败"])
+            ws.append(["Login failed", "登录失败"])
+            wb.save(tm_input)
+
+            generate_tm_pairs(
+                tm_input,
+                tm_pairs,
+                source_col="source",
+                target_col="target",
+            )
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "fr"])
+            ws.append(["Login failed", ""])
+            ws.append(["Brand new line", ""])
+            wb.save(source_input)
+
+            generate_workbook(
+                source_input,
+                pack_path,
+                source_col="source",
+                target_col="fr",
+                tm_workbook=tm_pairs,
+                use_existing_targets=False,
+            )
+
+            pack_book = load_workbook(pack_path)
+            try:
+                self.assertIn("source", [cell.value for cell in pack_book["translation_units"][1]])
+                self.assertIn("target", [cell.value for cell in pack_book["translation_units"][1]])
+                self.assertNotIn("source_unit", [cell.value for cell in pack_book["translation_units"][1]])
+                self.assertNotIn("target_unit", [cell.value for cell in pack_book["translation_units"][1]])
+            finally:
+                pack_book.close()
+
+            tm_book = load_workbook(tm_pairs)
+            try:
+                tm_headers = [cell.value for cell in tm_book["tm_pairs"][1]]
+                self.assertIn("source", tm_headers)
+                self.assertIn("target", tm_headers)
+                self.assertNotIn("source_unit", tm_headers)
+                self.assertNotIn("target_unit", tm_headers)
+            finally:
+                tm_book.close()
+
+            todo_path = tmp_path / "source_l10n" / "source_translator_todo.xlsx"
+            todo_book = load_workbook(todo_path)
+            try:
+                todo_ws = todo_book["to_translate"]
+                todo_headers = [cell.value for cell in todo_ws[1]]
+                self.assertIn("source", todo_headers)
+                self.assertIn("target", todo_headers)
+                self.assertNotIn("source_unit", todo_headers)
+                self.assertNotIn("target_unit", todo_headers)
+                target_idx = todo_headers.index("target") + 1
+                for row in todo_ws.iter_rows(min_row=2):
+                    row[target_idx - 1].value = "全新文本"
+
+                prefilled_headers = [
+                    cell.value for cell in todo_book["prefilled_units"][1]
+                ]
+                self.assertIn("source", prefilled_headers)
+                self.assertIn("target", prefilled_headers)
+                self.assertNotIn("source_unit", prefilled_headers)
+                self.assertNotIn("target_unit", prefilled_headers)
+                todo_book.save(todo_path)
+            finally:
+                todo_book.close()
+
+            stats = fill_target_column_workbook(
+                source_input,
+                filled_path,
+                source_col="source",
+                target_col="fr",
+                template_workbook=todo_path,
+            )
+
+        self.assertEqual(stats["autofilled_count"], 2)
 
     def test_translated_to_translate_can_fill_target_column_in_output_copy(self):
         from phraseloom.workflow import (
@@ -818,7 +946,7 @@ class TemplateDemoTests(unittest.TestCase):
             todo_book = load_workbook(standalone_todo)
             ws = todo_book["to_translate"]
             headers = [cell.value for cell in ws[1]]
-            target_idx = headers.index("target_unit") + 1
+            target_idx = _unit_header_index(headers, "target_unit") + 1
             for row in ws.iter_rows(min_row=2):
                 row[target_idx - 1].value = "全新文本"
             todo_book.save(standalone_todo)
@@ -925,8 +1053,8 @@ class TemplateDemoTests(unittest.TestCase):
             out = load_workbook(tm_pairs, data_only=True)
             ws = out["tm_pairs"]
             headers = [cell.value for cell in ws[1]]
-            source_idx = headers.index("source_unit")
-            target_idx = headers.index("target_unit")
+            source_idx = _unit_header_index(headers, "source_unit")
+            target_idx = _unit_header_index(headers, "target_unit")
             row = next(ws.iter_rows(min_row=2, values_only=True))
             out.close()
 
@@ -1457,7 +1585,7 @@ class TemplateDemoTests(unittest.TestCase):
             ]
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["unit_type"], "segment")
-            self.assertEqual(rows[0]["source_unit"], "VIP10 Paid Pack")
+            self.assertEqual(_unit_row_value(rows[0], "source_unit"), "VIP10 Paid Pack")
             self.assertEqual(rows[0]["coverage_count"], 3)
 
     def test_interactive_menu_shows_three_step_workflow(self):

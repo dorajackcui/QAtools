@@ -69,6 +69,13 @@ class UnitRow:
     original_index: int
     values: dict[str, object]
 
+    def _value(self, column: str) -> object:
+        for candidate in schema.UNIT_COLUMN_ALIASES.get(column, (column,)):
+            value = self.values.get(candidate)
+            if value not in (None, ""):
+                return value
+        return ""
+
     @property
     def unit_id(self) -> str:
         return str(self.values.get(schema.UNIT_ID_COLUMN) or "")
@@ -79,11 +86,11 @@ class UnitRow:
 
     @property
     def source_unit(self) -> str:
-        return str(self.values.get(schema.SOURCE_UNIT_COLUMN) or "")
+        return str(self._value(schema.SOURCE_UNIT_COLUMN) or "")
 
     @property
     def target_unit(self) -> str:
-        return str(self.values.get(schema.TARGET_UNIT_COLUMN) or "")
+        return str(self._value(schema.TARGET_UNIT_COLUMN) or "")
 
 
 class EntityExtractionStrategy(Protocol):

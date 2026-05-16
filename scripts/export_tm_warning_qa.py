@@ -289,10 +289,12 @@ def _headers(worksheet) -> list[Any]:
 
 def _column_index(headers: list[Any], name: str) -> int:
     normalized = [str(header).strip().lower() for header in headers]
-    try:
-        return normalized.index(name.strip().lower())
-    except ValueError as exc:
-        raise ValueError(f"required column not found: {name}") from exc
+    for candidate in schema.UNIT_COLUMN_ALIASES.get(name, (name,)):
+        try:
+            return normalized.index(candidate.strip().lower())
+        except ValueError:
+            continue
+    raise ValueError(f"required column not found: {name}")
 
 
 def _header_index(worksheet, name: str) -> int:
