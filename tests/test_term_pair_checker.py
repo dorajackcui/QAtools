@@ -31,7 +31,10 @@ class ExtractTermsTests(unittest.TestCase):
             extract_terms("任意文本", mark_styles=())
 
     def test_extract_terms_uses_default_json_exclusions_for_false_positive_tags(self) -> None:
-        text = "样式 </> <br/> <i> <img src='itemsmall_%s'/> <size={c}> <color=red> <outline color=blue> 真术语 <苹果>"
+        text = (
+            "样式 </> <br/> <i> <img src='itemsmall_%s'/> <size={c}> "
+            "<color=red> <outline color=blue> <2}{3> <6}{7> 真术语 <苹果>"
+        )
         self.assertEqual(extract_terms(text, mark_styles=("<>",)), ["<苹果>"])
 
     def test_extract_terms_supports_custom_json_exclusion_config(self) -> None:
@@ -114,15 +117,17 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A2"].value, 5)
             self.assertEqual(problem_sheet["B2"].value, "Alpha、Gamma")
             self.assertEqual(problem_sheet["C2"].value, "阿尔法、伽马")
-            self.assertIn("source/target术语数量不一致", str(problem_sheet["D2"].value))
-            self.assertEqual(problem_sheet["E2"].value, "第四行 [Alpha] 加【Gamma】")
-            self.assertEqual(problem_sheet["F2"].value, "第四行只有 [阿尔法]")
+            self.assertEqual(problem_sheet["D2"].value, "本批次新增")
+            self.assertIn("source/target术语数量不一致", str(problem_sheet["E2"].value))
+            self.assertEqual(problem_sheet["F2"].value, "第四行 [Alpha] 加【Gamma】")
+            self.assertEqual(problem_sheet["G2"].value, "第四行只有 [阿尔法]")
             self.assertEqual(problem_sheet["A3"].value, 4)
             self.assertEqual(problem_sheet["B3"].value, "Beta")
             self.assertEqual(problem_sheet["C3"].value, "贝塔")
-            self.assertEqual(problem_sheet["D3"].value, "target术语不匹配：实际术语 - 错误贝塔")
-            self.assertEqual(problem_sheet["E3"].value, "第三行复用 <Beta>")
-            self.assertEqual(problem_sheet["F3"].value, "第三行复用 <错误贝塔>")
+            self.assertEqual(problem_sheet["D3"].value, "本批次新增")
+            self.assertEqual(problem_sheet["E3"].value, "target术语不匹配：实际术语 - 错误贝塔")
+            self.assertEqual(problem_sheet["F3"].value, "第三行复用 <Beta>")
+            self.assertEqual(problem_sheet["G3"].value, "第三行复用 <错误贝塔>")
 
     def test_process_excel_dedupes_same_plain_term_with_different_marks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -189,9 +194,10 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A2"].value, 2)
             self.assertEqual(problem_sheet["B2"].value, "苹果")
             self.assertEqual(problem_sheet["C2"].value, "apple")
-            self.assertEqual(problem_sheet["D2"].value, "target缺少预期术语")
-            self.assertEqual(problem_sheet["E2"].value, "第三行先出现苹果")
-            self.assertEqual(problem_sheet["F2"].value, "第三行先出现banana")
+            self.assertEqual(problem_sheet["D2"].value, "本批次新增")
+            self.assertEqual(problem_sheet["E2"].value, "target缺少预期术语")
+            self.assertEqual(problem_sheet["F2"].value, "第三行先出现苹果")
+            self.assertEqual(problem_sheet["G2"].value, "第三行先出现banana")
 
     def test_process_excel_treats_marked_target_as_aligned_for_unmarked_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -361,10 +367,12 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A2"].value, 2)
             self.assertEqual(problem_sheet["B2"].value, "Apple")
             self.assertEqual(problem_sheet["C2"].value, "历史苹果")
-            self.assertEqual(problem_sheet["D2"].value, "target缺少预期术语")
+            self.assertEqual(problem_sheet["D2"].value, "历史TB")
+            self.assertEqual(problem_sheet["E2"].value, "target缺少预期术语")
             self.assertEqual(problem_sheet["A3"].value, 4)
             self.assertEqual(problem_sheet["B3"].value, "Apple")
             self.assertEqual(problem_sheet["C3"].value, "历史苹果")
+            self.assertEqual(problem_sheet["D3"].value, "历史TB")
 
     def test_process_excel_checks_full_history_tb_plus_new_batch_terms(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -419,6 +427,60 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A2"].value, 3)
             self.assertEqual(problem_sheet["B2"].value, "Apple")
             self.assertEqual(problem_sheet["C2"].value, "Pomme")
+
+    def test_problem_sheet_includes_term_source_and_sorts_history_first(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            history_path = Path(tmp_dir) / "history.xlsx"
+
+            history_workbook = Workbook()
+            history_sheet = history_workbook.active
+            history_sheet.title = "TB"
+            history_sheet["A1"] = "source"
+            history_sheet["B1"] = "target"
+            history_sheet["A2"] = "Zebra"
+            history_sheet["B2"] = "Zebre"
+            history_workbook.save(history_path)
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "建立新增 [Apple]"
+            worksheet["B2"] = "建立新增 [Pomme]"
+            worksheet["A3"] = "复用新增 Apple"
+            worksheet["B3"] = "复用新增错误"
+            worksheet["A4"] = "复用历史 Zebra"
+            worksheet["B4"] = "复用历史错误"
+            workbook.save(input_path)
+
+            _, _, _, saved_path, term_count, problem_count = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                mark_styles=("[]",),
+                history_tb_file=history_path,
+                history_sheet="TB",
+            )
+
+            self.assertEqual(term_count, 2)
+            self.assertEqual(problem_count, 2)
+
+            result_workbook = load_workbook(saved_path)
+            problem_sheet = result_workbook["问题列"]
+            self.assertEqual(problem_sheet["C1"].value, "预期target术语")
+            self.assertEqual(problem_sheet["D1"].value, "术语来源")
+            self.assertEqual(problem_sheet["E1"].value, "问题简述")
+            self.assertEqual(problem_sheet["F1"].value, "source原文")
+            self.assertEqual(problem_sheet["G1"].value, "target原文")
+            self.assertEqual(problem_sheet["B2"].value, "Zebra")
+            self.assertEqual(problem_sheet["C2"].value, "Zebre")
+            self.assertEqual(problem_sheet["D2"].value, "历史TB")
+            self.assertEqual(problem_sheet["B3"].value, "Apple")
+            self.assertEqual(problem_sheet["C3"].value, "Pomme")
+            self.assertEqual(problem_sheet["D3"].value, "本批次新增")
 
     def test_history_tb_loading_stops_after_consecutive_empty_tail_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
