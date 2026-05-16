@@ -30,7 +30,7 @@ from phraseloom.workflow import (
 DEFAULT_SOURCE_WORKBOOK = REPO_ROOT / "testfiles" / "for_test.xlsx"
 DEFAULT_TM_WORKBOOK = REPO_ROOT / "testfiles" / "TM.xlsx"
 PROTECTED_TOKEN_RE = re.compile(r"\{[1-9]\d*>|<[1-9]\d*\}|\{[1-9]\d*\}")
-MISSING_TARGET_WARNING = "fill target_unit in translation_units, then rerun fill"
+MISSING_TARGET_WARNING = "fill target in translation_units, then rerun fill"
 
 
 @dataclass(frozen=True)

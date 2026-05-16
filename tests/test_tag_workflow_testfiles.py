@@ -14,6 +14,17 @@ from phraseloom.workflow import (
 TESTFILES = Path("testfiles")
 
 
+def _unit_header_index(headers, column):
+    aliases = {
+        "source_unit": ("source_unit", "source"),
+        "target_unit": ("target_unit", "target"),
+    }
+    for candidate in aliases.get(column, (column,)):
+        if candidate in headers:
+            return headers.index(candidate)
+    raise ValueError(f"{column!r} is not in list")
+
+
 def create_tag_testfiles(tag_tm, tag_source):
     tm = Workbook()
     try:
@@ -103,8 +114,8 @@ class TagWorkflowTestfilesTests(unittest.TestCase):
         try:
             todo = todo_workbook["to_translate"]
             todo_headers = [cell.value for cell in todo[1]]
-            source_idx = todo_headers.index("source_unit") + 1
-            target_idx = todo_headers.index("target_unit") + 1
+            source_idx = _unit_header_index(todo_headers, "source_unit") + 1
+            target_idx = _unit_header_index(todo_headers, "target_unit") + 1
             todo_sources = [
                 row[source_idx - 1].value for row in todo.iter_rows(min_row=2)
             ]
@@ -152,8 +163,8 @@ class TagWorkflowTestfilesTests(unittest.TestCase):
         try:
             units = pack_workbook["translation_units"]
             headers = [cell.value for cell in units[1]]
-            source_idx = headers.index("source_unit") + 1
-            target_idx = headers.index("target_unit") + 1
+            source_idx = _unit_header_index(headers, "source_unit") + 1
+            target_idx = _unit_header_index(headers, "target_unit") + 1
             for row in units.iter_rows(min_row=2):
                 source_unit = row[source_idx - 1].value
                 if source_unit == "{1>VIP{num1} Pack<2}":

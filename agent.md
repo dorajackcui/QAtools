@@ -14,7 +14,7 @@ Main workflow:
 
 1. Completed historical Excel -> reusable TM workbook.
 2. New source Excel + reusable TM workbook -> TM prefill pack + translator todo.
-3. Translator fills `target_unit` in the todo workbook.
+3. Translator fills `target` in the todo workbook.
 4. Todo workbook -> filled source workbook copy or report workbook.
 
 Protected-token extraction is integrated into the main workflow as an internal
@@ -200,8 +200,8 @@ Known sample stats from `testfiles/`:
   fill command.
 - Entity TM prefill writes only `entity_structures.target_structure` and
   `entity_terms.target_entity`; it does not directly write full todo
-  `target_unit` values.
-- Entity fill writes `target_unit` only when the structure and every referenced
+  `target` values.
+- Entity fill writes `target` only when the structure and every referenced
   entity term have non-empty target values.
 - Entity extraction is strategy-based. The first strategy wraps the existing
   cluster probe logic, but future strategies should plug into

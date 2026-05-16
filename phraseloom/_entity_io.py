@@ -37,8 +37,9 @@ def _read_unit_rows(path: Path, sheet_name: str) -> tuple[list[UnitRow], list[st
             original_index = int(
                 values.get(schema.ORIGINAL_INDEX_COLUMN) or sequence_index
             )
-            if values.get(schema.SOURCE_UNIT_COLUMN):
-                rows.append(UnitRow(original_index, values))
+            unit_row = UnitRow(original_index, values)
+            if unit_row.source_unit:
+                rows.append(unit_row)
         return rows, headers
     finally:
         wb.close()
@@ -90,7 +91,8 @@ def _read_pack_unit_rows(
                 for index, header in enumerate(headers)
                 if header
             }
-            if values.get(schema.SOURCE_UNIT_COLUMN):
+            unit_row = UnitRow(sequence_index, values)
+            if unit_row.source_unit:
                 original_index_value = values.get(schema.ORIGINAL_INDEX_COLUMN)
                 original_index = _parse_original_index(
                     original_index_value,
@@ -118,9 +120,8 @@ def _read_tm_pair_rows(path: Path) -> list[UnitRow]:
                 for index, header in enumerate(headers)
                 if header
             }
-            if values.get(schema.SOURCE_UNIT_COLUMN) and values.get(
-                schema.TARGET_UNIT_COLUMN
-            ):
+            unit_row = UnitRow(sequence_index, values)
+            if unit_row.source_unit and unit_row.target_unit:
                 values[schema.UNIT_ID_COLUMN] = values.get(schema.TM_ID_COLUMN)
                 rows.append(UnitRow(sequence_index, values))
         return rows
@@ -267,8 +268,17 @@ def _append_unit_rows(
             if header == schema.ORIGINAL_INDEX_COLUMN:
                 values.append(row.original_index)
             else:
-                values.append(row.values.get(header))
+                values.append(_unit_row_value(row, header))
         ws.append(values)
+
+
+def _unit_row_value(row: UnitRow, header: str) -> object:
+    if header in schema.UNIT_COLUMN_ALIASES:
+        return row._value(header)
+    for canonical, aliases in schema.UNIT_COLUMN_ALIASES.items():
+        if header in aliases:
+            return row._value(canonical)
+    return row.values.get(header)
 
 
 def _hide_original_index_column(ws) -> None:

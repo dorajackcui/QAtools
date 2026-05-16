@@ -218,20 +218,35 @@ def _header_values(ws, *, fallback: bool = False) -> list[str]:
 
 
 def _optional_column(headers: list[str], column: str) -> int | None:
-    return headers.index(column) if column in headers else None
+    return _column_index(headers, column)
 
 
 def _require_columns(
     headers: list[str], sheet_name: str, required_columns: list[str]
 ) -> dict[str, int]:
-    missing = [column for column in required_columns if column not in headers]
+    indices = {
+        column: _column_index(headers, column)
+        for column in required_columns
+    }
+    missing = [column for column, index in indices.items() if index is None]
     if missing:
         available = ", ".join(column for column in headers if column) or "(none)"
         raise TranslationUnitLoadError(
             f"Sheet {sheet_name!r} is missing required columns: "
             f"{', '.join(missing)}.\nAvailable columns: {available}"
         )
-    return {column: headers.index(column) for column in required_columns}
+    return {column: index for column, index in indices.items() if index is not None}
+
+
+def _column_index(headers: list[str], column: str) -> int | None:
+    for candidate in schema.UNIT_COLUMN_ALIASES.get(column, (column,)):
+        if candidate in headers:
+            return headers.index(candidate)
+    return None
+
+
+def _display_unit_headers(headers: list[str]) -> list[str]:
+    return [schema.UNIT_DISPLAY_COLUMN_NAMES.get(header, header) for header in headers]
 
 
 def _append_schema_version(summary) -> None:
@@ -339,7 +354,7 @@ def _write_output_workbook(
     _append_schema_version(summary)
 
     review = wb.create_sheet(schema.TRANSLATION_UNITS_SHEET)
-    review.append(schema.TRANSLATION_UNIT_COLUMNS)
+    review.append(_display_unit_headers(schema.TRANSLATION_UNIT_COLUMNS))
     for unit in units:
         review.append(
             [
@@ -361,7 +376,7 @@ def _write_output_workbook(
         )
 
     todo = wb.create_sheet(schema.TO_TRANSLATE_SHEET)
-    todo.append(schema.TO_TRANSLATE_COLUMNS)
+    todo.append(_display_unit_headers(schema.TO_TRANSLATE_COLUMNS))
     for unit in _units_in_source_order(units):
         if unit.target_unit:
             continue
@@ -391,7 +406,7 @@ def _write_output_workbook(
             warning = "no translation unit"
             fill_status = "unit_not_found"
         elif not unit.target_unit:
-            warning = "fill target_unit in translation_units, then rerun fill"
+            warning = "fill target in translation_units, then rerun fill"
             fill_status = "missing_target_unit"
         else:
             warning = unit.warning
@@ -427,7 +442,7 @@ def _write_output_workbook(
             warning = "no translation unit"
             fill_status = "unit_not_found"
         elif not unit.target_unit:
-            warning = "fill target_unit in to_translate, then rerun fill"
+            warning = "fill target in to_translate, then rerun fill"
             fill_status = "missing_target_unit"
         else:
             warning = unit.warning
@@ -511,7 +526,7 @@ def _write_to_translate_workbook(
     context_index = _context_column_index(source_headers)
     todo = wb.active
     todo.title = schema.TO_TRANSLATE_SHEET
-    todo.append(schema.TO_TRANSLATE_COLUMNS)
+    todo.append(_display_unit_headers(schema.TO_TRANSLATE_COLUMNS))
     for unit in _units_in_source_order(units):
         if unit.target_unit:
             continue
@@ -532,7 +547,7 @@ def _write_to_translate_workbook(
         )
 
     prefilled = wb.create_sheet(schema.PREFILLED_UNITS_SHEET)
-    prefilled.append(schema.PREFILLED_UNIT_COLUMNS)
+    prefilled.append(_display_unit_headers(schema.PREFILLED_UNIT_COLUMNS))
     for unit in units:
         if not unit.target_unit:
             continue
@@ -622,7 +637,7 @@ def _write_tm_workbook(
     _append_schema_version(summary)
 
     pairs = wb.create_sheet(schema.TM_PAIRS_SHEET)
-    pairs.append(schema.TM_PAIR_COLUMNS)
+    pairs.append(_display_unit_headers(schema.TM_PAIR_COLUMNS))
     for index, unit in enumerate(units, start=1):
         pairs.append(
             [
