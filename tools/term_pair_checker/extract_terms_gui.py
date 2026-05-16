@@ -367,7 +367,7 @@ class ExtractTermsApp(ttk.Frame):
         message_lines.extend(
             [
                 f"术语表条目数: {term_count}",
-                f"问题行数: {problem_count}",
+                f"问题条数: {problem_count}",
                 f"输出文件: {saved_path}",
             ]
         )

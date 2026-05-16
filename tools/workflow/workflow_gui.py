@@ -395,7 +395,7 @@ class WorkflowRunnerApp(ttk.Frame):
         ]
         if summary.ran_term_pair_check:
             lines.append(f"术语表条目数: {summary.term_count}")
-            lines.append(f"术语问题行数: {summary.term_problem_count}")
+            lines.append(f"术语问题条数: {summary.term_problem_count}")
             if term_history_tb_file:
                 lines.append(f"术语历史 TB: {term_history_tb_file}")
         if summary.ran_tag_check:

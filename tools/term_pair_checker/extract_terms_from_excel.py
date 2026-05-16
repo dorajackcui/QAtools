@@ -638,7 +638,6 @@ def merge_term_pair(
 
 def append_problem(
     problem_entries: list[ProblemEntry],
-    problem_row_set: set[int],
     row_index: int,
     problem_source_term: str,
     expected_target_term: str,
@@ -647,9 +646,6 @@ def append_problem(
     source_snapshot: str,
     target_snapshot: str,
 ) -> None:
-    if row_index in problem_row_set:
-        return
-    problem_row_set.add(row_index)
     problem_entries.append(
         ProblemEntry(
             row_index=row_index,
@@ -861,8 +857,8 @@ def process_excel(
     term_mapping = build_initial_term_mapping(history_mapping)
     output_term_mapping: dict[str, RecordedTermPair] = {}
     count_mismatch_rows: dict[int, tuple[list[ExtractedTerm], list[ExtractedTerm]]] = {}
+    conflict_source_terms_by_row: dict[int, set[str]] = {}
     problem_entries: list[ProblemEntry] = []
-    problem_row_set: set[int] = set()
 
     for row_index in range(start_row, worksheet.max_row + 1):
         raw_source_value = worksheet[f"{source_column}{row_index}"].value
@@ -901,9 +897,9 @@ def process_excel(
                 )
                 if not merged:
                     row_has_problem = True
+                    conflict_source_terms_by_row.setdefault(row_index, set()).add(source_term.plain_text)
                     append_problem(
                         problem_entries,
-                        problem_row_set,
                         row_index,
                         source_term.plain_text,
                         existing_term_pair.target_plain_text,
@@ -912,7 +908,6 @@ def process_excel(
                         source_snapshot,
                         target_snapshot,
                     )
-                    break
 
             if not row_has_problem:
                 term_mapping = candidate_term_mapping
@@ -923,11 +918,10 @@ def process_excel(
 
     for row_index in range(start_row, worksheet.max_row + 1):
         if matcher is None:
-            if row_index in count_mismatch_rows and row_index not in problem_row_set:
+            if row_index in count_mismatch_rows:
                 source_terms, target_terms = count_mismatch_rows[row_index]
                 append_problem(
                     problem_entries,
-                    problem_row_set,
                     row_index,
                     format_problem_term(term.plain_text for term in source_terms),
                     format_expected_target_terms(source_terms, term_mapping),
@@ -956,14 +950,11 @@ def process_excel(
             match_mode=PAIR_CHECK_MATCH_MODE,
         )
         add_matched_terms_to_output(output_term_mapping, term_mapping, matched_entries)
-        if row_index in problem_row_set:
-            continue
         if not matched_entries:
             if row_index in count_mismatch_rows:
                 source_terms, target_terms = count_mismatch_rows[row_index]
                 append_problem(
                     problem_entries,
-                    problem_row_set,
                     row_index,
                     format_problem_term(term.plain_text for term in source_terms),
                     format_expected_target_terms(source_terms, term_mapping),
@@ -989,7 +980,6 @@ def process_excel(
                 continue
             append_problem(
                 problem_entries,
-                problem_row_set,
                 row_index,
                 format_problem_term(term.plain_text for term in source_terms),
                 format_expected_target_terms(source_terms, term_mapping),
@@ -1001,15 +991,16 @@ def process_excel(
                 build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                 build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
             )
-            continue
 
+        conflict_source_terms = conflict_source_terms_by_row.get(row_index, set())
         for entry in matched_entries:
+            if entry.source_term in conflict_source_terms:
+                continue
             if text_contains_term(normalized_target_text, entry.normalized_target, match_mode=PAIR_CHECK_MATCH_MODE):
                 continue
 
             append_problem(
                 problem_entries,
-                problem_row_set,
                 row_index,
                 entry.source_term,
                 entry.target_term,
@@ -1020,7 +1011,6 @@ def process_excel(
                 build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                 build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
             )
-            break
 
     term_sheet = rebuild_output_sheet(workbook, worksheet.title, TERM_SHEET_NAME)
     term_sheet["A1"] = "source术语"
@@ -1115,7 +1105,7 @@ def main() -> None:
     if args.history_tb:
         print(f"历史 TB: {Path(args.history_tb).expanduser().resolve()}")
     print(f"术语表条目数: {term_count}")
-    print(f"问题行数: {problem_count}")
+    print(f"问题条数: {problem_count}")
     print(f"输出文件: {output_path}")
 
 

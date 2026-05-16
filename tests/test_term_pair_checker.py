@@ -92,7 +92,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(target_col, "B")
             self.assertEqual(saved_path, expected_output_path.resolve())
             self.assertEqual(term_count, 3)
-            self.assertEqual(problem_count, 2)
+            self.assertEqual(problem_count, 3)
 
             original_workbook = load_workbook(input_path)
             self.assertEqual(original_workbook.sheetnames, ["Data"])
@@ -128,6 +128,13 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["E3"].value, "target术语不匹配：实际术语 - 错误贝塔")
             self.assertEqual(problem_sheet["F3"].value, "第三行复用 <Beta>")
             self.assertEqual(problem_sheet["G3"].value, "第三行复用 <错误贝塔>")
+            self.assertEqual(problem_sheet["A4"].value, 5)
+            self.assertEqual(problem_sheet["B4"].value, "Gamma")
+            self.assertEqual(problem_sheet["C4"].value, "伽马")
+            self.assertEqual(problem_sheet["D4"].value, "本批次新增")
+            self.assertEqual(problem_sheet["E4"].value, "target缺少预期术语")
+            self.assertEqual(problem_sheet["F4"].value, "第四行 [Alpha] 加【Gamma】")
+            self.assertEqual(problem_sheet["G4"].value, "第四行只有 [阿尔法]")
 
     def test_process_excel_dedupes_same_plain_term_with_different_marks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -198,6 +205,83 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["E2"].value, "target缺少预期术语")
             self.assertEqual(problem_sheet["F2"].value, "第三行先出现苹果")
             self.assertEqual(problem_sheet["G2"].value, "第三行先出现banana")
+
+    def test_process_excel_records_count_mismatch_and_missing_target_separately(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "建立 [Alpha]"
+            worksheet["B2"] = "建立 [ALPHA_OK]"
+            worksheet["A3"] = "建立 [Beta]"
+            worksheet["B3"] = "建立 [BETA_OK]"
+            worksheet["A4"] = "复用 [Alpha] and [Beta]"
+            worksheet["B4"] = "复用 [ALPHA_OK] only"
+            workbook.save(input_path)
+
+            _, _, _, saved_path, term_count, problem_count = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                mark_styles=("[]",),
+            )
+
+            self.assertEqual(term_count, 2)
+            self.assertEqual(problem_count, 2)
+
+            result_workbook = load_workbook(saved_path)
+            problem_sheet = result_workbook["问题列"]
+            self.assertEqual(problem_sheet["A2"].value, 4)
+            self.assertEqual(problem_sheet["B2"].value, "Alpha、Beta")
+            self.assertIn("source/target术语数量不一致", str(problem_sheet["E2"].value))
+            self.assertEqual(problem_sheet["A3"].value, 4)
+            self.assertEqual(problem_sheet["B3"].value, "Beta")
+            self.assertEqual(problem_sheet["C3"].value, "BETA_OK")
+            self.assertEqual(problem_sheet["E3"].value, "target缺少预期术语")
+
+    def test_process_excel_records_mismatched_marked_term_and_missing_target_separately(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "建立 [Alpha]"
+            worksheet["B2"] = "建立 [ALPHA_OK]"
+            worksheet["A3"] = "建立 [Beta]"
+            worksheet["B3"] = "建立 [BETA_OK]"
+            worksheet["A4"] = "复用 [Alpha] and Beta"
+            worksheet["B4"] = "复用 [WRONG] and untranslated"
+            workbook.save(input_path)
+
+            _, _, _, saved_path, term_count, problem_count = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                mark_styles=("[]",),
+            )
+
+            self.assertEqual(term_count, 2)
+            self.assertEqual(problem_count, 2)
+
+            result_workbook = load_workbook(saved_path)
+            problem_sheet = result_workbook["问题列"]
+            self.assertEqual(problem_sheet["A2"].value, 4)
+            self.assertEqual(problem_sheet["B2"].value, "Alpha")
+            self.assertEqual(problem_sheet["C2"].value, "ALPHA_OK")
+            self.assertEqual(problem_sheet["E2"].value, "target术语不匹配：实际术语 - WRONG")
+            self.assertEqual(problem_sheet["A3"].value, 4)
+            self.assertEqual(problem_sheet["B3"].value, "Beta")
+            self.assertEqual(problem_sheet["C3"].value, "BETA_OK")
+            self.assertEqual(problem_sheet["E3"].value, "target缺少预期术语")
 
     def test_process_excel_treats_marked_target_as_aligned_for_unmarked_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

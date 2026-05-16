@@ -98,7 +98,7 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
 - source / target 列
 - mark 类型
 - 术语表条目数
-- 问题行数
+- 问题条数
 - 输出文件路径
 
 ### 2. 术语表命中检查
