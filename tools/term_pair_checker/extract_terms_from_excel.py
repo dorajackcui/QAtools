@@ -15,11 +15,13 @@ from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string, get_column_letter
 
 from tools.term_matching import (
+    SUSPECTED_PLURAL_VARIANT_LABEL,
     TermMappingEntry,
     build_matcher,
     find_row_terms,
     normalize_text,
-    text_contains_term,
+    term_has_expected_target,
+    term_has_simple_s_plural_variant,
 )
 
 
@@ -716,12 +718,14 @@ def lookup_term_source(source_term: str, term_mapping: dict[str, RecordedTermPai
 
 def row_terms_are_aligned(
     matched_entries: list[TermMappingEntry],
+    normalized_source_text: str,
     normalized_target_text: str,
 ) -> bool:
     for entry in matched_entries:
-        if not text_contains_term(
+        if not term_has_expected_target(
+            normalized_source_text,
             normalized_target_text,
-            entry.normalized_target,
+            entry,
             match_mode=PAIR_CHECK_MATCH_MODE,
         ):
             return False
@@ -732,11 +736,12 @@ def count_mismatch_is_resolved(
     source_terms: list[ExtractedTerm],
     target_terms: list[ExtractedTerm],
     matched_entries: list[TermMappingEntry],
+    normalized_source_text: str,
     normalized_target_text: str,
 ) -> bool:
     if not matched_entries:
         return False
-    if not row_terms_are_aligned(matched_entries, normalized_target_text):
+    if not row_terms_are_aligned(matched_entries, normalized_source_text, normalized_target_text):
         return False
 
     matched_source_terms = {entry.source_term for entry in matched_entries}
@@ -968,6 +973,7 @@ def process_excel(
                 )
             continue
 
+        normalized_source_text = normalize_text(source_text, case_sensitive=PAIR_CHECK_CASE_SENSITIVE)
         normalized_target_text = normalize_text(target_text, case_sensitive=PAIR_CHECK_CASE_SENSITIVE)
         if row_index in count_mismatch_rows:
             source_terms, target_terms = count_mismatch_rows[row_index]
@@ -975,6 +981,7 @@ def process_excel(
                 source_terms,
                 target_terms,
                 matched_entries,
+                normalized_source_text,
                 normalized_target_text,
             ):
                 continue
@@ -996,8 +1003,22 @@ def process_excel(
         for entry in matched_entries:
             if entry.source_term in conflict_source_terms:
                 continue
-            if text_contains_term(normalized_target_text, entry.normalized_target, match_mode=PAIR_CHECK_MATCH_MODE):
+            if term_has_expected_target(
+                normalized_source_text,
+                normalized_target_text,
+                entry,
+                match_mode=PAIR_CHECK_MATCH_MODE,
+            ):
                 continue
+
+            problem_description = "target缺少预期术语"
+            if term_has_simple_s_plural_variant(
+                normalized_source_text,
+                normalized_target_text,
+                entry,
+                match_mode=PAIR_CHECK_MATCH_MODE,
+            ):
+                problem_description = SUSPECTED_PLURAL_VARIANT_LABEL
 
             append_problem(
                 problem_entries,
@@ -1005,9 +1026,7 @@ def process_excel(
                 entry.source_term,
                 entry.target_term,
                 lookup_term_source(entry.source_term, term_mapping),
-                (
-                    "target缺少预期术语"
-                ),
+                problem_description,
                 build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                 build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
             )

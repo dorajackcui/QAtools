@@ -129,6 +129,19 @@ class MatchingTests(unittest.TestCase):
             )
             self.assertEqual([entry.source_term for entry in matches], ["API key"])
 
+    def test_explicit_plural_term_wins_over_singular_plural_variant(self) -> None:
+        class FallbackMatcher(list):
+            pass
+
+        entries = self.create_entries([("shards", "ssss"), ("shard", "éclat")])
+        matches = find_row_terms(
+            "Collect shards.",
+            FallbackMatcher(entries),
+            case_sensitive=False,
+            match_mode="hybrid-boundary",
+        )
+        self.assertEqual([entry.source_term for entry in matches], ["shards"])
+
     def test_hybrid_boundary_does_not_match_rain_inside_training(self) -> None:
         class FallbackMatcher(list):
             pass
@@ -406,6 +419,131 @@ class ProcessExcelTests(unittest.TestCase):
                 match_mode="substring",
             )
             self.assertEqual(substring_summary.problem_count, 0)
+
+    def test_simple_s_plural_source_and_target_are_treated_as_aligned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            glossary_path = Path(tmp_dir) / "glossary.xlsx"
+            data_path = Path(tmp_dir) / "data.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "shard"
+            worksheet["B2"] = "éclat"
+            workbook.save(glossary_path)
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Collect shards."
+            worksheet["B2"] = "Collectez des éclats."
+            workbook.save(data_path)
+
+            summary = process_excel(
+                glossary_file=glossary_path,
+                data_file=data_path,
+                glossary_source_column="A",
+                glossary_target_column="B",
+                data_source_column="A",
+                data_target_column="B",
+                start_row=2,
+                match_mode="hybrid-boundary",
+            )
+
+            self.assertEqual(summary.matched_rows, 1)
+            self.assertEqual(summary.problem_count, 0)
+
+            result_workbook = load_workbook(summary.output_path)
+            self.assertEqual(result_workbook["术语命中问题"].max_row, 1)
+
+    def test_target_only_simple_s_plural_is_reported_as_suspected_plural_variant(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            glossary_path = Path(tmp_dir) / "glossary.xlsx"
+            data_path = Path(tmp_dir) / "data.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "shard"
+            worksheet["B2"] = "éclat"
+            workbook.save(glossary_path)
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Collect a shard."
+            worksheet["B2"] = "Collectez des éclats."
+            workbook.save(data_path)
+
+            summary = process_excel(
+                glossary_file=glossary_path,
+                data_file=data_path,
+                glossary_source_column="A",
+                glossary_target_column="B",
+                data_source_column="A",
+                data_target_column="B",
+                start_row=2,
+                match_mode="hybrid-boundary",
+            )
+
+            self.assertEqual(summary.problem_count, 1)
+
+            result_workbook = load_workbook(summary.output_path)
+            problem_sheet = result_workbook["术语命中问题"]
+            self.assertEqual(problem_sheet["B2"].value, "术语未按术语表翻译：疑似复数变体")
+
+    def test_plural_signature_variant_is_reported_as_suspected_plural_not_aligned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            glossary_path = Path(tmp_dir) / "glossary.xlsx"
+            data_path = Path(tmp_dir) / "data.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "EXP Candy"
+            worksheet["B2"] = "Bonbon Exp."
+            worksheet["A3"] = "Gacha Coin"
+            worksheet["B3"] = "Pièce de gacha"
+            workbook.save(glossary_path)
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Open EXP Candies."
+            worksheet["B2"] = "Ouvrir Bonbons Exp."
+            worksheet["A3"] = "Use Gacha Coins."
+            worksheet["B3"] = "Utiliser des Pièces de gacha."
+            workbook.save(data_path)
+
+            summary = process_excel(
+                glossary_file=glossary_path,
+                data_file=data_path,
+                glossary_source_column="A",
+                glossary_target_column="B",
+                data_source_column="A",
+                data_target_column="B",
+                start_row=2,
+                match_mode="hybrid-boundary",
+            )
+
+            self.assertEqual(summary.matched_rows, 2)
+            self.assertEqual(summary.problem_count, 2)
+
+            result_workbook = load_workbook(summary.output_path)
+            problem_sheet = result_workbook["术语命中问题"]
+            self.assertEqual(problem_sheet["B2"].value, "术语未按术语表翻译：疑似复数变体")
+            self.assertEqual(problem_sheet["C2"].value, "EXP Candy")
+            self.assertEqual(problem_sheet["B3"].value, "术语未按术语表翻译：疑似复数变体")
+            self.assertEqual(problem_sheet["C3"].value, "Gacha Coin")
 
 
 if __name__ == "__main__":
