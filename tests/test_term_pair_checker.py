@@ -37,6 +37,18 @@ class ExtractTermsTests(unittest.TestCase):
         )
         self.assertEqual(extract_terms(text, mark_styles=("<>",)), ["<苹果>"])
 
+    def test_extract_terms_ignores_numbered_tag_boundaries_between_marked_terms(self) -> None:
+        text = (
+            "3. You can obtain corresponding faction crystals by challenging the "
+            "{1>[Will] Tower<2}, {3>[Order] Tower<4}, {5>[Origin] Tower<6}, "
+            "and {7>Divinity [Tower]<8} in Dragonspiral."
+        )
+
+        self.assertEqual(
+            extract_terms(text, mark_styles=("[]", "<>")),
+            ["[Will]", "[Order]", "[Origin]", "[Tower]"],
+        )
+
     def test_extract_terms_supports_custom_json_exclusion_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             config_path = Path(tmp_dir) / "custom_exclusions.json"
