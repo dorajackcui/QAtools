@@ -33,7 +33,8 @@ class ExtractTermsTests(unittest.TestCase):
     def test_extract_terms_uses_default_json_exclusions_for_false_positive_tags(self) -> None:
         text = (
             "样式 </> <br/> <i> <img src='itemsmall_%s'/> <size={c}> "
-            "<color=red> <outline color=blue> <2}{3> <6}{7> 真术语 <苹果>"
+            "<a href='https://example.com'> <color=red> <outline color=blue> "
+            "<2}{3> <6}{7> 真术语 <苹果>"
         )
         self.assertEqual(extract_terms(text, mark_styles=("<>",)), ["<苹果>"])
 
@@ -47,6 +48,14 @@ class ExtractTermsTests(unittest.TestCase):
         self.assertEqual(
             extract_terms(text, mark_styles=("[]", "<>")),
             ["[Will]", "[Order]", "[Origin]", "[Tower]"],
+        )
+
+    def test_extract_terms_ignores_short_and_symbol_only_pseudo_terms(self) -> None:
+        text = "<a> [b] 【Z】 [123] 【+10%】 [火] <A1> [HP]"
+
+        self.assertEqual(
+            extract_terms(text, mark_styles=("[]", "<>", "【】")),
+            ["[火]", "<A1>", "[HP]"],
         )
 
     def test_extract_terms_supports_custom_json_exclusion_config(self) -> None:

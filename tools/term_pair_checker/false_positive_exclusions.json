@@ -5,6 +5,7 @@
     "^br\\s*/$",
     "^i$",
     "^img\\b.*$",
+    "^a\\s+href\\s*=.*$",
     "^color\\s*=.*$",
     "^outline\\s+color\\s*=.*$",
     "^size\\s*=.*$",

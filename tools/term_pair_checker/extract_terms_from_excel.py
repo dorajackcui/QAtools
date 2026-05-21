@@ -32,6 +32,7 @@ DEFAULT_MARK_STYLES = ("【】",)
 DEFAULT_EXCLUSION_CONFIG_NAME = "false_positive_exclusions.json"
 PAIR_CHECK_MATCH_MODE = "hybrid-boundary"
 PAIR_CHECK_CASE_SENSITIVE = False
+SINGLE_ASCII_LETTER_PATTERN = re.compile(r"^[A-Za-z]$")
 NUMERIC_TAG_BOUNDARY_SPAN_PATTERN = re.compile(r"^\d+\}.*\{\d+$", re.DOTALL)
 HISTORY_EMPTY_ROW_STOP_THRESHOLD = 1000
 TERM_SOURCE_HISTORY = "历史TB"
@@ -202,6 +203,10 @@ def should_exclude_term(
     plain_text: str,
     exclusion_regexes: Iterable[re.Pattern[str]],
 ) -> bool:
+    if SINGLE_ASCII_LETTER_PATTERN.fullmatch(plain_text):
+        return True
+    if not any(character.isalpha() for character in plain_text):
+        return True
     if NUMERIC_TAG_BOUNDARY_SPAN_PATTERN.fullmatch(plain_text):
         return True
     return any(
