@@ -39,11 +39,16 @@ htmlcov/
 *.swp
 *.swo
 
-# Project-generated Excel outputs
-*_term_pairs.xlsx
-*_glossary_checked.xlsx
-*_split_lines.xlsx
-
-# Sample Excel files
-sample*.xlsx
-*_sample.xlsx
+# Excel files
+*.[xX][lL][sS]
+*.[xX][lL][sS][xX]
+*.[xX][lL][sS][mM]
+*.[xX][lL][sS][bB]
+*.[xX][lL][tT]
+*.[xX][lL][tT][xX]
+*.[xX][lL][tT][mM]
+*.[xX][lL][aA]
+*.[xX][lL][aA][mM]
+*.[xX][lL][lL]
+*.[xX][lL][wW]
+~$*.[xX][lL][sS]*
