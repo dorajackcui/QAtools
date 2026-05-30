@@ -51,6 +51,14 @@ class ExtractTokensTests(unittest.TestCase):
         )
         self.assertEqual(extract_tokens(text, token_types=("brace",)), ["{name}"])
 
+    def test_extract_tokens_supports_square_color_tags(self) -> None:
+        text = "保留 [color=red]、[color = #fff] 和 [/color]，忽略 [stage1]"
+
+        self.assertEqual(
+            extract_tokens(text, token_types=("square_color",)),
+            ["[color=red]", "[color = #fff]", "[/color]"],
+        )
+
 
 class ProcessExcelTests(unittest.TestCase):
     def create_workbook(self, path: Path) -> None:
@@ -92,6 +100,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(summary.total_rows_checked, 6)
             self.assertEqual(summary.rows_with_selected_tokens, 5)
             self.assertEqual(summary.angle_rows, 2)
+            self.assertEqual(summary.square_color_rows, 0)
             self.assertEqual(summary.brace_rows, 3)
             self.assertEqual(summary.newline_rows, 1)
             self.assertEqual(summary.numeric_rows, 0)
@@ -129,7 +138,7 @@ class ProcessExcelTests(unittest.TestCase):
             summary_sheet = workbook["检查汇总"]
             summary_values = {
                 summary_sheet.cell(row_index, 1).value: summary_sheet.cell(row_index, 2).value
-                for row_index in range(2, 15)
+                for row_index in range(2, 16)
             }
             self.assertEqual(summary_values["检查工作表"], "Data")
             self.assertEqual(summary_values["source列"], "A")
@@ -139,6 +148,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(summary_values["总行数"], 6)
             self.assertEqual(summary_values["命中检查类型行数"], 5)
             self.assertEqual(summary_values["含尖括号tag行数"], 2)
+            self.assertEqual(summary_values["含方括号color tag行数"], 0)
             self.assertEqual(summary_values["含花括号placeholder行数"], 3)
             self.assertEqual(summary_values[r"含\n mark行数"], 1)
             self.assertEqual(summary_values["含数字tag行数"], 0)
@@ -160,6 +170,7 @@ class ProcessExcelTests(unittest.TestCase):
 
             self.assertEqual(summary.rows_with_selected_tokens, 2)
             self.assertEqual(summary.angle_rows, 2)
+            self.assertEqual(summary.square_color_rows, 0)
             self.assertEqual(summary.brace_rows, 0)
             self.assertEqual(summary.newline_rows, 0)
             self.assertEqual(summary.numeric_rows, 0)
@@ -186,6 +197,7 @@ class ProcessExcelTests(unittest.TestCase):
 
             self.assertEqual(summary.rows_with_selected_tokens, 1)
             self.assertEqual(summary.angle_rows, 0)
+            self.assertEqual(summary.square_color_rows, 0)
             self.assertEqual(summary.brace_rows, 0)
             self.assertEqual(summary.newline_rows, 1)
             self.assertEqual(summary.numeric_rows, 0)
@@ -219,6 +231,7 @@ class ProcessExcelTests(unittest.TestCase):
 
             self.assertEqual(summary.rows_with_selected_tokens, 1)
             self.assertEqual(summary.brace_rows, 0)
+            self.assertEqual(summary.square_color_rows, 0)
             self.assertEqual(summary.numeric_rows, 1)
             self.assertEqual(summary.problem_rows, 1)
             self.assertEqual(summary.problem_count, 1)
@@ -228,6 +241,36 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["B2"].value, "数字tag不一致")
             self.assertIn("target缺少=<3}", str(problem_sheet["C2"].value))
             self.assertIn("target多出=<4}", str(problem_sheet["C2"].value))
+
+    def test_process_excel_reports_square_color_tag_mismatches(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "颜色 [color=red]文本[/color]"
+            worksheet["B2"] = "颜色 [color=red]文本"
+            workbook.save(input_path)
+
+            summary = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                token_types=("square_color",),
+            )
+
+            self.assertEqual(summary.rows_with_selected_tokens, 1)
+            self.assertEqual(summary.square_color_rows, 1)
+            self.assertEqual(summary.problem_rows, 1)
+            self.assertEqual(summary.problem_count, 1)
+
+            workbook = load_workbook(summary.output_path)
+            problem_sheet = workbook["标签占位问题"]
+            self.assertEqual(problem_sheet["B2"].value, "方括号color tag不一致")
+            self.assertIn("target缺少=[/color]", str(problem_sheet["C2"].value))
 
 
 if __name__ == "__main__":

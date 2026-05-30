@@ -58,6 +58,7 @@ Tag 检查用于逐行比较 source / target 中 tag、placeholder 和 mark toke
 | 内部类型 | UI 名称 | 可识别形式 |
 | --- | --- | --- |
 | `angle` | `<...> tag` | `<...>` |
+| `square_color` | `[color=...] tag` | `[color=...]`、`[/color]` |
 | `brace` | `{...} placeholder` | `{name}`、`{count}` 等普通花括号 placeholder |
 | `newline` | `\n mark` | 字面量 `\n` |
 | `numeric` | 数字 tag | `{1}`、`{2>`、`<3}` |
@@ -66,14 +67,15 @@ Tag 检查用于逐行比较 source / target 中 tag、placeholder 和 mark toke
 
 | 入口 | 默认检查类型 |
 | --- | --- |
-| CLI / `process_excel()` 未显式传参 | `angle`、`brace`、`newline`、`numeric` |
-| Tag 检查 GUI | `angle`、`brace`、`newline`、`numeric` |
-| Workflow GUI | `angle`、`brace`、`newline`、`numeric` |
+| CLI / `process_excel()` 未显式传参 | `angle`、`square_color`、`brace`、`newline`、`numeric` |
+| Tag 检查 GUI | `angle`、`square_color`、`brace`、`newline`、`numeric` |
+| Workflow GUI | `angle`、`square_color`、`brace`、`newline`、`numeric` |
 
 ### Tag token 过滤
 
 - `angle` 默认不会检查所有 `<...>`，而是读取 `tools/term_pair_checker/false_positive_exclusions.json`，只保留配置中定义的真实 tag 模式。
 - 这份 JSON 在术语对检查里用于排除 `<>` 伪术语；在 Tag 检查里反向用于保留真正需要校验的 `<...>` tag。
+- `square_color` 只检查 `[color=...]` 和 `[/color]`，不会把普通 `[stage1]` 或术语 mark `[]` 都当成 tag。
 - `{1}`、`{2>...<3}` 这类数字 protected marker 不会作为普通 `{...}` placeholder 检查，会交给 `numeric` 类型处理。
 - 普通文本里的 `<apple>` 默认不会作为 tag 检查。
 

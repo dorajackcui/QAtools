@@ -24,9 +24,15 @@
 - `tools/tag_placeholder_checker/check_tags_and_placeholders.py`
   - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
   - 常用可选：`-s/--sheet`、`--start-row`、`--token-type`、`--angle-config`、`-o/--output`
+- `tools/chinese_target_checker/check_chinese_target.py`
+  - 必填：`input_file`、`-t/--target-column`
+  - 常用可选：`-s/--sheet`、`-r/--result-column`、`--start-row`、`--problem-sheet`、`-o/--output`
 - `tools/excel_line_splitter/split_excel_lines.py`
   - 必填：`input_file`、`-c/--source-column`、`-r/--result-column`
   - 常用可选：`-s/--sheet`、`--start-row`、`-o/--output`
+- `tools/french_nbsp_restorer/restore_french_nbsp.py`
+  - 必填：`input_file`、`-t/--target-column`
+  - 常用可选：`-s/--sheet`、`-r/--result-column`、`--start-row`、`-o/--output`
 
 ## 推荐命令模板
 
@@ -187,6 +193,7 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
   -t B \
   --start-row 2 \
   --token-type angle \
+  --token-type square_color \
   --token-type brace \
   --token-type newline \
   --token-type numeric \
@@ -197,6 +204,7 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
 
 - `<...>` 默认不是全量检查，而是按 `tools/term_pair_checker/false_positive_exclusions.json` 中的模式识别真正需要校验的 tag
 - 这份默认模式和术语配对工具共用同一个文件，因为那批被 `<>` mark 排除的内容正是 tag 检查应该关注的对象
+- 方括号 color tag 会检查 `[color=...]` 和 `[/color]`
 - 数字 tag 会按 `{n}`、`{n>`、`<n}` 单独检查，例如 `{1}{2>Glace du Néant<3}` 会提取为 `{1}`、`{2>`、`<3}`，不会作为普通 `{...}` placeholder 检查
 
 如果只检查 `<...>` tag：
@@ -224,10 +232,91 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
 - 总行数
 - 命中检查类型行数
 - 含尖括号 tag 行数
+- 含方括号 color tag 行数
 - 含花括号 placeholder 行数
 - 含 `\n` mark 行数
 - 含数字 tag 行数
 - 问题行数 / 问题条数
+- 输出文件路径
+
+### 5. Target 中文检查
+
+默认写入 target 右侧一列：
+
+```bash
+python3 tools/chinese_target_checker/check_chinese_target.py ./input.xlsx \
+  -s Sheet1 \
+  -t B \
+  --start-row 2 \
+  -o ./artifacts/input_chinese_target_checked.xlsx
+```
+
+如果希望指定结果列，并额外生成问题工作表：
+
+```bash
+python3 tools/chinese_target_checker/check_chinese_target.py ./input.xlsx \
+  -s Sheet1 \
+  -t B \
+  -r C \
+  --start-row 2 \
+  --problem-sheet \
+  -o ./artifacts/input_chinese_target_checked.xlsx
+```
+
+说明：
+
+- 结果列表头为 `中文检查`。
+- 含中文字符的 target 行会写入 `含中文`。
+- 未命中的行留空。
+- `--problem-sheet` 会新增 `中文检查问题`，列出行号、target 文本和匹配到的中文字符。
+
+标准输出会打印：
+
+- 工作表名
+- target 列 / 结果列
+- 开始行
+- 处理行数
+- 含中文行数
+- 问题工作表状态
+- 输出文件路径
+
+### 6. 法语 NBSP 恢复
+
+直接修复 target 列：
+
+```bash
+python3 tools/french_nbsp_restorer/restore_french_nbsp.py ./input.xlsx \
+  -s Sheet1 \
+  -t B \
+  --start-row 2 \
+  -o ./artifacts/input_french_nbsp_restored.xlsx
+```
+
+如果希望保留原 target，并把修复后的完整译文写入另一列：
+
+```bash
+python3 tools/french_nbsp_restorer/restore_french_nbsp.py ./input.xlsx \
+  -s Sheet1 \
+  -t B \
+  -r C \
+  --start-row 2 \
+  -o ./artifacts/input_french_nbsp_restored.xlsx
+```
+
+说明：
+
+- 会恢复 `;`、`:`、`?`、`!` 前的 NBSP。
+- 会恢复 `«` 后和 `»` 前的 NBSP。
+- 指定 `-r/--result-column` 后，不需要修复的 target 也会复制到结果列。
+- 不会改写 URL 内标点和 `12:30` 这类时间冒号。
+
+标准输出会打印：
+
+- 工作表名
+- target 列 / 结果列
+- 开始行
+- 处理行数
+- 修复行数
 - 输出文件路径
 
 ## Agent 调用注意事项
@@ -239,4 +328,6 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
   - `<原文件名>_term_pairs.xlsx`
   - `<原文件名>_glossary_checked.xlsx`
   - `<原文件名>_tag_placeholder_checked.xlsx`
+  - `<原文件名>_chinese_target_checked.xlsx`
   - `<原文件名>_split_lines.xlsx`
+  - `<原文件名>_french_nbsp_restored.xlsx`

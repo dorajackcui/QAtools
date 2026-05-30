@@ -7,7 +7,9 @@ from unittest.mock import patch
 
 from openpyxl import Workbook
 
+from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
 from tools.excel_line_splitter.split_excel_lines_gui import SplitExcelLinesApp
+from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
 from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
 from tools.term_glossary_checker.check_terms_against_glossary_gui import TermGlossaryCheckerApp
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
@@ -177,6 +179,26 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.sheet_combobox = FakeCombobox()
         return app
 
+    def build_french_nbsp_restorer_app(self, input_path: Path) -> FrenchNbspRestorerApp:
+        app = FrenchNbspRestorerApp.__new__(FrenchNbspRestorerApp)
+        app.input_file_var = FakeVar(str(input_path))
+        app.output_file_var = FakeVar("")
+        app.sheet_var = FakeVar("")
+        app.target_column_var = FakeVar("B")
+        app.result_column_var = FakeVar("")
+        app.sheet_combobox = FakeCombobox()
+        return app
+
+    def build_chinese_target_checker_app(self, input_path: Path) -> ChineseTargetCheckerApp:
+        app = ChineseTargetCheckerApp.__new__(ChineseTargetCheckerApp)
+        app.input_file_var = FakeVar(str(input_path))
+        app.output_file_var = FakeVar("")
+        app.sheet_var = FakeVar("")
+        app.target_column_var = FakeVar("B")
+        app.result_column_var = FakeVar("")
+        app.sheet_combobox = FakeCombobox()
+        return app
+
     def build_workflow_app(self, input_path: Path) -> WorkflowRunnerApp:
         app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
         app.input_file_var = FakeVar(str(input_path))
@@ -320,6 +342,42 @@ class GuiSheetSelectionTests(unittest.TestCase):
             app.handle_sheet_selected(show_error=False)
 
             self.assertEqual(app.source_column_var.get(), "A")
+            self.assertEqual(app.target_column_var.get(), "B")
+
+    def test_french_nbsp_restorer_refresh_populates_sheet_choices_and_detects_target_column(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "nbsp.xlsx"
+            self.create_tag_checker_workbook(workbook_path)
+            app = self.build_french_nbsp_restorer_app(workbook_path)
+
+            app.refresh_sheet_choices(show_error=False)
+
+            self.assertEqual(app.sheet_combobox["values"], ("Tags", "Archive"))
+            self.assertEqual(app.sheet_var.get(), "Tags")
+            self.assertEqual(app.target_column_var.get(), "F")
+
+    def test_chinese_target_checker_refresh_populates_sheet_choices_and_detects_target_column(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "chinese.xlsx"
+            self.create_tag_checker_workbook(workbook_path)
+            app = self.build_chinese_target_checker_app(workbook_path)
+
+            app.refresh_sheet_choices(show_error=False)
+
+            self.assertEqual(app.sheet_combobox["values"], ("Tags", "Archive"))
+            self.assertEqual(app.sheet_var.get(), "Tags")
+            self.assertEqual(app.target_column_var.get(), "F")
+
+    def test_french_nbsp_restorer_switching_sheet_redetects_target_column(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "nbsp.xlsx"
+            self.create_tag_checker_workbook(workbook_path)
+            app = self.build_french_nbsp_restorer_app(workbook_path)
+
+            app.refresh_sheet_choices(show_error=False)
+            app.sheet_var.set("Archive")
+            app.handle_sheet_selected(show_error=False)
+
             self.assertEqual(app.target_column_var.get(), "B")
 
     def test_workflow_refresh_populates_sheet_choices_and_detects_columns(self) -> None:

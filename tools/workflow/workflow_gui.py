@@ -38,6 +38,7 @@ class WorkflowRunnerApp(ttk.Frame):
             "<>": tk.BooleanVar(value=True),
         }
         self.angle_var = tk.BooleanVar(value=True)
+        self.square_color_var = tk.BooleanVar(value=True)
         self.brace_var = tk.BooleanVar(value=True)
         self.newline_var = tk.BooleanVar(value=True)
         self.numeric_var = tk.BooleanVar(value=True)
@@ -145,14 +146,17 @@ class WorkflowRunnerApp(ttk.Frame):
         ttk.Checkbutton(tag_type_frame, text="<...> tag", variable=self.angle_var).grid(
             row=0, column=0, sticky="w"
         )
-        ttk.Checkbutton(tag_type_frame, text="{...} placeholder", variable=self.brace_var).grid(
+        ttk.Checkbutton(tag_type_frame, text="[color=...] tag", variable=self.square_color_var).grid(
             row=0, column=1, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(tag_type_frame, text="\\n mark", variable=self.newline_var).grid(
+        ttk.Checkbutton(tag_type_frame, text="{...} placeholder", variable=self.brace_var).grid(
             row=0, column=2, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(tag_type_frame, text="数字tag", variable=self.numeric_var).grid(
+        ttk.Checkbutton(tag_type_frame, text="\\n mark", variable=self.newline_var).grid(
             row=0, column=3, sticky="w", padx=(12, 0)
+        )
+        ttk.Checkbutton(tag_type_frame, text="数字tag", variable=self.numeric_var).grid(
+            row=0, column=4, sticky="w", padx=(12, 0)
         )
 
         ttk.Button(self, text="开始执行 Workflow", command=self.run_selected_tasks).grid(
@@ -317,6 +321,8 @@ class WorkflowRunnerApp(ttk.Frame):
         token_types: list[str] = []
         if self.angle_var.get():
             token_types.append("angle")
+        if self.square_color_var.get():
+            token_types.append("square_color")
         if self.brace_var.get():
             token_types.append("brace")
         if self.newline_var.get():

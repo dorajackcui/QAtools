@@ -6,7 +6,9 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
+from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
 from tools.excel_line_splitter.split_excel_lines_gui import SplitExcelLinesApp
+from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
 from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
 from tools.term_glossary_checker.check_terms_against_glossary_gui import TermGlossaryCheckerApp
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
@@ -31,7 +33,7 @@ class ToolshubApp:
         ).grid(row=0, column=0, sticky="w")
         ttk.Label(
             frame,
-            text="统一入口管理 workflow 编排、术语对检查、术语表命中检查、tag检查和分行拆列。",
+            text="统一入口管理 workflow 编排、术语对检查、术语表命中检查、tag检查、target中文检查、分行拆列和法语 NBSP 恢复。",
         ).grid(row=1, column=0, sticky="w", pady=(4, 10))
 
         notebook = ttk.Notebook(frame)
@@ -41,13 +43,17 @@ class ToolshubApp:
         term_pair_tab = ExtractTermsApp(notebook)
         glossary_tab = TermGlossaryCheckerApp(notebook)
         tag_checker_tab = TagPlaceholderCheckerApp(notebook)
+        chinese_target_tab = ChineseTargetCheckerApp(notebook)
         splitter_tab = SplitExcelLinesApp(notebook)
+        french_nbsp_tab = FrenchNbspRestorerApp(notebook)
 
         notebook.add(workflow_tab, text="Workflow编排")
         notebook.add(term_pair_tab, text="术语对检查")
         notebook.add(glossary_tab, text="术语表命中检查")
         notebook.add(tag_checker_tab, text="Tag检查")
+        notebook.add(chinese_target_tab, text="Target中文检查")
         notebook.add(splitter_tab, text="分行拆列")
+        notebook.add(french_nbsp_tab, text="法语NBSP恢复")
 
         frame.columnconfigure(0, weight=1)
 

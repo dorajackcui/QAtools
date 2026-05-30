@@ -98,8 +98,8 @@ python3 tools/excel_line_splitter/split_excel_lines_gui.py
 ### 4. Tag / Placeholder 检查
 
 - 目录：`tools/tag_placeholder_checker`
-- 用途：逐行检查双语 Excel 中 `source` / `target` 的 `<...>`、`{...}`、`\n` 和数字 tag 是否一致
-- 检查类型：支持 `<...>` tag、`{...}` placeholder、`\n` mark 与 `{n}` / `{n>` / `<n}` 数字 tag，可单独或组合检查
+- 用途：逐行检查双语 Excel 中 `source` / `target` 的 `<...>`、`[color=...]` / `[/color]`、`{...}`、`\n` 和数字 tag 是否一致
+- 检查类型：支持 `<...>` tag、`[color=...]` / `[/color]` tag、`{...}` placeholder、`\n` mark 与 `{n}` / `{n>` / `<n}` 数字 tag，可单独或组合检查
 - `<...>` 识别：默认直接复用 `tools/term_pair_checker/false_positive_exclusions.json` 识别真正需要校验的 tag，避免维护两份规则
 - GUI 增强：自动读取工作表列表，并尝试自动识别 `source` / `target` 列
 - 输出方式：生成新的结果 Excel，不覆盖原文件
@@ -125,6 +125,58 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders_gui.py
 
 详情见 `tools/tag_placeholder_checker/README.md`。
 
+### 5. Target 中文检查
+
+- 目录：`tools/chinese_target_checker`
+- 用途：检查 Excel `target` 列是否包含中文字符
+- 输出方式：默认在 `target` 右侧一列写入 `中文检查` 标记列，含中文行标记为 `含中文`
+- 可选问题表：可生成 `中文检查问题` 工作表，列出命中行和匹配到的中文字符
+- CLI：
+
+```bash
+python3 tools/chinese_target_checker/check_chinese_target.py input.xlsx \
+  -s Sheet1 \
+  -t B \
+  --start-row 2 \
+  --problem-sheet \
+  -o output_chinese_target_checked.xlsx
+```
+
+- GUI：
+
+```bash
+python3 tools/chinese_target_checker/check_chinese_target_gui.py
+```
+
+详情见 `tools/chinese_target_checker/README.md`。
+
+### 6. 法语 NBSP 恢复
+
+- 目录：`tools/french_nbsp_restorer`
+- 用途：恢复 Excel target 列中的法语 non-breaking space（NBSP）
+- 恢复规则：`;`、`:`、`?`、`!` 前，以及 `«` / `»` 内侧
+- 保护规则：不会改写 URL 内标点和 `12:30` 这类时间冒号
+- 输出方式：生成新的结果 Excel，不覆盖原文件
+- 写入方式：默认直接修复 target 列；也可以指定结果列，写入修复后的完整 target，未改动行也会复制过去
+- CLI：
+
+```bash
+python3 tools/french_nbsp_restorer/restore_french_nbsp.py input.xlsx \
+  -s Sheet1 \
+  -t B \
+  -r C \
+  --start-row 2 \
+  -o output_french_nbsp_restored.xlsx
+```
+
+- GUI：
+
+```bash
+python3 tools/french_nbsp_restorer/restore_french_nbsp_gui.py
+```
+
+详情见 `tools/french_nbsp_restorer/README.md`。
+
 ## 依赖安装
 
 ```bash
@@ -138,6 +190,8 @@ pip install -r requirements.txt
 - 术语表命中检查详细说明：`tools/term_glossary_checker/README.md`
 - Tag / Placeholder 检查详细说明：`tools/tag_placeholder_checker/README.md`
 - Excel 分行拆列详细说明：`tools/excel_line_splitter/README.md`
+- Target 中文检查详细说明：`tools/chinese_target_checker/README.md`
+- 法语 NBSP 恢复详细说明：`tools/french_nbsp_restorer/README.md`
 
 ## 统一 GUI 入口
 

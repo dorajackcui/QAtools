@@ -17,17 +17,19 @@ from openpyxl.utils import column_index_from_string
 
 PROBLEM_SHEET_NAME = "标签占位问题"
 SUMMARY_SHEET_NAME = "检查汇总"
-SUPPORTED_TOKEN_TYPES = ("angle", "brace", "newline", "numeric")
+SUPPORTED_TOKEN_TYPES = ("angle", "square_color", "brace", "newline", "numeric")
 DEFAULT_TOKEN_TYPES = SUPPORTED_TOKEN_TYPES
 DEFAULT_ANGLE_CONFIG_NAME = "tools/term_pair_checker/false_positive_exclusions.json"
 TOKEN_LABELS = {
     "angle": "尖括号tag",
+    "square_color": "方括号color tag",
     "brace": "花括号placeholder",
     "newline": r"\n mark",
     "numeric": "数字tag",
 }
 TOKEN_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
     "angle": (re.compile(r"<([^<>]+)>"),),
+    "square_color": (re.compile(r"\[/color\]|\[color\s*=\s*[^\[\]]+\]", re.IGNORECASE),),
     "brace": (re.compile(r"\{([^{}]+)\}"),),
     "newline": (re.compile(r"\\n"),),
     "numeric": (re.compile(r"\{\d+>|<\d+\}|\{\d+\}"),),
@@ -52,6 +54,7 @@ class CheckSummary:
     total_rows_checked: int
     rows_with_selected_tokens: int
     angle_rows: int
+    square_color_rows: int
     brace_rows: int
     newline_rows: int
     numeric_rows: int
@@ -288,6 +291,7 @@ def write_summary_sheet(
         ("总行数", summary.total_rows_checked),
         ("命中检查类型行数", summary.rows_with_selected_tokens),
         ("含尖括号tag行数", summary.angle_rows),
+        ("含方括号color tag行数", summary.square_color_rows),
         ("含花括号placeholder行数", summary.brace_rows),
         (r"含\n mark行数", summary.newline_rows),
         ("含数字tag行数", summary.numeric_rows),
@@ -391,6 +395,7 @@ def process_excel(
     total_rows_checked = max(0, worksheet.max_row - start_row + 1)
     rows_with_selected_tokens = 0
     angle_rows = 0
+    square_color_rows = 0
     brace_rows = 0
     newline_rows = 0
     numeric_rows = 0
@@ -422,6 +427,8 @@ def process_excel(
 
         if any(token.token_type == "angle" for token in combined_tokens):
             angle_rows += 1
+        if any(token.token_type == "square_color" for token in combined_tokens):
+            square_color_rows += 1
         if any(token.token_type == "brace" for token in combined_tokens):
             brace_rows += 1
         if any(token.token_type == "newline" for token in combined_tokens):
@@ -460,6 +467,7 @@ def process_excel(
         total_rows_checked=total_rows_checked,
         rows_with_selected_tokens=rows_with_selected_tokens,
         angle_rows=angle_rows,
+        square_color_rows=square_color_rows,
         brace_rows=brace_rows,
         newline_rows=newline_rows,
         numeric_rows=numeric_rows,
@@ -500,6 +508,7 @@ def main() -> None:
     print(f"总行数: {summary.total_rows_checked}")
     print(f"命中检查类型行数: {summary.rows_with_selected_tokens}")
     print(f"含尖括号tag行数: {summary.angle_rows}")
+    print(f"含方括号color tag行数: {summary.square_color_rows}")
     print(f"含花括号placeholder行数: {summary.brace_rows}")
     print(rf"含\n mark行数: {summary.newline_rows}")
     print(f"含数字tag行数: {summary.numeric_rows}")

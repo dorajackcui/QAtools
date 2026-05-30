@@ -28,6 +28,7 @@ class TagPlaceholderCheckerApp(ttk.Frame):
         self.target_column_var = tk.StringVar(value="B")
         self.start_row_var = tk.StringVar(value="2")
         self.angle_var = tk.BooleanVar(value=True)
+        self.square_color_var = tk.BooleanVar(value=True)
         self.brace_var = tk.BooleanVar(value=True)
         self.newline_var = tk.BooleanVar(value=True)
         self.numeric_var = tk.BooleanVar(value=True)
@@ -82,21 +83,24 @@ class TagPlaceholderCheckerApp(ttk.Frame):
         ttk.Checkbutton(token_type_frame, text="<...> tag", variable=self.angle_var).grid(
             row=0, column=0, sticky="w"
         )
-        ttk.Checkbutton(token_type_frame, text="{...} placeholder", variable=self.brace_var).grid(
+        ttk.Checkbutton(token_type_frame, text="[color=...] tag", variable=self.square_color_var).grid(
             row=0, column=1, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(token_type_frame, text="\\n mark", variable=self.newline_var).grid(
+        ttk.Checkbutton(token_type_frame, text="{...} placeholder", variable=self.brace_var).grid(
             row=0, column=2, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(token_type_frame, text="数字tag", variable=self.numeric_var).grid(
+        ttk.Checkbutton(token_type_frame, text="\\n mark", variable=self.newline_var).grid(
             row=0, column=3, sticky="w", padx=(12, 0)
+        )
+        ttk.Checkbutton(token_type_frame, text="数字tag", variable=self.numeric_var).grid(
+            row=0, column=4, sticky="w", padx=(12, 0)
         )
 
         ttk.Button(self, text="开始检查", command=self.run_check).grid(
             row=7, column=0, columnspan=3, sticky="ew"
         )
 
-        note = r"规则：逐行比对 source / target 中的 <...>、{...}、\n 和数字tag，检查缺失、多出和数量不一致。"
+        note = r"规则：逐行比对 source / target 中的 <...>、[color=...]、[/color]、{...}、\n 和数字tag，检查缺失、多出和数量不一致。"
         ttk.Label(self, text=note).grid(row=8, column=0, columnspan=3, sticky="w", pady=(12, 0))
         ttk.Label(
             self,
@@ -188,6 +192,8 @@ class TagPlaceholderCheckerApp(ttk.Frame):
         token_types: list[str] = []
         if self.angle_var.get():
             token_types.append("angle")
+        if self.square_color_var.get():
+            token_types.append("square_color")
         if self.brace_var.get():
             token_types.append("brace")
         if self.newline_var.get():
@@ -237,6 +243,8 @@ class TagPlaceholderCheckerApp(ttk.Frame):
         selected_labels = []
         if "angle" in summary.selected_token_types:
             selected_labels.append("<...> tag")
+        if "square_color" in summary.selected_token_types:
+            selected_labels.append("[color=...] tag")
         if "brace" in summary.selected_token_types:
             selected_labels.append("{...} placeholder")
         if "newline" in summary.selected_token_types:
@@ -254,6 +262,7 @@ class TagPlaceholderCheckerApp(ttk.Frame):
                     f"总行数: {summary.total_rows_checked}",
                     f"命中检查类型行数: {summary.rows_with_selected_tokens}",
                     f"含尖括号tag行数: {summary.angle_rows}",
+                    f"含方括号color tag行数: {summary.square_color_rows}",
                     f"含花括号placeholder行数: {summary.brace_rows}",
                     rf"含\n mark行数: {summary.newline_rows}",
                     f"含数字tag行数: {summary.numeric_rows}",
