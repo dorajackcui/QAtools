@@ -128,18 +128,16 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders_gui.py
 ### 5. Target 中文检查
 
 - 目录：`tools/chinese_target_checker`
-- 用途：检查 Excel `target` 列是否包含中文字符
-- 输出方式：默认在 `target` 右侧一列写入 `中文检查` 标记列，含中文行标记为 `含中文`
-- 可选问题表：可生成 `中文检查问题` 工作表，列出命中行和匹配到的中文字符
+- 用途：检查 Excel `target` 列是否包含中文字符或中文/全角标点
+- 输出方式：默认直接修改原文件，在 `target` 右侧新增或复用 `中文检查` 标记列，命中行标记为 `含中文`
+- 不额外生成问题工作表；如果工作簿里已有旧的 `中文检查问题` 工作表，运行时会移除
 - CLI：
 
 ```bash
 python3 tools/chinese_target_checker/check_chinese_target.py input.xlsx \
   -s Sheet1 \
   -t B \
-  --start-row 2 \
-  --problem-sheet \
-  -o output_chinese_target_checked.xlsx
+  --start-row 2
 ```
 
 - GUI：

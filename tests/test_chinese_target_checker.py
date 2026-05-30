@@ -14,15 +14,19 @@ from tools.chinese_target_checker.check_chinese_target import (
 
 
 class ChineseTargetTextTests(unittest.TestCase):
-    def test_contains_chinese_detects_cjk_ideographs_only(self) -> None:
+    def test_contains_chinese_detects_cjk_ideographs_and_punctuation(self) -> None:
         self.assertTrue(contains_chinese("Keep 中文 text"))
-        self.assertFalse(contains_chinese("Only punctuation ，。！？"))
+        self.assertTrue(contains_chinese("Only punctuation ，。！？"))
+        self.assertTrue(contains_chinese("Fullwidth marks 【】（）《》“”"))
+        self.assertTrue(contains_chinese("Typography marks “”‘’—…·"))
         self.assertFalse(contains_chinese(""))
         self.assertFalse(contains_chinese(None))
         self.assertFalse(contains_chinese(42))
+        self.assertFalse(contains_chinese("ASCII punctuation ()[]!?"))
+        self.assertFalse(contains_chinese("Fullwidth alnum ＡＢ１２"))
 
     def test_extract_chinese_characters_preserves_match_order(self) -> None:
-        self.assertEqual(extract_chinese_characters("A中B文C中"), "中文中")
+        self.assertEqual(extract_chinese_characters("A中B，C（D）“E”…"), "中，（）“”…")
         self.assertEqual(extract_chinese_characters("No Chinese"), "")
 
 
@@ -46,10 +50,9 @@ class ChineseTargetExcelTests(unittest.TestCase):
         worksheet["C4"] = "old clear none"
         workbook.save(path)
 
-    def test_process_excel_marks_default_adjacent_result_column(self) -> None:
+    def test_process_excel_inserts_default_result_column_in_place(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
-            expected_output_path = Path(tmp_dir) / "input_chinese_target_checked.xlsx"
             self.create_workbook(input_path)
 
             summary = process_excel(
@@ -59,28 +62,28 @@ class ChineseTargetExcelTests(unittest.TestCase):
                 start_row=2,
             )
 
-            self.assertEqual(summary.output_path, expected_output_path.resolve())
+            self.assertEqual(summary.output_path, input_path.resolve())
             self.assertEqual(summary.worksheet_title, "Data")
             self.assertEqual(summary.target_column, "B")
             self.assertEqual(summary.result_column, "C")
             self.assertEqual(summary.start_row, 2)
             self.assertEqual(summary.processed_count, 3)
             self.assertEqual(summary.matched_count, 1)
-            self.assertFalse(summary.problem_sheet_created)
 
-            original_workbook = load_workbook(input_path)
-            self.assertEqual(original_workbook["Data"]["C1"].value, "old result")
-            self.assertEqual(original_workbook["Data"]["C3"].value, "old clear")
+            workbook = load_workbook(input_path)
+            worksheet = workbook["Data"]
+            self.assertEqual(worksheet["C1"].value, "中文检查")
+            self.assertIsNone(worksheet["C2"].value)
+            self.assertEqual(worksheet["C3"].value, "含中文")
+            self.assertIsNone(worksheet["C4"].value)
+            self.assertEqual(worksheet["D1"].value, "old result")
+            self.assertEqual(worksheet["D2"].value, "old keep")
+            self.assertEqual(worksheet["D3"].value, "old clear")
+            self.assertEqual(worksheet["D4"].value, "old clear none")
+            self.assertEqual(worksheet["E1"].value, "custom result")
+            self.assertNotIn("中文检查问题", workbook.sheetnames)
 
-            output_workbook = load_workbook(summary.output_path)
-            output_sheet = output_workbook["Data"]
-            self.assertEqual(output_sheet["C1"].value, "中文检查")
-            self.assertIsNone(output_sheet["C2"].value)
-            self.assertEqual(output_sheet["C3"].value, "含中文")
-            self.assertIsNone(output_sheet["C4"].value)
-            self.assertNotIn("中文检查问题", output_workbook.sheetnames)
-
-    def test_process_excel_supports_custom_result_column_and_problem_sheet(self) -> None:
+    def test_process_excel_supports_custom_result_column_without_problem_sheet(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
             output_path = Path(tmp_dir) / "output.xlsx"
@@ -92,7 +95,6 @@ class ChineseTargetExcelTests(unittest.TestCase):
                 result_column="D",
                 sheet="Data",
                 start_row=2,
-                create_problem_sheet=True,
                 output_file=output_path,
             )
 
@@ -100,7 +102,6 @@ class ChineseTargetExcelTests(unittest.TestCase):
             self.assertEqual(summary.result_column, "D")
             self.assertEqual(summary.processed_count, 3)
             self.assertEqual(summary.matched_count, 1)
-            self.assertTrue(summary.problem_sheet_created)
 
             output_workbook = load_workbook(summary.output_path)
             output_sheet = output_workbook["Data"]
@@ -108,14 +109,56 @@ class ChineseTargetExcelTests(unittest.TestCase):
             self.assertIsNone(output_sheet["D2"].value)
             self.assertEqual(output_sheet["D3"].value, "含中文")
             self.assertIsNone(output_sheet["D4"].value)
+            self.assertNotIn("中文检查问题", output_workbook.sheetnames)
 
-            problem_sheet = output_workbook["中文检查问题"]
-            self.assertEqual(problem_sheet["A1"].value, "行号")
-            self.assertEqual(problem_sheet["B1"].value, "target文本")
-            self.assertEqual(problem_sheet["C1"].value, "中文字符")
-            self.assertEqual(problem_sheet["A2"].value, 3)
-            self.assertEqual(problem_sheet["B2"].value, "包含中文 target")
-            self.assertEqual(problem_sheet["C2"].value, "包含中文")
+            input_workbook = load_workbook(input_path)
+            self.assertEqual(input_workbook["Data"]["D1"].value, "custom result")
+            self.assertIsNone(input_workbook["Data"]["D3"].value)
+
+    def test_process_excel_removes_stale_problem_sheet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            self.create_workbook(input_path)
+            workbook = load_workbook(input_path)
+            workbook.create_sheet("中文检查问题")
+            workbook.save(input_path)
+
+            process_excel(
+                input_file=input_path,
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+            )
+
+            output_workbook = load_workbook(input_path)
+            self.assertNotIn("中文检查问题", output_workbook.sheetnames)
+
+    def test_process_excel_reuses_existing_adjacent_result_column(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            self.create_workbook(input_path)
+            workbook = load_workbook(input_path)
+            worksheet = workbook["Data"]
+            worksheet.insert_cols(3)
+            worksheet["C1"] = "中文检查"
+            worksheet["D1"] = "old result"
+            worksheet["E1"] = "custom result"
+            workbook.save(input_path)
+
+            summary = process_excel(
+                input_file=input_path,
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+            )
+
+            self.assertEqual(summary.result_column, "C")
+            output_workbook = load_workbook(input_path)
+            output_sheet = output_workbook["Data"]
+            self.assertEqual(output_sheet.max_column, 5)
+            self.assertEqual(output_sheet["C1"].value, "中文检查")
+            self.assertEqual(output_sheet["D1"].value, "old result")
+            self.assertEqual(output_sheet["E1"].value, "custom result")
 
     def test_process_excel_rejects_invalid_start_row(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

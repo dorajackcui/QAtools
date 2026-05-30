@@ -24,7 +24,6 @@ class ChineseTargetCheckerApp(ttk.Frame):
         self.target_column_var = tk.StringVar(value="B")
         self.result_column_var = tk.StringVar()
         self.start_row_var = tk.StringVar(value="2")
-        self.problem_sheet_var = tk.BooleanVar(value=False)
 
         self._build_ui()
 
@@ -65,18 +64,12 @@ class ChineseTargetCheckerApp(ttk.Frame):
             row=5, column=1, sticky="w", pady=(0, 8)
         )
 
-        ttk.Checkbutton(
-            self,
-            text="新增问题工作表",
-            variable=self.problem_sheet_var,
-        ).grid(row=6, column=1, sticky="w", pady=(0, 12))
-
         ttk.Button(self, text="开始检查中文", command=self.run_check).grid(
-            row=7, column=0, columnspan=3, sticky="ew"
+            row=6, column=0, columnspan=3, sticky="ew"
         )
 
-        note = "规则：检查 target 列是否包含中文字符；结果列为空时默认写入 target 右侧一列。"
-        ttk.Label(self, text=note).grid(row=8, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        note = "规则：检查 target 列是否包含中文字符；输出为空时直接修改原文件，结果列为空时默认在 target 右侧新增一列。"
+        ttk.Label(self, text=note).grid(row=7, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.columnconfigure(1, weight=1)
 
@@ -89,8 +82,6 @@ class ChineseTargetCheckerApp(ttk.Frame):
             return
 
         self.input_file_var.set(file_path)
-        if not self.output_file_var.get().strip():
-            self.output_file_var.set(str(build_default_output_path(Path(file_path))))
         self.refresh_sheet_choices()
 
     def choose_output_file(self) -> None:
@@ -182,7 +173,6 @@ class ChineseTargetCheckerApp(ttk.Frame):
                 result_column=result_column,
                 sheet=sheet,
                 start_row=start_row,
-                create_problem_sheet=self.problem_sheet_var.get(),
                 output_file=output_file or None,
             )
         except Exception as exc:
@@ -201,7 +191,6 @@ class ChineseTargetCheckerApp(ttk.Frame):
                     f"开始行: {summary.start_row}",
                     f"处理行数: {summary.processed_count}",
                     f"含中文行数: {summary.matched_count}",
-                    f"问题工作表: {'已生成' if summary.problem_sheet_created else '未生成'}",
                     f"输出文件: {summary.output_path}",
                 ]
             ),

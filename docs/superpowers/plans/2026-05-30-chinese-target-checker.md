@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build an Excel tool that marks rows whose `target` column contains Chinese characters, with an optional problem sheet.
+**Goal:** Build an Excel tool that inserts a result column beside `target` and marks rows whose `target` column contains Chinese characters or Chinese/fullwidth punctuation without creating a separate problem sheet.
 
-**Architecture:** Add a focused `tools/chinese_target_checker` package with a pure detection helper, an Excel processor, and a Tkinter GUI. Follow existing Toolshub conventions for CLI arguments, workbook output, sheet and column handling, tests, README documentation, and unified GUI registration.
+**Architecture:** Add a focused `tools/chinese_target_checker` package with a pure detection helper, an Excel processor, and a Tkinter GUI. The default save mode is in-place, with `-o/--output` retained for explicit save-as behavior. Follow existing Toolshub conventions for CLI arguments, sheet and column handling, tests, README documentation, and unified GUI registration.
 
 **Tech Stack:** Python 3, `openpyxl`, `tkinter`, `unittest`.
 
@@ -30,7 +30,7 @@
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/test_chinese_target_checker.py` with tests for `contains_chinese`, default adjacent result column, custom result column, optional problem sheet, and input preservation.
+Create `tests/test_chinese_target_checker.py` with tests for `contains_chinese` covering ideographs, CJK punctuation, fullwidth punctuation, ASCII punctuation exclusions, and fullwidth alphanumeric exclusions; also cover default in-place inserted adjacent result column, reuse of an existing adjacent result column, custom result column with explicit output file, stale problem sheet removal, and explicit output preserving the input file.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -53,7 +53,7 @@ Implement:
 - `prompt_if_missing`
 - `main`
 
-Use `openpyxl.load_workbook`, write `中文检查` to the result column header, write `含中文` for matched rows and `None` for non-matched rows, and create `中文检查问题` only when requested.
+Use `openpyxl.load_workbook`, insert the default result column immediately to the right of `target`, write `中文检查` to the result column header, write `含中文` for matched rows and `None` for non-matched rows, and remove stale `中文检查问题` sheets.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -73,7 +73,7 @@ Inspect `tests/test_gui_excel_selection.py` and reuse existing GUI auto-detectio
 
 - [ ] **Step 2: Implement the GUI**
 
-Create a `ChineseTargetCheckerApp(ttk.Frame)` with file selectors, sheet selector, target/result/start row fields, problem sheet checkbox, and a run button.
+Create a `ChineseTargetCheckerApp(ttk.Frame)` with file selectors, sheet selector, target/result/start row fields, and a run button.
 
 - [ ] **Step 3: Register the GUI in Toolshub**
 
@@ -94,7 +94,7 @@ Expected: existing GUI selection tests pass.
 
 - [ ] **Step 1: Add tool README**
 
-Document CLI and GUI usage, default adjacent result column behavior, optional problem sheet, and output file behavior.
+Document CLI and GUI usage, default in-place inserted adjacent result column behavior, stale problem sheet removal, and explicit output file behavior.
 
 - [ ] **Step 2: Update root documentation**
 
@@ -114,7 +114,7 @@ Expected: all listed tests pass.
 
 - [ ] **Step 5: Verify with the user-provided workbook**
 
-Run the CLI against `/Users/zhiyangcui/Documents/orchestra/done/task/task.xlsx` with explicit sheet, target column, start row, output path, and `--problem-sheet` after inspecting workbook metadata.
+Run the CLI against `/Users/zhiyangcui/Documents/orchestra/done/task/task.xlsx` with explicit sheet, target column, and start row after inspecting workbook metadata.
 
 Expected: command exits successfully and prints processed and matched row counts.
 

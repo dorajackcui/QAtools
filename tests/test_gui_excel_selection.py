@@ -368,6 +368,34 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.sheet_var.get(), "Tags")
             self.assertEqual(app.target_column_var.get(), "F")
 
+    def test_chinese_target_checker_choose_input_keeps_output_blank_for_in_place_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "chinese.xlsx"
+            self.create_tag_checker_workbook(workbook_path)
+            app = self.build_chinese_target_checker_app(Path(""))
+
+            with patch(
+                "tools.chinese_target_checker.check_chinese_target_gui.filedialog.askopenfilename",
+                return_value=str(workbook_path),
+            ):
+                app.choose_input_file()
+
+            self.assertEqual(app.input_file_var.get(), str(workbook_path))
+            self.assertEqual(app.output_file_var.get(), "")
+            self.assertEqual(app.sheet_var.get(), "Tags")
+
+    def test_chinese_target_checker_has_no_problem_sheet_toggle(self) -> None:
+        app = ChineseTargetCheckerApp.__new__(ChineseTargetCheckerApp)
+        with (
+            patch.object(ChineseTargetCheckerApp, "_build_ui", lambda self: None),
+            patch("tools.chinese_target_checker.check_chinese_target_gui.ttk.Frame.__init__", lambda self, master=None, padding=None: None),
+            patch("tools.chinese_target_checker.check_chinese_target_gui.tk.StringVar", FakeVar),
+            patch("tools.chinese_target_checker.check_chinese_target_gui.tk.BooleanVar", FakeBoolVar),
+        ):
+            ChineseTargetCheckerApp.__init__(app, object())
+
+        self.assertFalse(hasattr(app, "problem_sheet_var"))
+
     def test_french_nbsp_restorer_switching_sheet_redetects_target_column(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workbook_path = Path(tmp_dir) / "nbsp.xlsx"

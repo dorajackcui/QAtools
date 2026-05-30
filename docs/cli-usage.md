@@ -11,7 +11,7 @@
 - 推荐显式指定 `-o/--output`，这样输出路径稳定，后续 agent 更容易继续处理结果文件。
 - 列参数统一使用 Excel 列字母，例如 `A`、`B`、`AA`。
 - 如果 CLI 与 GUI 行为看起来不同，优先记住：GUI 的“自动识别工作表 / source / target 列”属于界面增强，CLI 不会自动帮你补这些参数。
-- 所有工具都会生成新的 Excel 文件，不会覆盖原文件。
+- 除特别说明外，工具会生成新的 Excel 文件，不会覆盖原文件。
 
 ## 非交互调用约定
 
@@ -26,7 +26,7 @@
   - 常用可选：`-s/--sheet`、`--start-row`、`--token-type`、`--angle-config`、`-o/--output`
 - `tools/chinese_target_checker/check_chinese_target.py`
   - 必填：`input_file`、`-t/--target-column`
-  - 常用可选：`-s/--sheet`、`-r/--result-column`、`--start-row`、`--problem-sheet`、`-o/--output`
+  - 常用可选：`-s/--sheet`、`-r/--result-column`、`--start-row`、`-o/--output`
 - `tools/excel_line_splitter/split_excel_lines.py`
   - 必填：`input_file`、`-c/--source-column`、`-r/--result-column`
   - 常用可选：`-s/--sheet`、`--start-row`、`-o/--output`
@@ -241,17 +241,16 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
 
 ### 5. Target 中文检查
 
-默认写入 target 右侧一列：
+默认直接修改原文件，在 target 右侧新增一列：
 
 ```bash
 python3 tools/chinese_target_checker/check_chinese_target.py ./input.xlsx \
   -s Sheet1 \
   -t B \
-  --start-row 2 \
-  -o ./artifacts/input_chinese_target_checked.xlsx
+  --start-row 2
 ```
 
-如果希望指定结果列，并额外生成问题工作表：
+如果希望指定结果列，并另存为新文件：
 
 ```bash
 python3 tools/chinese_target_checker/check_chinese_target.py ./input.xlsx \
@@ -259,16 +258,18 @@ python3 tools/chinese_target_checker/check_chinese_target.py ./input.xlsx \
   -t B \
   -r C \
   --start-row 2 \
-  --problem-sheet \
   -o ./artifacts/input_chinese_target_checked.xlsx
 ```
 
 说明：
 
-- 结果列表头为 `中文检查`。
-- 含中文字符的 target 行会写入 `含中文`。
+- 结果列表头为 `中文检查`，默认插入到 target 右侧，原右侧列会后移；如果 target 右侧已经是 `中文检查` 列，则直接复用。
+- 含中文字符或中文/全角标点的 target 行会写入 `含中文`。
+- 检查范围包含汉字、CJK 标点、全角标点和常见中文排版符号，例如 `【】（）`、`，。！？`、`《》“”‘’—…·`。
+- 普通 ASCII 标点和全角英数不会单独触发标记。
 - 未命中的行留空。
-- `--problem-sheet` 会新增 `中文检查问题`，列出行号、target 文本和匹配到的中文字符。
+- 不额外生成问题工作表；如果工作簿里已有旧的 `中文检查问题` 工作表，运行时会移除。
+- 不传 `-o/--output` 时会直接保存回原文件；需要保留原文件时请显式传 `-o`。
 
 标准输出会打印：
 
@@ -277,7 +278,6 @@ python3 tools/chinese_target_checker/check_chinese_target.py ./input.xlsx \
 - 开始行
 - 处理行数
 - 含中文行数
-- 问题工作表状态
 - 输出文件路径
 
 ### 6. 法语 NBSP 恢复
@@ -328,6 +328,6 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp.py ./input.xlsx \
   - `<原文件名>_term_pairs.xlsx`
   - `<原文件名>_glossary_checked.xlsx`
   - `<原文件名>_tag_placeholder_checked.xlsx`
-  - `<原文件名>_chinese_target_checked.xlsx`
+  - Target 中文检查默认直接修改原文件；显式传 `-o` 时由调用方指定输出名
   - `<原文件名>_split_lines.xlsx`
   - `<原文件名>_french_nbsp_restored.xlsx`
