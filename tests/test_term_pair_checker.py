@@ -13,6 +13,7 @@ from tools.term_pair_checker.extract_terms_from_excel import (
     extract_terms,
     process_excel,
 )
+from tools.false_positive_review import ReviewDecision
 
 
 class ExtractTermsTests(unittest.TestCase):
@@ -226,6 +227,48 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["E2"].value, "target缺少预期术语")
             self.assertEqual(problem_sheet["F2"].value, "第三行先出现苹果")
             self.assertEqual(problem_sheet["G2"].value, "第三行先出现banana")
+
+    def test_process_excel_can_run_false_positive_reviewer_on_problem_sheet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "建立 [Lineup]"
+            worksheet["B2"] = "建立 [Équipe]"
+            worksheet["A3"] = "Lineup RCMD:"
+            worksheet["B3"] = "Compo conseillée:"
+            workbook.save(input_path)
+
+            def reviewer(clusters):
+                return {
+                    clusters[0].key: ReviewDecision(
+                        decision="review",
+                        category="需人工确认",
+                        confidence="medium",
+                        note="项目是否接受 Compo 作为 Équipe 短称需要确认",
+                    )
+                }
+
+            _, _, _, saved_path, _, problem_count = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                mark_styles=("[]",),
+                false_positive_reviewer=reviewer,
+            )
+
+            self.assertEqual(problem_count, 1)
+            result_workbook = load_workbook(saved_path)
+            problem_sheet = result_workbook["问题列"]
+            self.assertEqual(problem_sheet["H1"].value, "fp_decision")
+            self.assertEqual(problem_sheet["H2"].value, "review")
+            self.assertEqual(problem_sheet["I2"].value, "需人工确认")
+            self.assertEqual(problem_sheet["K2"].value, "项目是否接受 Compo 作为 Équipe 短称需要确认")
 
     def test_process_excel_records_count_mismatch_and_missing_target_separately(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

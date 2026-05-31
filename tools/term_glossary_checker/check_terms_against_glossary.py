@@ -8,6 +8,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
@@ -21,6 +24,12 @@ from tools.term_matching import (
     term_has_expected_target,
     term_has_simple_s_plural_variant,
     text_contains_term,
+)
+from tools.false_positive_review import (
+    GLOSSARY_PROBLEM_MAPPING,
+    Reviewer,
+    apply_false_positive_review_to_sheet,
+    review_clusters_with_codex,
 )
 
 
@@ -88,6 +97,27 @@ def parse_args() -> argparse.Namespace:
         "-o",
         "--output",
         help="输出 Excel 文件路径，默认生成 <原文件名>_glossary_checked.xlsx",
+    )
+    parser.add_argument(
+        "--codex-fp-review",
+        action="store_true",
+        help="检查完成后调用 Codex 对术语问题做假阳性筛查，并写回 fp_* 辅助列。",
+    )
+    parser.add_argument(
+        "--codex-fp-sample-size",
+        type=int,
+        default=5,
+        help="每个术语问题 cluster 发送给 Codex 的样本条数，默认 5。",
+    )
+    parser.add_argument(
+        "--codex-model",
+        help="Codex 假阳性筛查使用的模型；不填则使用 Codex 默认模型。",
+    )
+    parser.add_argument(
+        "--codex-reasoning-effort",
+        default="high",
+        choices=("low", "medium", "high"),
+        help="Codex 假阳性筛查使用的 reasoning effort，默认 high。",
     )
     return parser.parse_args()
 
@@ -238,7 +268,15 @@ def write_problem_sheet(workbook, worksheet_title: str, problem_entries: list[tu
     for column_index, header in enumerate(headers, start=1):
         problem_sheet.cell(1, column_index, header)
 
-    for row_index, entry in enumerate(problem_entries, start=2):
+    sorted_problem_entries = sorted(
+        problem_entries,
+        key=lambda entry: (
+            entry[2] == "",
+            normalize_text(entry[2], case_sensitive=False),
+            entry[0],
+        ),
+    )
+    for row_index, entry in enumerate(sorted_problem_entries, start=2):
         for column_index, value in enumerate(entry, start=1):
             problem_sheet.cell(row_index, column_index, value)
 
@@ -303,6 +341,8 @@ def process_excel(
     case_sensitive: bool = False,
     match_mode: str = "hybrid-boundary",
     output_file: str | Path | None = None,
+    false_positive_reviewer: Reviewer | None = None,
+    false_positive_sample_size: int = 5,
 ) -> CheckSummary:
     if start_row < 1:
         raise ValueError("开始行必须大于等于 1。")
@@ -416,12 +456,27 @@ def process_excel(
         start_row=start_row,
         match_mode=match_mode,
     )
+    if false_positive_reviewer is not None:
+        apply_false_positive_review_to_sheet(
+            workbook,
+            PROBLEM_SHEET_NAME,
+            GLOSSARY_PROBLEM_MAPPING,
+            reviewer=false_positive_reviewer,
+            sample_size=false_positive_sample_size,
+        )
     workbook.save(output_path)
     return summary
 
 
 def main() -> None:
     args = prompt_if_missing(parse_args())
+    false_positive_reviewer = None
+    if args.codex_fp_review:
+        false_positive_reviewer = lambda clusters: review_clusters_with_codex(  # noqa: E731
+            clusters,
+            model=args.codex_model,
+            reasoning_effort=args.codex_reasoning_effort,
+        )
     summary = process_excel(
         glossary_file=args.glossary_file,
         data_file=args.data_file,
@@ -435,6 +490,8 @@ def main() -> None:
         case_sensitive=args.case_sensitive,
         match_mode=args.match_mode,
         output_file=args.output,
+        false_positive_reviewer=false_positive_reviewer,
+        false_positive_sample_size=args.codex_fp_sample_size,
     )
 
     print("处理完成。")
@@ -448,6 +505,8 @@ def main() -> None:
     print(f"命中术语行数: {summary.matched_rows}")
     print(f"问题行数: {summary.problem_rows}")
     print(f"问题条数: {summary.problem_count}")
+    if args.codex_fp_review:
+        print("Codex 假阳性筛查: 已写入 fp_* 辅助列")
     print(f"输出文件: {summary.output_path}")
 
 

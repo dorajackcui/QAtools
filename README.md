@@ -15,6 +15,7 @@
 - 复数处理：回扫时双边整条 `术语+s` / `译法+s` 直接放行；其他复数签名疑似命中会在问题简述标注“疑似复数变体”
 - 历史 TB：可选选择历史 TB；选择后会用“历史 TB 全量 + 本批次新增 TB”一起检查
 - 误判排除：默认通过 `tools/term_pair_checker/false_positive_exclusions.json` 排除 `</>`、`<color=...>` 这类伪标签
+- Codex 假阳性筛查：可选开启；检查完成后按术语、期望译法、问题类型和原文/译文文本组成的问题 cluster 调用本机 `codex exec`，在 `问题列` 追加 `fp_*` 辅助列
 - 输出增强：结果会给出合并后的 `术语表`（只包含本次检查文本中涉及的术语，并包含保留 mark、无 mark 和术语来源列），以及带原文上下文的 `问题列`
 - GUI 增强：自动读取工作表列表，并尝试自动识别本批次和历史 TB 的 `source` / `target` 列
 - 输出方式：生成新的结果 Excel，不覆盖原文件
@@ -50,6 +51,7 @@ python3 tools/term_pair_checker/extract_terms_gui.py
 - 目录：`tools/term_glossary_checker`
 - 用途：使用术语表检查双语 Excel 中的 source 是否按约定 target 进行了翻译
 - 复数处理：双边整条 `术语+s` / `译法+s` 直接放行；其他复数签名疑似命中会在问题类型标注“疑似复数变体”
+- Codex 假阳性筛查：可选开启；检查完成后按术语、期望译法、问题类型和原文/译文文本组成的问题 cluster 调用本机 `codex exec`，在 `术语命中问题` 追加 `fp_*` 辅助列
 - GUI 增强：术语表文件和检查文件都支持工作表下拉选择与 `source` / `target` 列自动识别
 - 输出方式：生成新的结果 Excel，不覆盖原文件
 - CLI：

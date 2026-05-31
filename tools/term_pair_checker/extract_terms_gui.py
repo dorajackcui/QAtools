@@ -8,6 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
+from tools.false_positive_review import review_clusters_with_codex
 
 try:
     from .extract_terms_from_excel import (
@@ -46,6 +47,7 @@ class ExtractTermsApp(ttk.Frame):
             "[]": tk.BooleanVar(value=True),
             "<>": tk.BooleanVar(value=True),
         }
+        self.codex_fp_review_var = tk.BooleanVar(value=False)
 
         self._build_ui()
 
@@ -137,8 +139,14 @@ class ExtractTermsApp(ttk.Frame):
             row=0, column=2, sticky="w", padx=(12, 0)
         )
 
+        ttk.Checkbutton(
+            self,
+            text="使用 Codex 筛查术语误报",
+            variable=self.codex_fp_review_var,
+        ).grid(row=12, column=0, columnspan=3, sticky="w", pady=(0, 12))
+
         ttk.Button(self, text="开始检查", command=self.run_extraction).grid(
-            row=12, column=0, columnspan=3, sticky="ew"
+            row=13, column=0, columnspan=3, sticky="ew"
         )
 
         note = (
@@ -146,7 +154,7 @@ class ExtractTermsApp(ttk.Frame):
             "历史 TB 命中时优先使用历史 target；"
             f"伪标签排除规则请维护在 {DEFAULT_EXCLUSION_CONFIG_NAME}。"
         )
-        ttk.Label(self, text=note).grid(row=13, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Label(self, text=note).grid(row=14, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.columnconfigure(1, weight=1)
 
@@ -349,6 +357,7 @@ class ExtractTermsApp(ttk.Frame):
                 history_target_column=history_target_column,
                 history_start_row=history_start_row,
                 output_file=output_file or None,
+                false_positive_reviewer=review_clusters_with_codex if self.codex_fp_review_var.get() else None,
             )
         except Exception as exc:
             messagebox.showerror("处理失败", str(exc))
@@ -364,6 +373,8 @@ class ExtractTermsApp(ttk.Frame):
         ]
         if history_tb_file:
             message_lines.append(f"历史 TB: {history_tb_file}")
+        if self.codex_fp_review_var.get():
+            message_lines.append("Codex 假阳性筛查: 已写入 fp_* 辅助列")
         message_lines.extend(
             [
                 f"术语表条目数: {term_count}",

@@ -14,6 +14,7 @@ from tools.term_glossary_checker.check_terms_against_glossary import (
     process_excel,
     text_contains_term,
 )
+from tools.false_positive_review import ReviewDecision
 
 
 class GlossaryLoadingTests(unittest.TestCase):
@@ -544,6 +545,101 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["C2"].value, "EXP Candy")
             self.assertEqual(problem_sheet["B3"].value, "术语未按术语表翻译：疑似复数变体")
             self.assertEqual(problem_sheet["C3"].value, "Gacha Coin")
+
+    def test_process_excel_can_run_false_positive_reviewer_on_problem_sheet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            glossary_path = Path(tmp_dir) / "glossary.xlsx"
+            data_path = Path(tmp_dir) / "data.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Advanced"
+            worksheet["B2"] = "Avancé"
+            workbook.save(glossary_path)
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Current equipment tier cannot be advanced"
+            worksheet["B2"] = "L'équipement actuel ne peut pas passer au rang supérieur"
+            workbook.save(data_path)
+
+            def reviewer(clusters):
+                return {
+                    clusters[0].key: ReviewDecision(
+                        decision="false_positive",
+                        category="词性变化/自然改写",
+                        confidence="high",
+                        note="advanced 是动词用法，target 已自然表达",
+                    )
+                }
+
+            summary = process_excel(
+                glossary_file=glossary_path,
+                data_file=data_path,
+                glossary_source_column="A",
+                glossary_target_column="B",
+                data_source_column="A",
+                data_target_column="B",
+                start_row=2,
+                false_positive_reviewer=reviewer,
+            )
+
+            self.assertEqual(summary.problem_count, 1)
+            result_workbook = load_workbook(summary.output_path)
+            problem_sheet = result_workbook["术语命中问题"]
+            self.assertEqual(problem_sheet["G1"].value, "fp_decision")
+            self.assertEqual(problem_sheet["G2"].value, "false_positive")
+            self.assertEqual(problem_sheet["H2"].value, "词性变化/自然改写")
+            self.assertEqual(problem_sheet["J2"].value, "advanced 是动词用法，target 已自然表达")
+
+    def test_problem_sheet_is_sorted_by_source_term(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            glossary_path = Path(tmp_dir) / "glossary.xlsx"
+            data_path = Path(tmp_dir) / "data.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Zebra"
+            worksheet["B2"] = "Zebre"
+            worksheet["A3"] = "Alpha"
+            worksheet["B3"] = "Alpha"
+            workbook.save(glossary_path)
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Use Zebra"
+            worksheet["B2"] = "Utiliser mauvais"
+            worksheet["A3"] = "Use Alpha"
+            worksheet["B3"] = "Utiliser mauvais"
+            workbook.save(data_path)
+
+            summary = process_excel(
+                glossary_file=glossary_path,
+                data_file=data_path,
+                glossary_source_column="A",
+                glossary_target_column="B",
+                data_source_column="A",
+                data_target_column="B",
+                start_row=2,
+            )
+
+            self.assertEqual(summary.problem_count, 2)
+            result_workbook = load_workbook(summary.output_path)
+            problem_sheet = result_workbook["术语命中问题"]
+            self.assertEqual(problem_sheet["C2"].value, "Alpha")
+            self.assertEqual(problem_sheet["A2"].value, 3)
+            self.assertEqual(problem_sheet["C3"].value, "Zebra")
+            self.assertEqual(problem_sheet["A3"].value, 2)
 
 
 if __name__ == "__main__":

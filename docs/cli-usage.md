@@ -107,6 +107,21 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
 - 问题条数
 - 输出文件路径
 
+如果需要在 `问题列` 上追加 Codex 假阳性筛查结果：
+
+```bash
+python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
+  -s Sheet1 \
+  -c A \
+  -t B \
+  --mark-style [] \
+  --mark-style <> \
+  --codex-fp-review \
+  -o ./artifacts/input_term_pairs.xlsx
+```
+
+该模式会调用本机 `codex exec`，按 `问题source术语 + 预期target术语 + 问题简述 + source原文 + target原文` 聚类，并写入 `fp_decision`、`fp_category`、`fp_confidence`、`fp_note`、`fp_by`。
+
 ### 2. 术语表命中检查
 
 推荐完整调用：
@@ -148,6 +163,22 @@ python3 tools/term_glossary_checker/check_terms_against_glossary.py \
 
 - `术语命中问题`
 - `检查汇总`
+
+如果需要在 `术语命中问题` 上追加 Codex 假阳性筛查结果：
+
+```bash
+python3 tools/term_glossary_checker/check_terms_against_glossary.py \
+  ./glossary.xlsx \
+  ./data.xlsx \
+  --glossary-source-column A \
+  --glossary-target-column B \
+  --data-source-column A \
+  --data-target-column B \
+  --codex-fp-review \
+  -o ./artifacts/data_glossary_checked.xlsx
+```
+
+该模式会调用本机 `codex exec`，按 `source术语 + 期望target术语 + 问题类型 + source文本 + target文本` 聚类，并写入 `fp_decision`、`fp_category`、`fp_confidence`、`fp_note`、`fp_by`。
 
 标准输出会打印：
 

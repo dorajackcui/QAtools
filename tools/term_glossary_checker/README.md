@@ -47,6 +47,7 @@ GUI 现在支持：
 - 默认输出为新的 Excel 文件，也可手动指定输出路径
 - 两份文件都会自动识别第 1 行表头中的 `source` / `target` 列并回填
 - 如果未识别到列，可继续手动填写列字母作为回退
+- 可勾选“使用 Codex 筛查术语误报”，在 `术语命中问题` 末尾写入 `fp_*` 辅助列
 
 ## 常用参数
 
@@ -59,6 +60,10 @@ GUI 现在支持：
 - `--start-row`：开始处理的行号，默认 `2`
 - `--case-sensitive`：启用大小写敏感匹配
 - `--match-mode`：匹配模式，可选 `hybrid-boundary` 或 `substring`
+- `--codex-fp-review`：检查完成后调用本机 `codex exec` 做假阳性筛查，并在 `术语命中问题` 末尾写入 `fp_decision`、`fp_category`、`fp_confidence`、`fp_note`、`fp_by`
+- `--codex-fp-sample-size`：每个同术语、期望译法、问题类型和原文/译文文本 cluster 发送给 Codex 的样本数，默认 `5`
+- `--codex-model`：Codex 假阳性筛查使用的模型；不填则使用 Codex 默认模型
+- `--codex-reasoning-effort`：Codex 假阳性筛查使用的 reasoning effort，默认 `high`
 - `-o, --output`：输出文件路径，可选，默认生成 `<原文件名>_glossary_checked.xlsx`
 
 ## 输出说明
@@ -71,6 +76,14 @@ GUI 现在支持：
 - `期望target术语`
 - `source文本`
 - `target文本`
+
+启用 `--codex-fp-review` 或 GUI 勾选 Codex 筛查后，还会追加：
+
+- `fp_decision`：`false_positive`、`true_issue` 或 `review`
+- `fp_category`
+- `fp_confidence`
+- `fp_note`
+- `fp_by`
 
 `检查汇总` 工作表包含以下统计项：
 

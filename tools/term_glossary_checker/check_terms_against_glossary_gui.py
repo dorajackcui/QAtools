@@ -8,6 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
+from tools.false_positive_review import review_clusters_with_codex
 
 try:
     from .check_terms_against_glossary import build_default_output_path, process_excel
@@ -30,6 +31,7 @@ class TermGlossaryCheckerApp(ttk.Frame):
         self.start_row_var = tk.StringVar(value="2")
         self.case_sensitive_var = tk.BooleanVar(value=False)
         self.match_mode_var = tk.StringVar(value="hybrid-boundary")
+        self.codex_fp_review_var = tk.BooleanVar(value=False)
 
         self._build_ui()
 
@@ -116,12 +118,18 @@ class TermGlossaryCheckerApp(ttk.Frame):
             row=11, column=0, columnspan=3, sticky="w", pady=(0, 12)
         )
 
+        ttk.Checkbutton(
+            self,
+            text="使用 Codex 筛查术语误报",
+            variable=self.codex_fp_review_var,
+        ).grid(row=12, column=0, columnspan=3, sticky="w", pady=(0, 12))
+
         ttk.Button(self, text="开始检查", command=self.run_check).grid(
-            row=12, column=0, columnspan=3, sticky="ew"
+            row=13, column=0, columnspan=3, sticky="ew"
         )
 
         note = "规则：默认使用混合边界匹配，避免 rain 命中 training、ACC 命中 account。"
-        ttk.Label(self, text=note).grid(row=13, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Label(self, text=note).grid(row=14, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.columnconfigure(1, weight=1)
 
@@ -316,6 +324,7 @@ class TermGlossaryCheckerApp(ttk.Frame):
                 case_sensitive=self.case_sensitive_var.get(),
                 match_mode=self.match_mode_var.get().strip() or "hybrid-boundary",
                 output_file=output_file or None,
+                false_positive_reviewer=review_clusters_with_codex if self.codex_fp_review_var.get() else None,
             )
         except Exception as exc:
             messagebox.showerror("处理失败", str(exc))
@@ -336,6 +345,11 @@ class TermGlossaryCheckerApp(ttk.Frame):
                     f"命中术语行数: {summary.matched_rows}",
                     f"问题行数: {summary.problem_rows}",
                     f"问题条数: {summary.problem_count}",
+                    *(
+                        ["Codex 假阳性筛查: 已写入 fp_* 辅助列"]
+                        if self.codex_fp_review_var.get()
+                        else []
+                    ),
                     f"输出文件: {summary.output_path}",
                 ]
             ),

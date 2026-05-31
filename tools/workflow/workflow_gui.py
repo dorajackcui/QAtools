@@ -8,6 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
+from tools.false_positive_review import review_clusters_with_codex
 from tools.term_pair_checker.extract_terms_from_excel import (
     TERM_SHEET_NAME,
     detect_history_tb_columns,
@@ -32,6 +33,7 @@ class WorkflowRunnerApp(ttk.Frame):
         self.start_row_var = tk.StringVar(value="2")
         self.run_term_pair_var = tk.BooleanVar(value=True)
         self.run_tag_check_var = tk.BooleanVar(value=True)
+        self.codex_fp_review_var = tk.BooleanVar(value=False)
         self.term_mark_style_vars = {
             "【】": tk.BooleanVar(value=False),
             "[]": tk.BooleanVar(value=True),
@@ -159,14 +161,20 @@ class WorkflowRunnerApp(ttk.Frame):
             row=0, column=4, sticky="w", padx=(12, 0)
         )
 
+        ttk.Checkbutton(
+            self,
+            text="使用 Codex 筛查术语误报",
+            variable=self.codex_fp_review_var,
+        ).grid(row=12, column=0, columnspan=3, sticky="w", pady=(0, 12))
+
         ttk.Button(self, text="开始执行 Workflow", command=self.run_selected_tasks).grid(
-            row=12, column=0, columnspan=3, sticky="ew"
+            row=13, column=0, columnspan=3, sticky="ew"
         )
 
         ttk.Label(
             self,
             text="说明：按顺序复用现有 checker，把术语对检查和 Tag检查结果写进同一份输出 Excel。",
-        ).grid(row=13, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ).grid(row=14, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.columnconfigure(1, weight=1)
 
@@ -386,6 +394,7 @@ class WorkflowRunnerApp(ttk.Frame):
                 term_history_start_row=term_history_start_row,
                 run_tag_check=run_tag_check,
                 tag_token_types=tag_token_types,
+                false_positive_reviewer=review_clusters_with_codex if self.codex_fp_review_var.get() else None,
             )
         except Exception as exc:
             messagebox.showerror("处理失败", str(exc))
@@ -402,6 +411,8 @@ class WorkflowRunnerApp(ttk.Frame):
         if summary.ran_term_pair_check:
             lines.append(f"术语表条目数: {summary.term_count}")
             lines.append(f"术语问题条数: {summary.term_problem_count}")
+            if self.codex_fp_review_var.get():
+                lines.append("Codex 假阳性筛查: 已写入 fp_* 辅助列")
             if term_history_tb_file:
                 lines.append(f"术语历史 TB: {term_history_tb_file}")
         if summary.ran_tag_check:

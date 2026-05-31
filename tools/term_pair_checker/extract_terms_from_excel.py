@@ -11,6 +11,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string, get_column_letter
 
@@ -22,6 +25,12 @@ from tools.term_matching import (
     normalize_text,
     term_has_expected_target,
     term_has_simple_s_plural_variant,
+)
+from tools.false_positive_review import (
+    TERM_PAIR_PROBLEM_MAPPING,
+    Reviewer,
+    apply_false_positive_review_to_sheet,
+    review_clusters_with_codex,
 )
 
 
@@ -316,6 +325,27 @@ def parse_args() -> argparse.Namespace:
         "-o",
         "--output",
         help="输出 Excel 文件路径，默认生成 <原文件名>_term_pairs.xlsx",
+    )
+    parser.add_argument(
+        "--codex-fp-review",
+        action="store_true",
+        help="检查完成后调用 Codex 对问题列做假阳性筛查，并写回 fp_* 辅助列。",
+    )
+    parser.add_argument(
+        "--codex-fp-sample-size",
+        type=int,
+        default=5,
+        help="每个术语问题 cluster 发送给 Codex 的样本条数，默认 5。",
+    )
+    parser.add_argument(
+        "--codex-model",
+        help="Codex 假阳性筛查使用的模型；不填则使用 Codex 默认模型。",
+    )
+    parser.add_argument(
+        "--codex-reasoning-effort",
+        default="high",
+        choices=("low", "medium", "high"),
+        help="Codex 假阳性筛查使用的 reasoning effort，默认 high。",
     )
     return parser.parse_args()
 
@@ -837,6 +867,8 @@ def process_excel(
     history_target_column: str | None = None,
     history_start_row: int = 2,
     output_file: str | Path | None = None,
+    false_positive_reviewer: Reviewer | None = None,
+    false_positive_sample_size: int = 5,
 ) -> tuple[str, str, str, Path, int, int]:
     input_path = Path(input_file).expanduser().resolve()
     if not input_path.exists():
@@ -1081,6 +1113,15 @@ def process_excel(
         problem_sheet[f"F{row_index}"] = problem_entry.source_snapshot
         problem_sheet[f"G{row_index}"] = problem_entry.target_snapshot
 
+    if false_positive_reviewer is not None:
+        apply_false_positive_review_to_sheet(
+            workbook,
+            PROBLEM_SHEET_NAME,
+            TERM_PAIR_PROBLEM_MAPPING,
+            reviewer=false_positive_reviewer,
+            sample_size=false_positive_sample_size,
+        )
+
     if "术语表（无mark）" in workbook.sheetnames:
         del workbook["术语表（无mark）"]
     if "术语汇总" in workbook.sheetnames:
@@ -1100,6 +1141,13 @@ def process_excel(
 
 def main() -> None:
     args = prompt_if_missing(parse_args())
+    false_positive_reviewer = None
+    if args.codex_fp_review:
+        false_positive_reviewer = lambda clusters: review_clusters_with_codex(  # noqa: E731
+            clusters,
+            model=args.codex_model,
+            reasoning_effort=args.codex_reasoning_effort,
+        )
 
     (
         worksheet_title,
@@ -1122,6 +1170,8 @@ def main() -> None:
         history_target_column=args.history_target_column,
         history_start_row=args.history_start_row,
         output_file=args.output,
+        false_positive_reviewer=false_positive_reviewer,
+        false_positive_sample_size=args.codex_fp_sample_size,
     )
 
     print("处理完成。")
@@ -1133,6 +1183,8 @@ def main() -> None:
         print(f"历史 TB: {Path(args.history_tb).expanduser().resolve()}")
     print(f"术语表条目数: {term_count}")
     print(f"问题条数: {problem_count}")
+    if args.codex_fp_review:
+        print("Codex 假阳性筛查: 已写入 fp_* 辅助列")
     print(f"输出文件: {output_path}")
 
 

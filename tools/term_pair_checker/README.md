@@ -59,6 +59,7 @@ GUI 现在支持：
 - 默认输出为新的 Excel 文件，也可手动指定输出路径
 - 自动识别第 1 行表头中的 `source` / `target` 列并回填
 - 如果未识别到列，可继续手动填写列字母作为回退
+- 可勾选“使用 Codex 筛查术语误报”，在 `问题列` 末尾写入 `fp_*` 辅助列
 
 兼容旧入口：
 
@@ -78,4 +79,8 @@ python3 extract_terms_gui.py
 - `--history-sheet`：历史 TB 工作表名称，可选；默认优先使用 `术语表`
 - `--history-source-column` / `--history-target-column`：历史 TB source / target 列，可选；不填则自动识别表头
 - `--history-start-row`：历史 TB 开始读取行号，默认 `2`
+- `--codex-fp-review`：检查完成后调用本机 `codex exec` 做假阳性筛查，并在 `问题列` 末尾写入 `fp_decision`、`fp_category`、`fp_confidence`、`fp_note`、`fp_by`
+- `--codex-fp-sample-size`：每个同术语、期望译法、问题类型和原文/译文文本 cluster 发送给 Codex 的样本数，默认 `5`
+- `--codex-model`：Codex 假阳性筛查使用的模型；不填则使用 Codex 默认模型
+- `--codex-reasoning-effort`：Codex 假阳性筛查使用的 reasoning effort，默认 `high`
 - `-o, --output`：输出文件路径，可选，默认生成 `<原文件名>_term_pairs.xlsx`
