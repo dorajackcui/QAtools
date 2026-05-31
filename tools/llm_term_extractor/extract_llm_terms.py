@@ -441,6 +441,8 @@ def _detect_history_columns(
             "Could not detect history TB source/target columns. "
             "Provide --history-source-column and --history-target-column."
         )
+    if detected_source_column == detected_target_column:
+        raise ValueError("历史 TB source/target 列不能相同。")
     return detected_source_column, detected_target_column
 
 

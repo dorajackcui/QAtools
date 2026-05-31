@@ -548,6 +548,48 @@ class LlmTermWorkbookTests(unittest.TestCase):
 
         self.assertEqual(mapping, {"abyssal vault": "深渊宝库"})
 
+    def test_load_history_tb_mapping_rejects_explicit_same_column(self) -> None:
+        from openpyxl import Workbook
+
+        from tools.llm_term_extractor.extract_llm_terms import load_history_tb_mapping
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-history-same-column-") as tmp_dir:
+            history_path = Path(tmp_dir) / "history.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "术语表"
+            worksheet["A1"] = "source"
+            worksheet["A2"] = "Abyssal Vault"
+            workbook.save(history_path)
+
+            with self.assertRaisesRegex(ValueError, "不能相同|same"):
+                load_history_tb_mapping(
+                    history_path,
+                    source_column="A",
+                    target_column="A",
+                )
+
+    def test_load_history_tb_mapping_rejects_same_column_resolved_from_headers(self) -> None:
+        from openpyxl import Workbook
+
+        from tools.llm_term_extractor.extract_llm_terms import load_history_tb_mapping
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-history-same-header-") as tmp_dir:
+            history_path = Path(tmp_dir) / "history.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "术语表"
+            worksheet["A1"] = "shared term header"
+            worksheet["A2"] = "Abyssal Vault"
+            workbook.save(history_path)
+
+            with self.assertRaisesRegex(ValueError, "不能相同|same"):
+                load_history_tb_mapping(
+                    history_path,
+                    source_column="shared term header",
+                    target_column="shared term header",
+                )
+
     def test_process_excel_routes_real_conflicts_to_review_sheets(self) -> None:
         from openpyxl import Workbook, load_workbook
 
