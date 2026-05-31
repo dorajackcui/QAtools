@@ -177,6 +177,44 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp_gui.py
 
 详情见 `tools/french_nbsp_restorer/README.md`。
 
+### 7. LLM 术语提取
+
+- 目录：`tools/llm_term_extractor`
+- 用途：从 Excel 的 `source` 列抽取游戏术语；如果 `target` 列有内容则抽取 source-target 对并做冲突复核；`target` 留空时则仅做 source-only 术语收集
+- 默认模型：`gpt-5.3-codex-spark`，`reasoning effort` 默认 `high`
+- prompt 管理：默认使用 `tools/llm_term_extractor/prompts/` 下的 `extract_terms_zh_target.md` 与 `conflict_review_zh_target.md`，支持 CLI 覆盖对应文件
+- 输出方式：生成新的结果 Excel（默认文件名 `<原文件名>_llm_terms.xlsx`），不会覆盖原文件
+- CLI：
+
+```bash
+python3 tools/llm_term_extractor/extract_llm_terms.py input.xlsx \
+  -s Sheet1 \
+  -c A \
+  -t B \
+  --start-row 2 \
+  --batch-size 50 \
+  --codex-model gpt-5.3-codex-spark \
+  --codex-reasoning-effort high \
+  --history-tb history_tb.xlsx \
+  --extract-prompt-file ./tools/llm_term_extractor/prompts/extract_terms_zh_target.md \
+  --conflict-prompt-file ./tools/llm_term_extractor/prompts/conflict_review_zh_target.md \
+  -o output_llm_terms.xlsx
+```
+
+- GUI：
+
+```bash
+python3 tools/llm_term_extractor/extract_llm_terms_gui.py
+```
+
+也可在统一入口启动：
+
+```bash
+python3 toolshub_gui.py
+```
+
+详情见 `tools/llm_term_extractor/README.md`。
+
 ## 依赖安装
 
 ```bash
@@ -192,6 +230,7 @@ pip install -r requirements.txt
 - Excel 分行拆列详细说明：`tools/excel_line_splitter/README.md`
 - Target 中文检查详细说明：`tools/chinese_target_checker/README.md`
 - 法语 NBSP 恢复详细说明：`tools/french_nbsp_restorer/README.md`
+- LLM 术语提取详细说明：`tools/llm_term_extractor/README.md`
 
 ## 统一 GUI 入口
 
@@ -200,3 +239,5 @@ python3 toolshub_gui.py
 ```
 
 会打开一个统一窗口，使用标签页管理这些工具；Workflow 编排页也支持给术语对检查选择历史 TB；原有各自的 GUI 入口仍然保留。
+
+统一入口同样包含 `LLM术语提取` 标签页，支持 source-only 与 target 两种模式和历史 TB 参数。GUI 内可选择或覆盖抽取 / 冲突复核的 prompt 文件。

@@ -33,6 +33,9 @@
 - `tools/french_nbsp_restorer/restore_french_nbsp.py`
   - 必填：`input_file`、`-t/--target-column`
   - 常用可选：`-s/--sheet`、`-r/--result-column`、`--start-row`、`-o/--output`
+- `tools/llm_term_extractor/extract_llm_terms.py`
+  - 必填：`input_file`、`-c/--source-column`
+  - 常用可选：`-s/--sheet`、`-t/--target-column`、`--start-row`、`--batch-size`、`--codex-model`、`--codex-reasoning-effort`、`--extract-prompt-file`、`--conflict-prompt-file`、`--dump-prompts-dir`、`--keep-raw-codex-output`、`--history-tb`、`--history-sheet`、`--history-source-column`、`--history-target-column`、`--history-start-row`、`-o/--output`
 
 ## 推荐命令模板
 
@@ -350,6 +353,69 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp.py ./input.xlsx \
 - 修复行数
 - 输出文件路径
 
+### 7. LLM 术语提取
+
+推荐完整调用（target 模式）：
+
+```bash
+python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
+  -s Sheet1 \
+  -c A \
+  -t B \
+  --start-row 2 \
+  --batch-size 50 \
+  --codex-model gpt-5.3-codex-spark \
+  --codex-reasoning-effort high \
+  -o ./artifacts/input_llm_terms.xlsx
+```
+
+如果是 source-only 模式（`target` 为空，或不传 `-t`）：
+
+```bash
+python3 tools/llm_term_extractor/extract_llm_terms.py ./source_only.xlsx \
+  -s Sheet1 \
+  -c A \
+  --start-row 2 \
+  --batch-size 50 \
+  -o ./artifacts/source_only_llm_terms.xlsx
+```
+
+带历史 TB 与 prompt 覆盖的推荐调用：
+
+```bash
+python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
+  -s Sheet1 \
+  -c A -t B \
+  --start-row 2 \
+  --batch-size 50 \
+  --history-tb ./history_tb.xlsx \
+  --history-sheet Glossary \
+  --history-source-column source \
+  --history-target-column target \
+  --extract-prompt-file ./tools/llm_term_extractor/prompts/extract_terms_zh_target.md \
+  --conflict-prompt-file ./tools/llm_term_extractor/prompts/conflict_review_zh_target.md \
+  --dump-prompts-dir ./artifacts/prompt_dumps \
+  --keep-raw-codex-output \
+  -o ./artifacts/input_llm_terms.xlsx
+```
+
+说明：
+
+- 默认输出文件名为 `<原文件名>_llm_terms.xlsx`；也可用 `-o/--output` 指定。
+- 该工具会在内部调用本机 `codex exec`，解析严格 JSON 的返回并写入多张输出工作表。
+- 单元测试里不要求真实调用 `codex exec`，可通过替身/patch 完成模拟测试。
+
+标准输出会打印：
+
+- 工作表名
+- source 列 / target 列
+- 开始行
+- 扫描行数
+- 批次数
+- 术语数
+- 冲突数
+- 输出文件路径
+
 ## Agent 调用注意事项
 
 - 不要把 GUI 的自动列识别能力当成 CLI 的默认能力；CLI 场景下请自己明确传列字母。
@@ -359,6 +425,7 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp.py ./input.xlsx \
   - `<原文件名>_term_pairs.xlsx`
   - `<原文件名>_glossary_checked.xlsx`
   - `<原文件名>_tag_placeholder_checked.xlsx`
-  - Target 中文检查默认直接修改原文件；显式传 `-o` 时由调用方指定输出名
+- Target 中文检查默认直接修改原文件；显式传 `-o` 时由调用方指定输出名
   - `<原文件名>_split_lines.xlsx`
   - `<原文件名>_french_nbsp_restored.xlsx`
+  - `<原文件名>_llm_terms.xlsx`
