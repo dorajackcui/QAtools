@@ -109,6 +109,14 @@ class GuiSheetSelectionTests(unittest.TestCase):
         workbook.active = 1
         workbook.save(path)
 
+    def create_source_only_workbook(self, path: Path) -> None:
+        workbook = Workbook()
+        data_sheet = workbook.active
+        data_sheet.title = "SourceOnly"
+        data_sheet["A1"] = "source"
+        data_sheet["B1"] = "note"
+        workbook.save(path)
+
     def create_splitter_workbook(self, path: Path) -> None:
         workbook = Workbook()
         data_sheet = workbook.active
@@ -226,8 +234,17 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.output_file_var = FakeVar("")
         app.sheet_var = FakeVar("")
         app.source_column_var = FakeVar("A")
-        app.target_column_var = FakeVar("B")
+        app.target_column_var = FakeVar("")
         app.sheet_combobox = FakeCombobox()
+        return app
+
+    def build_llm_term_extractor_app_with_history(self, history_path: Path) -> LlmTermExtractorApp:
+        app = LlmTermExtractorApp.__new__(LlmTermExtractorApp)
+        app.history_tb_file_var = FakeVar(str(history_path))
+        app.history_sheet_var = FakeVar("")
+        app.history_source_column_var = FakeVar("")
+        app.history_target_column_var = FakeVar("")
+        app.history_sheet_combobox = FakeCombobox()
         return app
 
     def test_term_pair_refresh_populates_sheet_choices_and_detects_columns(self) -> None:
@@ -472,7 +489,34 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.source_column_var.get(), "C")
             self.assertEqual(app.target_column_var.get(), "F")
 
-    def test_llm_term_extractor_blank_target_column_passes_none_to_processor(self) -> None:
+    def test_llm_term_extractor_source_only_refresh_clears_target_column(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "source_only.xlsx"
+            self.create_source_only_workbook(workbook_path)
+            app = self.build_llm_term_extractor_app(workbook_path)
+            app.target_column_var.set("B")
+
+            app.refresh_sheet_choices(show_error=False)
+
+            self.assertEqual(app.sheet_combobox["values"], ("SourceOnly",))
+            self.assertEqual(app.sheet_var.get(), "SourceOnly")
+            self.assertEqual(app.source_column_var.get(), "A")
+            self.assertEqual(app.target_column_var.get(), "")
+
+    def test_llm_term_extractor_history_tb_defaults_to_term_sheet_and_detects_nomark_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            history_path = Path(tmp_dir) / "history.xlsx"
+            self.create_history_tb_workbook(history_path)
+            app = self.build_llm_term_extractor_app_with_history(history_path)
+
+            app.refresh_history_sheet_choices(show_error=False)
+
+            self.assertEqual(app.history_sheet_combobox["values"], ("Raw", "术语表"))
+            self.assertEqual(app.history_sheet_var.get(), "术语表")
+            self.assertEqual(app.history_source_column_var.get(), "C")
+            self.assertEqual(app.history_target_column_var.get(), "D")
+
+    def test_llm_term_extractor_blank_target_and_history_fields_pass_to_processor(self) -> None:
         app = LlmTermExtractorApp.__new__(LlmTermExtractorApp)
         app.input_file_var = FakeVar("/tmp/input.xlsx")
         app.output_file_var = FakeVar("/tmp/output.xlsx")
@@ -486,6 +530,10 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.extract_prompt_file_var = FakeVar("")
         app.conflict_prompt_file_var = FakeVar("/tmp/conflict.md")
         app.history_tb_file_var = FakeVar("")
+        app.history_sheet_var = FakeVar("术语表")
+        app.history_source_column_var = FakeVar("C")
+        app.history_target_column_var = FakeVar("D")
+        app.history_start_row_var = FakeVar("4")
         app.keep_raw_codex_output_var = FakeBoolVar(True)
         summary = SimpleNamespace(
             output_path=Path("/tmp/output.xlsx"),
@@ -513,6 +561,10 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertEqual(process_excel_mock.call_args.kwargs["batch_size"], 25)
         self.assertEqual(process_excel_mock.call_args.kwargs["extract_prompt_file"], None)
         self.assertEqual(process_excel_mock.call_args.kwargs["conflict_prompt_file"], "/tmp/conflict.md")
+        self.assertEqual(process_excel_mock.call_args.kwargs["history_sheet"], "术语表")
+        self.assertEqual(process_excel_mock.call_args.kwargs["history_source_column"], "C")
+        self.assertEqual(process_excel_mock.call_args.kwargs["history_target_column"], "D")
+        self.assertEqual(process_excel_mock.call_args.kwargs["history_start_row"], 4)
         self.assertEqual(process_excel_mock.call_args.kwargs["keep_raw_codex_output"], True)
 
     def test_term_pair_gui_defaults_to_square_and_angle_marks(self) -> None:

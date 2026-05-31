@@ -7,6 +7,8 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from openpyxl import load_workbook
+
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
 
 try:
@@ -18,6 +20,7 @@ try:
         build_default_output_path,
         default_prompt_path,
         process_excel,
+        _detect_history_columns,
     )
 except ImportError:
     from extract_llm_terms import (
@@ -28,7 +31,45 @@ except ImportError:
         build_default_output_path,
         default_prompt_path,
         process_excel,
+        _detect_history_columns,
     )
+
+
+HISTORY_TERM_SHEET_NAME = "术语表"
+
+
+def _detect_history_tb_columns(
+    history_tb_file: str | Path,
+    sheet: str | None = None,
+) -> tuple[str, str | None, str | None]:
+    history_path = Path(history_tb_file).expanduser().resolve()
+    if not history_path.exists():
+        raise FileNotFoundError(f"历史 TB 文件不存在: {history_path}")
+
+    workbook = load_workbook(history_path, read_only=True, data_only=True)
+    try:
+        if sheet:
+            if sheet not in workbook.sheetnames:
+                raise ValueError(f"历史 TB 工作表不存在: {sheet}")
+            worksheet = workbook[sheet]
+        elif HISTORY_TERM_SHEET_NAME in workbook.sheetnames:
+            worksheet = workbook[HISTORY_TERM_SHEET_NAME]
+        else:
+            worksheet = workbook.active
+
+        try:
+            source_column, target_column = _detect_history_columns(
+                worksheet,
+                header_row=1,
+                source_column=None,
+                target_column=None,
+            )
+        except ValueError:
+            source_column, target_column = "", ""
+
+        return worksheet.title, source_column or None, target_column or None
+    finally:
+        workbook.close()
 
 
 class LlmTermExtractorApp(ttk.Frame):
@@ -38,7 +79,7 @@ class LlmTermExtractorApp(ttk.Frame):
         self.output_file_var = tk.StringVar()
         self.sheet_var = tk.StringVar()
         self.source_column_var = tk.StringVar(value="A")
-        self.target_column_var = tk.StringVar(value="B")
+        self.target_column_var = tk.StringVar()
         self.start_row_var = tk.StringVar(value="2")
         self.batch_size_var = tk.StringVar(value="50")
         self.codex_model_var = tk.StringVar(value=DEFAULT_CODEX_MODEL)
@@ -50,6 +91,10 @@ class LlmTermExtractorApp(ttk.Frame):
             value=str(default_prompt_path(DEFAULT_CONFLICT_PROMPT))
         )
         self.history_tb_file_var = tk.StringVar()
+        self.history_sheet_var = tk.StringVar()
+        self.history_source_column_var = tk.StringVar()
+        self.history_target_column_var = tk.StringVar()
+        self.history_start_row_var = tk.StringVar(value="2")
         self.keep_raw_codex_output_var = tk.BooleanVar(value=False)
 
         self._build_ui()
@@ -139,20 +184,45 @@ class LlmTermExtractorApp(ttk.Frame):
             row=0, column=1, sticky="ew", padx=(6, 0)
         )
 
+        ttk.Label(self, text="历史 TB 工作表").grid(row=12, column=0, sticky="w", pady=(0, 8))
+        self.history_sheet_combobox = ttk.Combobox(
+            self,
+            textvariable=self.history_sheet_var,
+            width=20,
+            state="readonly",
+        )
+        self.history_sheet_combobox.grid(row=12, column=1, sticky="w", pady=(0, 8))
+        self.history_sheet_combobox.bind("<<ComboboxSelected>>", self.handle_history_sheet_selected)
+
+        ttk.Label(self, text="历史 TB Source 列").grid(row=13, column=0, sticky="w", pady=(0, 8))
+        ttk.Entry(self, textvariable=self.history_source_column_var, width=10).grid(
+            row=13, column=1, sticky="w", pady=(0, 8)
+        )
+
+        ttk.Label(self, text="历史 TB Target 列").grid(row=14, column=0, sticky="w", pady=(0, 8))
+        ttk.Entry(self, textvariable=self.history_target_column_var, width=10).grid(
+            row=14, column=1, sticky="w", pady=(0, 8)
+        )
+
+        ttk.Label(self, text="历史 TB 开始行").grid(row=15, column=0, sticky="w", pady=(0, 8))
+        ttk.Entry(self, textvariable=self.history_start_row_var, width=10).grid(
+            row=15, column=1, sticky="w", pady=(0, 8)
+        )
+
         ttk.Checkbutton(
             self,
             text="保留 Codex 原始输出",
             variable=self.keep_raw_codex_output_var,
-        ).grid(row=12, column=0, columnspan=3, sticky="w", pady=(0, 12))
+        ).grid(row=16, column=0, columnspan=3, sticky="w", pady=(0, 12))
 
         ttk.Button(self, text="开始 LLM 术语提取", command=self.run_extraction).grid(
-            row=13, column=0, columnspan=3, sticky="ew"
+            row=17, column=0, columnspan=3, sticky="ew"
         )
 
         ttk.Label(
             self,
             text="说明：target 列可留空；输出包含去重术语、证据、冲突复核和导入候选工作表。",
-        ).grid(row=14, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ).grid(row=18, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.columnconfigure(1, weight=1)
 
@@ -213,13 +283,22 @@ class LlmTermExtractorApp(ttk.Frame):
         )
         if file_path:
             self.history_tb_file_var.set(file_path)
+            self.refresh_history_sheet_choices()
 
     def clear_history_tb_file(self) -> None:
         self.history_tb_file_var.set("")
+        self.history_source_column_var.set("")
+        self.history_target_column_var.set("")
+        self.history_start_row_var.set("2")
+        self.clear_history_sheet_choices()
 
     def clear_sheet_choices(self) -> None:
         self.sheet_combobox["values"] = ()
         self.sheet_var.set("")
+
+    def clear_history_sheet_choices(self) -> None:
+        self.history_sheet_combobox["values"] = ()
+        self.history_sheet_var.set("")
 
     def refresh_sheet_choices(self, show_error: bool = True) -> None:
         input_file = self.input_file_var.get().strip()
@@ -260,6 +339,53 @@ class LlmTermExtractorApp(ttk.Frame):
             self.source_column_var.set(detected_columns.detected_source_column)
         if detected_columns.detected_target_column:
             self.target_column_var.set(detected_columns.detected_target_column)
+        else:
+            self.target_column_var.set("")
+
+    def refresh_history_sheet_choices(self, show_error: bool = True) -> None:
+        history_tb_file = self.history_tb_file_var.get().strip()
+        if not history_tb_file:
+            self.clear_history_sheet_choices()
+            return
+
+        try:
+            sheet_choices = list_workbook_sheets(history_tb_file)
+        except Exception as exc:
+            self.clear_history_sheet_choices()
+            if show_error:
+                messagebox.showerror("读取失败", str(exc))
+            return
+
+        self.history_sheet_combobox["values"] = sheet_choices.sheet_names
+        selected_sheet = self.history_sheet_var.get().strip()
+        if selected_sheet not in sheet_choices.sheet_names:
+            selected_sheet = (
+                HISTORY_TERM_SHEET_NAME
+                if HISTORY_TERM_SHEET_NAME in sheet_choices.sheet_names
+                else sheet_choices.default_sheet or (sheet_choices.sheet_names[0] if sheet_choices.sheet_names else "")
+            )
+            self.history_sheet_var.set(selected_sheet)
+
+        self.handle_history_sheet_selected(show_error=show_error)
+
+    def handle_history_sheet_selected(self, _event: object | None = None, show_error: bool = True) -> None:
+        history_tb_file = self.history_tb_file_var.get().strip()
+        selected_sheet = self.history_sheet_var.get().strip() or None
+        if not history_tb_file or not selected_sheet:
+            return
+
+        try:
+            _sheet_title, source_column, target_column = _detect_history_tb_columns(
+                history_tb_file,
+                sheet=selected_sheet,
+            )
+        except Exception as exc:
+            if show_error:
+                messagebox.showerror("读取失败", str(exc))
+            return
+
+        self.history_source_column_var.set(source_column or "")
+        self.history_target_column_var.set(target_column or "")
 
     def run_extraction(self) -> None:
         input_file = self.input_file_var.get().strip()
@@ -272,6 +398,9 @@ class LlmTermExtractorApp(ttk.Frame):
         extract_prompt_file = self.extract_prompt_file_var.get().strip() or None
         conflict_prompt_file = self.conflict_prompt_file_var.get().strip() or None
         history_tb_file = self.history_tb_file_var.get().strip() or None
+        history_sheet = self.history_sheet_var.get().strip() or None
+        history_source_column = self.history_source_column_var.get().strip() or None
+        history_target_column = self.history_target_column_var.get().strip() or None
 
         if not input_file:
             messagebox.showerror("缺少文件", "请先选择输入 Excel 文件。")
@@ -299,6 +428,12 @@ class LlmTermExtractorApp(ttk.Frame):
             return
 
         try:
+            history_start_row = int(self.history_start_row_var.get().strip() or "2")
+        except ValueError:
+            messagebox.showerror("历史 TB 开始行错误", "历史 TB 开始行必须是整数。")
+            return
+
+        try:
             summary = process_excel(
                 input_file=input_file,
                 source_column=source_column,
@@ -308,6 +443,10 @@ class LlmTermExtractorApp(ttk.Frame):
                 batch_size=batch_size,
                 output_file=output_file or None,
                 history_tb_file=history_tb_file,
+                history_sheet=history_sheet,
+                history_source_column=history_source_column,
+                history_target_column=history_target_column,
+                history_start_row=history_start_row,
                 codex_model=codex_model,
                 codex_reasoning_effort=codex_reasoning_effort,
                 extract_prompt_file=extract_prompt_file,
