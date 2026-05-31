@@ -73,8 +73,7 @@ python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
 
 ## 输出工作表
 
-- `Terms_Source_Dedup`：术语聚合结果（去重）  
-  列：`source_term`, `target_terms_observed`, `row_count`, `rows`, `source_examples`, `target_examples`, `term_types`, `confidences`, `notes`, `decision`, `decision_reason`
+- `Terms_Source_Dedup`：术语聚合结果（去重）。列：`source_term`, `target_terms_observed`, `row_count`, `rows`, `source_examples`, `target_examples`, `term_types`, `confidences`, `notes`, `decision`, `decision_reason`
 - `Extraction_Evidence`：逐条抽取证据，含行号与源/目标文本
 - `Conflicts_To_Review`：多译法复核输出，含 LLM 决策信息
 - `Import_Candidate`：可直接导入候选（`decision` 为 `same` 或无冲突且能确定唯一 target）
