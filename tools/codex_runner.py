@@ -63,8 +63,14 @@ def run_codex_exec_prompt(
         check=False,
     )
     if completed.returncode != 0:
-        error_text = completed.stderr.strip() or completed.stdout.strip()
-        raise RuntimeError(f"{error_prefix}: {error_text}")
+        stderr_text = completed.stderr.strip()
+        stdout_text = completed.stdout.strip()
+        details = [f"exit {completed.returncode}"]
+        if stderr_text:
+            details.append(f"stderr: {stderr_text}")
+        if stdout_text:
+            details.append(f"stdout: {stdout_text}")
+        raise RuntimeError(f"{error_prefix}: {'; '.join(details)}")
 
     output_file = Path(output_path)
     return output_file.read_text(encoding="utf-8") if output_file.exists() else completed.stdout

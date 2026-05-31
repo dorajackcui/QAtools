@@ -56,8 +56,13 @@ class CodexRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             output_path = Path(tmp_dir) / "codex-output.txt"
             with patch("tools.codex_runner.subprocess.run", side_effect=fake_run):
-                with self.assertRaisesRegex(RuntimeError, "stderr text"):
+                with self.assertRaises(RuntimeError) as context:
                     run_codex_exec_prompt("prompt text", output_path=output_path)
+
+        error_text = str(context.exception)
+        self.assertIn("exit 1", error_text)
+        self.assertIn("stdout text", error_text)
+        self.assertIn("stderr text", error_text)
 
 
 if __name__ == "__main__":

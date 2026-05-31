@@ -123,11 +123,21 @@ def _column_from_argument(worksheet: Any, column: str | None, header_row: int) -
 def _find_header_column(
     headers: list[tuple[str, str]],
     candidate_groups: tuple[set[str], ...],
+    *,
+    require_unique_matches: bool = False,
 ) -> str | None:
     for candidates in candidate_groups:
-        for column_letter, normalized_header in headers:
-            if normalized_header in candidates:
-                return column_letter
+        matches = [
+            column_letter
+            for column_letter, normalized_header in headers
+            if normalized_header in candidates
+        ]
+        if require_unique_matches:
+            if len(matches) == 1:
+                return matches[0]
+            continue
+        if matches:
+            return matches[0]
     return None
 
 
@@ -148,6 +158,7 @@ def detect_history_columns_from_header_row(
     target_column: str | None = None,
     prefer_no_mark: bool = True,
     allow_partial: bool = False,
+    require_unique_header_matches: bool = False,
 ) -> tuple[str | None, str | None]:
     if header_row < 1:
         raise ValueError("历史 TB 表头行必须大于等于 1。")
@@ -157,9 +168,17 @@ def detect_history_columns_from_header_row(
     headers = _non_empty_headers(worksheet, header_row)
 
     if not detected_source_column:
-        detected_source_column = _find_header_column(headers, _source_candidate_groups(prefer_no_mark))
+        detected_source_column = _find_header_column(
+            headers,
+            _source_candidate_groups(prefer_no_mark),
+            require_unique_matches=require_unique_header_matches,
+        )
     if not detected_target_column:
-        detected_target_column = _find_header_column(headers, _target_candidate_groups(prefer_no_mark))
+        detected_target_column = _find_header_column(
+            headers,
+            _target_candidate_groups(prefer_no_mark),
+            require_unique_matches=require_unique_header_matches,
+        )
 
     if (not detected_source_column or not detected_target_column) and len(headers) == 2:
         fallback_columns = [column for column, _header in headers]
@@ -186,23 +205,28 @@ def detect_history_tb_columns(
     source_column: str | None = None,
     target_column: str | None = None,
     start_row: int = 2,
+    header_row: int | None = None,
     preferred_sheet: str = DEFAULT_HISTORY_SHEET_NAME,
     prefer_no_mark: bool = True,
     allow_partial: bool = False,
+    require_unique_header_matches: bool = False,
 ) -> HistoryTbColumns:
     if start_row < 1:
         raise ValueError("历史 TB 开始行必须大于等于 1。")
+    if header_row is not None and header_row < 1:
+        raise ValueError("历史 TB 表头行必须大于等于 1。")
 
     workbook = load_workbook(resolve_history_path(history_tb_file), read_only=True, data_only=True)
     try:
         worksheet = choose_history_worksheet(workbook, sheet, preferred_sheet=preferred_sheet)
         source_column, target_column = detect_history_columns_from_header_row(
             worksheet,
-            header_row=max(1, start_row - 1),
+            header_row=header_row or max(1, start_row - 1),
             source_column=source_column,
             target_column=target_column,
             prefer_no_mark=prefer_no_mark,
             allow_partial=allow_partial,
+            require_unique_header_matches=require_unique_header_matches,
         )
         return HistoryTbColumns(
             sheet_title=worksheet.title,
@@ -220,22 +244,27 @@ def iter_history_rows(
     source_column: str | None = None,
     target_column: str | None = None,
     start_row: int = 2,
+    header_row: int | None = None,
     preferred_sheet: str = DEFAULT_HISTORY_SHEET_NAME,
     prefer_no_mark: bool = True,
     empty_row_stop_threshold: int | None = None,
+    require_unique_header_matches: bool = False,
 ) -> tuple[str, str, str, tuple[HistoryTbRow, ...]]:
     if start_row < 1:
         raise ValueError("历史 TB 开始行必须大于等于 1。")
+    if header_row is not None and header_row < 1:
+        raise ValueError("历史 TB 表头行必须大于等于 1。")
 
     workbook = load_workbook(resolve_history_path(history_tb_file), read_only=True, data_only=True)
     try:
         worksheet = choose_history_worksheet(workbook, sheet, preferred_sheet=preferred_sheet)
         detected_source_column, detected_target_column = detect_history_columns_from_header_row(
             worksheet,
-            header_row=max(1, start_row - 1),
+            header_row=header_row or max(1, start_row - 1),
             source_column=source_column,
             target_column=target_column,
             prefer_no_mark=prefer_no_mark,
+            require_unique_header_matches=require_unique_header_matches,
         )
         assert detected_source_column is not None
         assert detected_target_column is not None

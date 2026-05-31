@@ -783,6 +783,50 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertIn("apple", history_mapping)
             self.assertNotIn("late", history_mapping)
 
+    def test_history_tb_start_row_keeps_row_one_header_detection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            history_path = Path(tmp_dir) / "history.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "术语表"
+            worksheet["A1"] = "source术语"
+            worksheet["B1"] = "target术语"
+            worksheet["C1"] = "备注"
+            worksheet["A2"] = "Skipped"
+            worksheet["B2"] = "Ignore"
+            worksheet["C2"] = "not a header"
+            worksheet["A3"] = "Apple"
+            worksheet["B3"] = "Pomme"
+            worksheet["C3"] = "use me"
+            workbook.save(history_path)
+
+            history_mapping = term_pair_module.load_history_tb_mapping(
+                history_path,
+                start_row=3,
+            )
+
+            self.assertNotIn("skipped", history_mapping)
+            self.assertEqual(history_mapping["apple"].target_plain_text, "Pomme")
+
+    def test_history_tb_rejects_ambiguous_duplicate_source_headers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            history_path = Path(tmp_dir) / "history.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "术语表"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "source"
+            worksheet["C1"] = "target"
+            worksheet["A2"] = "Wrong Source"
+            worksheet["B2"] = "Apple"
+            worksheet["C2"] = "Pomme"
+            workbook.save(history_path)
+
+            with self.assertRaisesRegex(ValueError, "缺少 source/target 列"):
+                term_pair_module.load_history_tb_mapping(history_path)
+
 
 if __name__ == "__main__":
     unittest.main()

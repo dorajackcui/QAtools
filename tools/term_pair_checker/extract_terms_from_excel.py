@@ -388,6 +388,7 @@ def detect_history_tb_columns(
         preferred_sheet=TERM_SHEET_NAME,
         prefer_no_mark=False,
         allow_partial=True,
+        require_unique_header_matches=True,
     )
 
 
@@ -409,9 +410,11 @@ def load_history_tb_mapping(
         source_column=source_column,
         target_column=target_column,
         start_row=start_row,
+        header_row=1,
         preferred_sheet=TERM_SHEET_NAME,
         prefer_no_mark=False,
         empty_row_stop_threshold=HISTORY_EMPTY_ROW_STOP_THRESHOLD,
+        require_unique_header_matches=True,
     )
 
     history_mapping: dict[str, RecordedTermPair] = {}
