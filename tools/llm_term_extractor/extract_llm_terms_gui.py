@@ -8,6 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
+from tools.gui_common import parse_positive_int
 
 try:
     from .extract_llm_terms import (
@@ -387,18 +388,15 @@ class LlmTermExtractorApp(ttk.Frame):
             return
 
         try:
-            start_row = int(self.start_row_var.get().strip() or "2")
-        except ValueError:
-            messagebox.showerror("开始行错误", "开始行必须是整数。")
+            start_row = parse_positive_int(self.start_row_var.get(), default=2, field_name="开始行")
+        except ValueError as exc:
+            messagebox.showerror("开始行错误", str(exc))
             return
 
         try:
-            batch_size = int(self.batch_size_var.get().strip() or "50")
-        except ValueError:
-            messagebox.showerror("批大小错误", "批大小必须是整数。")
-            return
-        if batch_size < 1:
-            messagebox.showerror("批大小错误", "批大小必须大于 0。")
+            batch_size = parse_positive_int(self.batch_size_var.get(), default=50, field_name="批大小")
+        except ValueError as exc:
+            messagebox.showerror("批大小错误", str(exc))
             return
 
         if history_tb_file:
@@ -456,16 +454,15 @@ class LlmTermExtractorApp(ttk.Frame):
 
     def _parse_history_start_row(self, show_error: bool = True) -> int | None:
         try:
-            history_start_row = int(self.history_start_row_var.get().strip() or "2")
-        except ValueError:
+            return parse_positive_int(
+                self.history_start_row_var.get(),
+                default=2,
+                field_name="历史 TB 开始行",
+            )
+        except ValueError as exc:
             if show_error:
-                messagebox.showerror("历史 TB 开始行错误", "历史 TB 开始行必须是整数。")
+                messagebox.showerror("历史 TB 开始行错误", str(exc))
             return None
-        if history_start_row < 1:
-            if show_error:
-                messagebox.showerror("历史 TB 开始行错误", "历史 TB 开始行必须大于 0。")
-            return None
-        return history_start_row
 
 
 def main() -> None:

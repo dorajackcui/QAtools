@@ -9,6 +9,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
 from tools.false_positive_review import review_clusters_with_codex
+from tools.gui_common import parse_positive_int
 from tools.term_pair_checker.extract_terms_from_excel import (
     TERM_SHEET_NAME,
     detect_history_tb_columns,
@@ -368,15 +369,19 @@ class WorkflowRunnerApp(ttk.Frame):
             return
 
         try:
-            start_row = int(self.start_row_var.get().strip() or "2")
-        except ValueError:
-            messagebox.showerror("开始行错误", "开始行必须是整数。")
+            start_row = parse_positive_int(self.start_row_var.get(), default=2, field_name="开始行")
+        except ValueError as exc:
+            messagebox.showerror("开始行错误", str(exc))
             return
         if term_history_tb_file:
             try:
-                term_history_start_row = int(self.term_history_start_row_var.get().strip() or "2")
-            except ValueError:
-                messagebox.showerror("术语历史开始行错误", "术语历史开始行必须是整数。")
+                term_history_start_row = parse_positive_int(
+                    self.term_history_start_row_var.get(),
+                    default=2,
+                    field_name="术语历史开始行",
+                )
+            except ValueError as exc:
+                messagebox.showerror("术语历史开始行错误", str(exc))
                 return
         else:
             term_history_sheet = None
