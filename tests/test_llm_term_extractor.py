@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 import tempfile
 import unittest
+from argparse import Namespace
 from pathlib import Path
 from subprocess import CompletedProcess
 from unittest.mock import patch
@@ -149,6 +153,170 @@ class CodexTermReviewTests(unittest.TestCase):
         self.assertEqual(output, '{"rows":[]}')
 
 
+class LlmTermCodexOrchestrationTests(unittest.TestCase):
+    def test_default_output_path_uses_llm_terms_suffix(self) -> None:
+        from tools.llm_term_extractor.extract_llm_terms import build_default_output_path
+
+        output_path = build_default_output_path("/tmp/source-workbook.xlsx")
+
+        self.assertEqual(output_path, Path("/tmp/source-workbook_llm_terms.xlsx"))
+
+    def test_default_batch_extractor_renders_prompt_dumps_raw_output_and_retries_invalid_json(self) -> None:
+        from tools.llm_term_extractor.extract_llm_terms import build_codex_batch_extractor
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-codex-") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            output_path = tmp_path / "input_llm_terms.xlsx"
+            dump_dir = tmp_path / "prompts"
+            responses = iter(
+                [
+                    "not valid json",
+                    (
+                        '{"rows":[{"row_id":"2","terms":[{"source_term":"Abyssal Vault",'
+                        '"target_term":"深渊宝库","category":"item","note":"fixed name"}]}]}'
+                    ),
+                ]
+            )
+            prompts: list[str] = []
+
+            def fake_run_codex_prompt(prompt, output_path_arg, model, reasoning_effort, timeout_seconds):
+                prompts.append(prompt)
+                self.assertEqual(model, DEFAULT_CODEX_MODEL)
+                self.assertEqual(reasoning_effort, DEFAULT_REASONING_EFFORT)
+                self.assertTrue(str(output_path_arg).endswith(".txt"))
+                return next(responses)
+
+            with patch(
+                "tools.llm_term_extractor.extract_llm_terms.run_codex_prompt",
+                side_effect=fake_run_codex_prompt,
+            ):
+                extractor = build_codex_batch_extractor(
+                    output_path=output_path,
+                    dump_prompts_dir=dump_dir,
+                    keep_raw_codex_output=True,
+                )
+                rows = list(
+                    extractor(
+                        [
+                            InputBatchRow(
+                                row_id="2",
+                                source_text="Unlock the Abyssal Vault.",
+                                target_text="解锁深渊宝库。",
+                            )
+                        ]
+                    )
+                )
+
+            self.assertEqual(len(prompts), 2)
+            self.assertIn("source_target", prompts[0])
+            self.assertIn('"row_id": "2"', prompts[0])
+            self.assertIn("return strict JSON", prompts[1])
+            self.assertEqual(rows[0].row_id, "2")
+            self.assertEqual(rows[0].terms[0].source_term, "Abyssal Vault")
+
+            dumped_prompt = dump_dir / "extract-batch-0001.md"
+            self.assertTrue(dumped_prompt.exists())
+            self.assertIn("Abyssal Vault", dumped_prompt.read_text(encoding="utf-8"))
+
+            raw_output_path = tmp_path / "input_llm_terms_codex_raw.jsonl"
+            raw_lines = [
+                json.loads(line)
+                for line in raw_output_path.read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual([line["kind"] for line in raw_lines], ["extract", "extract"])
+            self.assertEqual([line["attempt"] for line in raw_lines], [1, 2])
+            self.assertEqual(raw_lines[0]["raw_output"], "not valid json")
+            self.assertIn('"rows"', raw_lines[1]["raw_output"])
+
+    def test_conflict_reviewer_renders_prompt_and_retries_invalid_json(self) -> None:
+        from tools.llm_term_extractor.extract_llm_terms import build_codex_conflict_reviewer
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-conflict-codex-") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            output_path = tmp_path / "input_llm_terms.xlsx"
+            dump_dir = tmp_path / "prompts"
+            responses = iter(
+                [
+                    "not valid json",
+                    (
+                        '{"decisions":[{"group_id":"abyssal vault","decision":"same",'
+                        '"canonical_target":"深渊宝库","reason":"same term"}]}'
+                    ),
+                ]
+            )
+            prompts: list[str] = []
+
+            def fake_run_codex_prompt(prompt, output_path_arg, model, reasoning_effort, timeout_seconds):
+                prompts.append(prompt)
+                self.assertEqual(model, DEFAULT_CODEX_MODEL)
+                self.assertEqual(reasoning_effort, DEFAULT_REASONING_EFFORT)
+                self.assertTrue(str(output_path_arg).endswith(".txt"))
+                return next(responses)
+
+            with patch(
+                "tools.llm_term_extractor.extract_llm_terms.run_codex_prompt",
+                side_effect=fake_run_codex_prompt,
+            ):
+                reviewer = build_codex_conflict_reviewer(
+                    output_path=output_path,
+                    dump_prompts_dir=dump_dir,
+                    keep_raw_codex_output=True,
+                )
+                decisions = reviewer(
+                    [
+                        ConflictGroup(
+                            group_id="abyssal vault",
+                            source_term="Abyssal Vault",
+                            target_terms=("深渊宝库", "深渊金库"),
+                            examples=("Unlock the Abyssal Vault.",),
+                        )
+                    ]
+                )
+
+            self.assertEqual(len(prompts), 2)
+            self.assertIn('"group_id": "abyssal vault"', prompts[0])
+            self.assertIn("return strict JSON", prompts[1])
+            self.assertEqual(decisions[0].group_id, "abyssal vault")
+            self.assertEqual(decisions[0].decision, "same")
+
+            dumped_prompt = dump_dir / "conflict-review.md"
+            self.assertTrue(dumped_prompt.exists())
+            self.assertIn("Abyssal Vault", dumped_prompt.read_text(encoding="utf-8"))
+
+            raw_output_path = tmp_path / "input_llm_terms_codex_raw.jsonl"
+            raw_lines = [
+                json.loads(line)
+                for line in raw_output_path.read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual([line["kind"] for line in raw_lines], ["conflict", "conflict"])
+            self.assertEqual([line["attempt"] for line in raw_lines], [1, 2])
+            self.assertEqual(raw_lines[0]["raw_output"], "not valid json")
+            self.assertIn('"decisions"', raw_lines[1]["raw_output"])
+
+    def test_prompt_if_missing_requires_input_and_source_in_noninteractive_mode(self) -> None:
+        from tools.llm_term_extractor.extract_llm_terms import prompt_if_missing
+
+        with patch("sys.stdin.isatty", return_value=False):
+            with self.assertRaises(SystemExit) as missing_input:
+                prompt_if_missing(Namespace(input_file=None, source_column="A"))
+            self.assertIn("input_file", str(missing_input.exception))
+
+            with self.assertRaises(SystemExit) as missing_source:
+                prompt_if_missing(Namespace(input_file="/tmp/input.xlsx", source_column=None))
+            self.assertIn("source_column", str(missing_source.exception))
+
+    def test_cli_help_runs_when_invoked_as_script(self) -> None:
+        completed = subprocess.run(
+            [sys.executable, "tools/llm_term_extractor/extract_llm_terms.py", "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("--history-tb", completed.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -251,6 +419,72 @@ class LlmTermWorkbookTests(unittest.TestCase):
             review = result["Review_Before_Import"]
             self.assertEqual(review["A2"].value, "Heart Flower Gift Box")
             self.assertEqual(review["D2"].value, "target缺失")
+
+    def test_process_excel_routes_history_matches(self) -> None:
+        from openpyxl import Workbook, load_workbook
+
+        from tools.llm_term_extractor.codex_term_review import ExtractedLlmTerm, RowExtraction
+        from tools.llm_term_extractor.extract_llm_terms import process_excel
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-history-") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            input_path = tmp_path / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Unlock the Abyssal Vault."
+            worksheet["B2"] = "解锁深渊宝库。"
+            workbook.save(input_path)
+
+            history_path = tmp_path / "history.xlsx"
+            history = Workbook()
+            history_sheet = history.active
+            history_sheet.title = "术语表"
+            history_sheet["A1"] = "source术语（无mark）"
+            history_sheet["B1"] = "target术语(无mark)"
+            history_sheet["A2"] = " abyssal   vault "
+            history_sheet["B2"] = "深渊宝库"
+            history.save(history_path)
+
+            def fake_extractor(rows):
+                return [
+                    RowExtraction(
+                        row_id="2",
+                        terms=(
+                            ExtractedLlmTerm(
+                                source_term="Abyssal Vault",
+                                target_term="深渊宝库",
+                                category="item",
+                                note="already known term",
+                            ),
+                        ),
+                    )
+                ]
+
+            summary = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+                batch_extractor=fake_extractor,
+                history_tb_file=history_path,
+            )
+
+            self.assertEqual(summary.term_count, 1)
+            self.assertEqual(summary.import_candidate_count, 0)
+            self.assertEqual(summary.review_before_import_count, 0)
+            self.assertEqual(summary.already_in_history_count, 1)
+
+            result = load_workbook(summary.output_path)
+            history_output = result["Already_In_History"]
+            self.assertEqual(history_output["A2"].value, "Abyssal Vault")
+            self.assertEqual(history_output["B2"].value, "深渊宝库")
+
+            import_candidates = result["Import_Candidate"]
+            self.assertIsNone(import_candidates["A2"].value)
 
     def test_process_excel_routes_real_conflicts_to_review_sheets(self) -> None:
         from openpyxl import Workbook, load_workbook
