@@ -486,6 +486,68 @@ class LlmTermWorkbookTests(unittest.TestCase):
             import_candidates = result["Import_Candidate"]
             self.assertIsNone(import_candidates["A2"].value)
 
+    def test_load_history_tb_mapping_detects_toolshub_nomark_headers(self) -> None:
+        from openpyxl import Workbook
+
+        from tools.llm_term_extractor.extract_llm_terms import load_history_tb_mapping
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-history-headers-") as tmp_dir:
+            history_path = Path(tmp_dir) / "history.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "术语表"
+            worksheet["A1"] = "source(无mark)"
+            worksheet["B1"] = "target（无mark）"
+            worksheet["C1"] = "术语来源"
+            worksheet["A2"] = "  Abyssal   Vault "
+            worksheet["B2"] = "深渊宝库"
+            worksheet["C2"] = "history"
+            workbook.save(history_path)
+
+            mapping = load_history_tb_mapping(history_path)
+
+        self.assertEqual(mapping, {"abyssal vault": "深渊宝库"})
+
+    def test_load_history_tb_mapping_uses_other_fallback_column_when_source_detected(self) -> None:
+        from openpyxl import Workbook
+
+        from tools.llm_term_extractor.extract_llm_terms import load_history_tb_mapping
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-history-fallback-source-") as tmp_dir:
+            history_path = Path(tmp_dir) / "history.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "术语表"
+            worksheet["A1"] = "custom target header"
+            worksheet["B1"] = "source"
+            worksheet["A2"] = "深渊宝库"
+            worksheet["B2"] = "Abyssal Vault"
+            workbook.save(history_path)
+
+            mapping = load_history_tb_mapping(history_path)
+
+        self.assertEqual(mapping, {"abyssal vault": "深渊宝库"})
+
+    def test_load_history_tb_mapping_uses_other_fallback_column_when_target_detected(self) -> None:
+        from openpyxl import Workbook
+
+        from tools.llm_term_extractor.extract_llm_terms import load_history_tb_mapping
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-history-fallback-target-") as tmp_dir:
+            history_path = Path(tmp_dir) / "history.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "术语表"
+            worksheet["A1"] = "target"
+            worksheet["B1"] = "custom source header"
+            worksheet["A2"] = "深渊宝库"
+            worksheet["B2"] = "Abyssal Vault"
+            workbook.save(history_path)
+
+            mapping = load_history_tb_mapping(history_path)
+
+        self.assertEqual(mapping, {"abyssal vault": "深渊宝库"})
+
     def test_process_excel_routes_real_conflicts_to_review_sheets(self) -> None:
         from openpyxl import Workbook, load_workbook
 

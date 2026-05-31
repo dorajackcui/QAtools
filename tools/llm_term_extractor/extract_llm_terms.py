@@ -50,11 +50,13 @@ STRICT_JSON_RETRY_REMINDER = (
 )
 HISTORY_SOURCE_HEADERS = {
     "source",
+    "source(无mark)",
     "source术语",
     "source术语(无mark)",
 }
 HISTORY_TARGET_HEADERS = {
     "target",
+    "target(无mark)",
     "target术语",
     "target术语(无mark)",
 }
@@ -421,8 +423,18 @@ def _detect_history_columns(
             detected_target_column = column_letter
 
     if (not detected_source_column or not detected_target_column) and len(non_empty_headers) == 2:
-        detected_source_column = detected_source_column or non_empty_headers[0][0]
-        detected_target_column = detected_target_column or non_empty_headers[1][0]
+        fallback_columns = [column for column, _header in non_empty_headers]
+        if detected_source_column and not detected_target_column:
+            detected_target_column = next(
+                column for column in fallback_columns if column != detected_source_column
+            )
+        elif detected_target_column and not detected_source_column:
+            detected_source_column = next(
+                column for column in fallback_columns if column != detected_target_column
+            )
+        else:
+            detected_source_column = fallback_columns[0]
+            detected_target_column = fallback_columns[1]
 
     if not detected_source_column or not detected_target_column:
         raise ValueError(
