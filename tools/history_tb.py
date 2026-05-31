@@ -222,6 +222,7 @@ def iter_history_rows(
     start_row: int = 2,
     preferred_sheet: str = DEFAULT_HISTORY_SHEET_NAME,
     prefer_no_mark: bool = True,
+    empty_row_stop_threshold: int | None = None,
 ) -> tuple[str, str, str, tuple[HistoryTbRow, ...]]:
     if start_row < 1:
         raise ValueError("历史 TB 开始行必须大于等于 1。")
@@ -240,9 +241,19 @@ def iter_history_rows(
         assert detected_target_column is not None
 
         rows: list[HistoryTbRow] = []
+        consecutive_empty_rows = 0
         for row_index in range(start_row, worksheet.max_row + 1):
             source_text = cell_text(worksheet[f"{detected_source_column}{row_index}"].value)
             target_text = cell_text(worksheet[f"{detected_target_column}{row_index}"].value)
+            if not source_text and not target_text:
+                consecutive_empty_rows += 1
+                if (
+                    empty_row_stop_threshold is not None
+                    and consecutive_empty_rows >= empty_row_stop_threshold
+                ):
+                    break
+                continue
+            consecutive_empty_rows = 0
             if not source_text or not target_text:
                 continue
             rows.append(

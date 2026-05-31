@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import load_workbook
-from openpyxl.utils import column_index_from_string, get_column_letter
+from openpyxl.utils import column_index_from_string
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -34,6 +34,10 @@ from tools.llm_term_extractor.codex_term_review import (
     render_extraction_prompt,
     run_codex_prompt,
 )
+from tools.history_tb import (
+    detect_history_tb_columns as shared_detect_history_tb_columns,
+    iter_history_rows,
+)
 
 
 TERMS_SHEET_NAME = "Terms_Source_Dedup"
@@ -49,27 +53,6 @@ STRICT_JSON_RETRY_REMINDER = (
     "\n\nYour previous response could not be parsed. "
     "Return strict JSON only, with no markdown fences, no prose, and the same schema."
 )
-HISTORY_SOURCE_EXACT_HEADERS = {
-    "source",
-}
-HISTORY_TARGET_EXACT_HEADERS = {
-    "target",
-}
-HISTORY_SOURCE_NO_MARK_HEADERS = {
-    "source(无mark)",
-    "source术语(无mark)",
-}
-HISTORY_TARGET_NO_MARK_HEADERS = {
-    "target(无mark)",
-    "target术语(无mark)",
-}
-HISTORY_SOURCE_MARKED_HEADERS = {
-    "source术语",
-}
-HISTORY_TARGET_MARKED_HEADERS = {
-    "target术语",
-}
-
 BatchExtractor = Callable[[list[InputBatchRow]], Iterable[RowExtraction]]
 ConflictReviewer = Callable[[list[ConflictGroup]], Any]
 
@@ -380,102 +363,6 @@ def _read_source_rows(
     return rows
 
 
-def _normalize_history_header(value: object) -> str:
-    return re.sub(
-        r"\s+",
-        "",
-        _cell_text(value)
-        .casefold()
-        .replace("（", "(")
-        .replace("）", ")"),
-    )
-
-
-def _column_from_history_argument(worksheet: Any, column: str | None, header_row: int) -> str:
-    if not column:
-        return ""
-    try:
-        return normalize_column(column)
-    except ValueError:
-        expected_header = _normalize_history_header(column)
-        for column_index in range(1, worksheet.max_column + 1):
-            if _normalize_history_header(worksheet.cell(header_row, column_index).value) == expected_header:
-                return get_column_letter(column_index)
-        raise
-
-
-def _find_history_header_column(
-    headers: list[tuple[str, str]],
-    candidate_groups: tuple[set[str], ...],
-) -> str:
-    for candidates in candidate_groups:
-        for column_letter, normalized_header in headers:
-            if normalized_header in candidates:
-                return column_letter
-    return ""
-
-
-def _detect_history_columns(
-    worksheet: Any,
-    *,
-    header_row: int,
-    source_column: str | None,
-    target_column: str | None,
-) -> tuple[str, str]:
-    detected_source_column = _column_from_history_argument(worksheet, source_column, header_row)
-    detected_target_column = _column_from_history_argument(worksheet, target_column, header_row)
-    non_empty_headers: list[tuple[str, str]] = []
-
-    for column_index in range(1, worksheet.max_column + 1):
-        column_letter = get_column_letter(column_index)
-        normalized_header = _normalize_history_header(worksheet.cell(header_row, column_index).value)
-        if not normalized_header:
-            continue
-        non_empty_headers.append((column_letter, normalized_header))
-
-    if not detected_source_column:
-        detected_source_column = _find_history_header_column(
-            non_empty_headers,
-            (
-                HISTORY_SOURCE_EXACT_HEADERS,
-                HISTORY_SOURCE_NO_MARK_HEADERS,
-                HISTORY_SOURCE_MARKED_HEADERS,
-            ),
-        )
-    if not detected_target_column:
-        detected_target_column = _find_history_header_column(
-            non_empty_headers,
-            (
-                HISTORY_TARGET_EXACT_HEADERS,
-                HISTORY_TARGET_NO_MARK_HEADERS,
-                HISTORY_TARGET_MARKED_HEADERS,
-            ),
-        )
-
-    if (not detected_source_column or not detected_target_column) and len(non_empty_headers) == 2:
-        fallback_columns = [column for column, _header in non_empty_headers]
-        if detected_source_column and not detected_target_column:
-            detected_target_column = next(
-                column for column in fallback_columns if column != detected_source_column
-            )
-        elif detected_target_column and not detected_source_column:
-            detected_source_column = next(
-                column for column in fallback_columns if column != detected_target_column
-            )
-        else:
-            detected_source_column = fallback_columns[0]
-            detected_target_column = fallback_columns[1]
-
-    if not detected_source_column or not detected_target_column:
-        raise ValueError(
-            "Could not detect history TB source/target columns. "
-            "Provide --history-source-column and --history-target-column."
-        )
-    if detected_source_column == detected_target_column:
-        raise ValueError("历史 TB source/target 列不能相同。")
-    return detected_source_column, detected_target_column
-
-
 def detect_history_tb_columns(
     history_tb_file: str | Path,
     *,
@@ -485,30 +372,17 @@ def detect_history_tb_columns(
     start_row: int = 2,
 ) -> tuple[str, str, str]:
     """Return history TB worksheet title and detected source/target columns."""
-    history_path = Path(history_tb_file).expanduser().absolute()
-    if not history_path.exists():
-        raise FileNotFoundError(f"History TB file does not exist: {history_path}")
-    if start_row < 1:
-        raise ValueError("history start_row must be at least 1.")
-
-    workbook = load_workbook(history_path, read_only=True, data_only=True)
-    try:
-        if sheet:
-            worksheet = workbook[sheet]
-        elif "术语表" in workbook.sheetnames:
-            worksheet = workbook["术语表"]
-        else:
-            worksheet = workbook.active
-
-        detected_source_column, detected_target_column = _detect_history_columns(
-            worksheet,
-            header_row=max(1, start_row - 1),
-            source_column=source_column,
-            target_column=target_column,
-        )
-        return worksheet.title, detected_source_column, detected_target_column
-    finally:
-        workbook.close()
+    columns = shared_detect_history_tb_columns(
+        history_tb_file,
+        sheet=sheet,
+        source_column=source_column,
+        target_column=target_column,
+        start_row=start_row,
+        prefer_no_mark=True,
+    )
+    assert columns.source_column is not None
+    assert columns.target_column is not None
+    return columns.sheet_title, columns.source_column, columns.target_column
 
 
 def load_history_tb_mapping(
@@ -519,40 +393,23 @@ def load_history_tb_mapping(
     target_column: str | None = None,
     start_row: int = 2,
 ) -> dict[str, str]:
-    history_path = Path(history_tb_file).expanduser().absolute()
-    if not history_path.exists():
-        raise FileNotFoundError(f"History TB file does not exist: {history_path}")
-    if start_row < 1:
-        raise ValueError("history start_row must be at least 1.")
-
-    workbook = load_workbook(history_path, read_only=True, data_only=True)
-    if sheet:
-        worksheet = workbook[sheet]
-    elif "术语表" in workbook.sheetnames:
-        worksheet = workbook["术语表"]
-    else:
-        worksheet = workbook.active
-
-    header_row = max(1, start_row - 1)
-    detected_source_column, detected_target_column = _detect_history_columns(
-        worksheet,
-        header_row=header_row,
+    mapping: dict[str, str] = {}
+    _sheet_title, _source_column, _target_column, rows = iter_history_rows(
+        history_tb_file,
+        sheet=sheet,
         source_column=source_column,
         target_column=target_column,
+        start_row=start_row,
+        prefer_no_mark=True,
     )
-
-    mapping: dict[str, str] = {}
-    for row_index in range(start_row, worksheet.max_row + 1):
-        source_text = _cell_text(worksheet[f"{detected_source_column}{row_index}"].value)
-        target_text = _cell_text(worksheet[f"{detected_target_column}{row_index}"].value)
-        if not source_text or not target_text:
-            continue
+    for row in rows:
+        source_text = row.source_text
+        target_text = row.target_text
         source_key = normalize_term_key(source_text)
         if not source_key:
             continue
         if source_key not in mapping or (not mapping[source_key] and target_text):
             mapping[source_key] = target_text
-    workbook.close()
     return mapping
 
 

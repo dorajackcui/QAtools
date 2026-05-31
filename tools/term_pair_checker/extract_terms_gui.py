@@ -308,6 +308,7 @@ class ExtractTermsApp(ttk.Frame):
         history_sheet = self.history_sheet_var.get().strip() or None
         history_source_column = self.history_source_column_var.get().strip() or None
         history_target_column = self.history_target_column_var.get().strip() or None
+        history_start_row = 2
         source_column = self.source_column_var.get().strip()
         target_column = self.target_column_var.get().strip()
         sheet = self.sheet_var.get().strip() or None
@@ -330,11 +331,16 @@ class ExtractTermsApp(ttk.Frame):
         except ValueError:
             messagebox.showerror("开始行错误", "开始行必须是整数。")
             return
-        try:
-            history_start_row = int(self.history_start_row_var.get().strip() or "2")
-        except ValueError:
-            messagebox.showerror("历史 TB 开始行错误", "历史 TB 开始行必须是整数。")
-            return
+        if history_tb_file:
+            try:
+                history_start_row = int(self.history_start_row_var.get().strip() or "2")
+            except ValueError:
+                messagebox.showerror("历史 TB 开始行错误", "历史 TB 开始行必须是整数。")
+                return
+        else:
+            history_sheet = None
+            history_source_column = None
+            history_target_column = None
 
         try:
             (

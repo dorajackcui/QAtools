@@ -643,6 +643,98 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertIsNone(process_excel_mock.call_args.kwargs["history_target_column"])
         self.assertEqual(process_excel_mock.call_args.kwargs["history_start_row"], 2)
 
+    def test_term_pair_ignores_invalid_history_start_without_history_file(self) -> None:
+        app = ExtractTermsApp.__new__(ExtractTermsApp)
+        app.input_file_var = FakeVar("/tmp/input.xlsx")
+        app.output_file_var = FakeVar("/tmp/output.xlsx")
+        app.history_tb_file_var = FakeVar("")
+        app.history_sheet_var = FakeVar("术语表")
+        app.history_source_column_var = FakeVar("C")
+        app.history_target_column_var = FakeVar("D")
+        app.history_start_row_var = FakeVar("not-an-int")
+        app.source_column_var = FakeVar("A")
+        app.target_column_var = FakeVar("B")
+        app.sheet_var = FakeVar("Data")
+        app.start_row_var = FakeVar("2")
+        app.mark_style_vars = {
+            "【】": FakeBoolVar(False),
+            "[]": FakeBoolVar(True),
+            "<>": FakeBoolVar(True),
+        }
+        app.codex_fp_review_var = FakeBoolVar(False)
+
+        with (
+            patch(
+                "tools.term_pair_checker.extract_terms_gui.process_excel",
+                return_value=("Data", "A", "B", Path("/tmp/output.xlsx"), 3, 0),
+            ) as process_excel_mock,
+            patch("tools.term_pair_checker.extract_terms_gui.messagebox.showerror") as showerror_mock,
+            patch("tools.term_pair_checker.extract_terms_gui.messagebox.showinfo"),
+        ):
+            app.run_extraction()
+
+        showerror_mock.assert_not_called()
+        process_excel_mock.assert_called_once()
+        self.assertIsNone(process_excel_mock.call_args.kwargs["history_tb_file"])
+        self.assertIsNone(process_excel_mock.call_args.kwargs["history_sheet"])
+        self.assertIsNone(process_excel_mock.call_args.kwargs["history_source_column"])
+        self.assertIsNone(process_excel_mock.call_args.kwargs["history_target_column"])
+        self.assertEqual(process_excel_mock.call_args.kwargs["history_start_row"], 2)
+
+    def test_workflow_ignores_invalid_history_start_without_history_file(self) -> None:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        app.input_file_var = FakeVar("/tmp/input.xlsx")
+        app.output_file_var = FakeVar("/tmp/output.xlsx")
+        app.term_history_tb_file_var = FakeVar("")
+        app.term_history_sheet_var = FakeVar("术语表")
+        app.term_history_source_column_var = FakeVar("C")
+        app.term_history_target_column_var = FakeVar("D")
+        app.term_history_start_row_var = FakeVar("not-an-int")
+        app.source_column_var = FakeVar("A")
+        app.target_column_var = FakeVar("B")
+        app.sheet_var = FakeVar("Data")
+        app.start_row_var = FakeVar("2")
+        app.run_term_pair_var = FakeBoolVar(True)
+        app.run_tag_check_var = FakeBoolVar(True)
+        app.codex_fp_review_var = FakeBoolVar(False)
+        app.term_mark_style_vars = {
+            "【】": FakeBoolVar(False),
+            "[]": FakeBoolVar(True),
+            "<>": FakeBoolVar(True),
+        }
+        app.angle_var = FakeBoolVar(True)
+        app.square_color_var = FakeBoolVar(True)
+        app.brace_var = FakeBoolVar(True)
+        app.newline_var = FakeBoolVar(True)
+        app.numeric_var = FakeBoolVar(True)
+        summary = SimpleNamespace(
+            output_path=Path("/tmp/output.xlsx"),
+            worksheet_title="Data",
+            source_column="A",
+            target_column="B",
+            start_row=2,
+            ran_term_pair_check=True,
+            ran_tag_check=True,
+            term_count=3,
+            term_problem_count=0,
+            tag_problem_count=0,
+        )
+
+        with (
+            patch("tools.workflow.workflow_gui.run_workflow", return_value=summary) as run_workflow_mock,
+            patch("tools.workflow.workflow_gui.messagebox.showerror") as showerror_mock,
+            patch("tools.workflow.workflow_gui.messagebox.showinfo"),
+        ):
+            app.run_selected_tasks()
+
+        showerror_mock.assert_not_called()
+        run_workflow_mock.assert_called_once()
+        self.assertIsNone(run_workflow_mock.call_args.kwargs["term_history_tb_file"])
+        self.assertIsNone(run_workflow_mock.call_args.kwargs["term_history_sheet"])
+        self.assertIsNone(run_workflow_mock.call_args.kwargs["term_history_source_column"])
+        self.assertIsNone(run_workflow_mock.call_args.kwargs["term_history_target_column"])
+        self.assertEqual(run_workflow_mock.call_args.kwargs["term_history_start_row"], 2)
+
     def test_term_pair_gui_defaults_to_square_and_angle_marks(self) -> None:
         app = ExtractTermsApp.__new__(ExtractTermsApp)
         with (

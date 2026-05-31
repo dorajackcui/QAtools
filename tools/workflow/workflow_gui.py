@@ -352,6 +352,7 @@ class WorkflowRunnerApp(ttk.Frame):
         run_tag_check = self.run_tag_check_var.get()
         term_mark_styles = self.get_selected_term_mark_styles()
         tag_token_types = self.get_selected_tag_token_types()
+        term_history_start_row = 2
 
         if not input_file:
             messagebox.showerror("缺少文件", "请先选择输入 Excel 文件。")
@@ -371,11 +372,16 @@ class WorkflowRunnerApp(ttk.Frame):
         except ValueError:
             messagebox.showerror("开始行错误", "开始行必须是整数。")
             return
-        try:
-            term_history_start_row = int(self.term_history_start_row_var.get().strip() or "2")
-        except ValueError:
-            messagebox.showerror("术语历史开始行错误", "术语历史开始行必须是整数。")
-            return
+        if term_history_tb_file:
+            try:
+                term_history_start_row = int(self.term_history_start_row_var.get().strip() or "2")
+            except ValueError:
+                messagebox.showerror("术语历史开始行错误", "术语历史开始行必须是整数。")
+                return
+        else:
+            term_history_sheet = None
+            term_history_source_column = None
+            term_history_target_column = None
 
         try:
             summary = run_workflow(
