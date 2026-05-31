@@ -16,6 +16,7 @@ from tools.false_positive_review import (
     apply_false_positive_review_to_sheet,
     build_codex_prompt,
     collect_review_clusters,
+    parse_codex_decisions,
     review_cluster_batch_with_codex,
     review_clusters_in_batches,
 )
@@ -285,13 +286,25 @@ class FalsePositiveReviewTests(unittest.TestCase):
 
         prompt = build_codex_prompt([cluster], prompt_ids=["cluster-1"])
 
-        self.assertIn("术语一致性 QA，不是翻译语义等价评估", prompt)
-        self.assertIn("同义词、近义词、自然改写、看似官方的另一定稿、短称或语义等价译名", prompt)
+        self.assertIn("这是术语一致性 QA，不是一般翻译质量评估", prompt)
+        self.assertIn("动名词/名词化、形容词化、词族派生或法语句法重组", prompt)
+        self.assertIn("词性变化/动名词/自然句法重组", prompt)
+        self.assertIn("另一个同义译名、近义译名、自然改写、短称、看似官方的另一定稿或语义等价译名", prompt)
         self.assertIn("source_term=Fiery Assault", prompt)
         self.assertIn("target_text 使用 Assaut flamboyant", prompt)
         self.assertIn("判 true_issue", prompt)
         self.assertIn("同义译名/定稿差异但未按术语表", prompt)
         self.assertNotIn("官方译名/固定译法变体", prompt)
+
+    def test_parse_codex_decisions_tolerates_literal_control_characters_in_note(self) -> None:
+        text = (
+            '{"results":[{"id":"cluster-1","decision":"review","category":"需人工确认",'
+            '"confidence":"low","note":"第一行\n第二行"}]}'
+        )
+
+        decisions = parse_codex_decisions(text)
+
+        self.assertEqual(decisions["cluster-1"].note, "第一行\n第二行")
 
 
 if __name__ == "__main__":

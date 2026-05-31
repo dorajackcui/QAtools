@@ -288,12 +288,18 @@ def build_codex_prompt(clusters: list[ReviewCluster], *, prompt_ids: list[str] |
     return (
         "你是本地化 QA 术语误报筛查助手。\n\n"
         "任务：判断术语检查结果是否为 false positive。术语检查器只做字符串匹配，可能因为单复数、阴阳性、"
-        "大小写、标记、词性变化或 source 非术语用法而误报。\n"
-        "核心原则：这是术语一致性 QA，不是翻译语义等价评估。expected_target 是术语表要求的目标术语；"
-        "如果 source_text 中确实是在使用 source_term 这个术语，target_text 必须使用 expected_target 或其明确形态/格式变体。\n\n"
+        "大小写、变音符号、标记包裹、词性变化、动名词/名词化、形容词化、法语句法重组，"
+        "或 source 非术语用法而误报。\n\n"
+        "核心原则：\n"
+        "1. 这是术语一致性 QA，不是一般翻译质量评估。\n"
+        "2. expected_target 是术语表要求的目标术语。\n"
+        "3. 如果 source_text 中的 source_term 是明确专有术语、技能名、道具名、系统名、功能名、UI 固定名，"
+        "target_text 应使用 expected_target 或其明确形态/格式变体。\n"
+        "4. 但如果 source_term 在 source_text 中不是专有术语名，而是普通动作、状态、属性、修饰语、语法成分，"
+        "target_text 可以使用 expected_target 的自然词性变化、动名词/名词化、形容词化、词族派生或法语句法重组。\n\n"
         "请只基于给定数据判断，不要改译文，不要新增术语，不要运行命令，不要读取文件。\n\n"
         "输入包含多个 clusters。每个 cluster 含 id、source_term、expected_target、issue_type、source_text、target_text、examples。"
-        "source_text 和 target_text 是本次判断的原文与译文；examples 是同一 cluster 的重复样本。\n\n"
+        "source_text 和 target_text 是本次判断的主要依据；examples 是同一 cluster 的重复样本。\n\n"
         "请原样返回每个 cluster 的短 id。\n\n"
         "输出严格 JSON，不要 Markdown，不要解释文字：\n"
         "{\n"
@@ -301,20 +307,23 @@ def build_codex_prompt(clusters: list[ReviewCluster], *, prompt_ids: list[str] |
         "    {\n"
         '      "id": "原 cluster id",\n'
         '      "decision": "false_positive | true_issue | review",\n'
-        '      "category": "单复数/阴阳性变体 | source非术语用法/词性变化 | 格式/大小写/标记导致漏命中 | 同义译名/定稿差异但未按术语表 | 可能真术语问题 | 需人工确认",\n'
+        '      "category": "单复数/阴阳性变体 | 词性变化/动名词/自然句法重组 | 格式/大小写/标记导致漏命中 | source非术语用法 | 同义译名/定稿差异但未按术语表 | 可能真术语问题 | 需人工确认",\n'
         '      "confidence": "high | medium | low",\n'
         '      "note": "一句中文说明"\n'
         "    }\n"
         "  ]\n"
         "}\n\n"
         "判断原则：\n"
-        "1. 只有 target_text 已使用 expected_target 的明显单复数、阴阳性、大小写、变音符号或标记包裹变体，才因目标术语命中问题判 false_positive。\n"
-        "2. 如果 source_term 在 source_text 中不是术语用法，而是普通词、动词、形容词或更大短语的一部分，且 target_text 用自然译法表达了该普通含义，判 false_positive 或 review。\n"
-        "3. 如果 source_text 中确实是在使用 source_term 这个术语，而 target_text 使用的是 expected_target 的同义词、近义词、自然改写、看似官方的另一定稿、短称或语义等价译名，但没有使用 expected_target 或明确形态/格式变体，判 true_issue。\n"
-        "4. 不要把“含义一致”“语义等价”“译文自然”“看似官方的不同译法”作为 false_positive 理由；除非输入数据明确证明该变体是允许术语，否则应判 true_issue 或 review。\n"
-        "5. 示例：source_term=Fiery Assault，expected_target=Assaut Enflammé，target_text 使用 Assaut flamboyant；即使含义接近，也因为没有按术语表使用 Assaut Enflammé，判 true_issue。\n"
-        "6. 如果 target_text 没有表达 source_term 的术语含义，或用了明显不同概念，判 true_issue。\n"
-        "7. 如果需要项目术语规范才能确认 source 是否为术语用法或某变体是否被允许，判 review。\n"
+        "1. 如果 target_text 已使用 expected_target 的明显单复数、阴阳性、大小写、变音符号差异、标记包裹形式，判 false_positive。\n"
+        "2. 如果 target_text 没有逐字出现 expected_target，但使用了 expected_target 的明确词性变化、动名词、名词化、形容词化、词族派生或法语自然句法重组，并且含义仍对应 source_term，判 false_positive 或 review。\n"
+        "   例：术语表是名词，但译文因句法需要使用对应动词/动作名词/形容词形式，可判 false_positive。\n"
+        "   例：expected_target 的核心词根仍可识别，只是为了法语语法发生性数、词性或结构变化，可判 false_positive。\n"
+        "3. 如果 source_term 在 source_text 中不是专有术语名，而是普通词、动词、形容词、状态描述或更大短语的一部分，且 target_text 用自然译法表达了该普通含义，判 false_positive 或 review。\n"
+        "4. 如果 source_text 中的 source_term 是明确专有术语、技能名、道具名、系统名、功能名、UI 固定名，而 target_text 使用的是另一个同义译名、近义译名、自然改写、短称、看似官方的另一定稿或语义等价译名，但没有使用 expected_target 或其明确形态/格式变体，判 true_issue。\n"
+        "   例：source_term=Fiery Assault，expected_target=Assaut Enflammé，target_text 使用 Assaut flamboyant；即使含义接近，也因为未按术语表使用 Assaut Enflammé，判 true_issue。\n"
+        "5. 不要仅因为“含义一致”“语义等价”“译文自然”就判 false_positive。必须能说明它是 expected_target 的形态/词性/句法变体，或 source_term 在该处不是专有术语用法。\n"
+        "6. 如果 target_text 完全没有表达 source_term 的术语含义，或用了明显不同概念，判 true_issue。\n"
+        "7. 如果需要项目术语规范才能确认某个短称、另一定稿、词族派生或上下文用法是否允许，判 review。\n"
         "8. 不确定时优先 review，不要硬判 false_positive。\n\n"
         "现在请判断以下 clusters：\n"
         f"{json.dumps(cluster_payload, ensure_ascii=False, indent=2)}\n"
@@ -332,7 +341,7 @@ def extract_json_object(text: str) -> dict[str, Any]:
         if start == -1 or end == -1 or end < start:
             raise ValueError("Codex 输出中没有 JSON 对象。")
         stripped = stripped[start : end + 1]
-    parsed = json.loads(stripped)
+    parsed = json.loads(stripped, strict=False)
     if not isinstance(parsed, dict):
         raise ValueError("Codex 输出 JSON 不是对象。")
     return parsed
