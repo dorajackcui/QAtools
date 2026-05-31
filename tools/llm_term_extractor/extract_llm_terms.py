@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import sys
+import tempfile
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -159,12 +160,6 @@ def _codex_raw_output_path(output_path: Path) -> Path:
     return output_path.with_name(f"{output_path.stem}_codex_raw.jsonl")
 
 
-def _codex_message_output_path(output_path: Path, kind: str, item_index: int, attempt: int) -> Path:
-    return output_path.with_name(
-        f".{output_path.stem}_{kind}_{item_index:04d}_attempt_{attempt}.txt"
-    )
-
-
 def _resolve_codex_output_path(
     output_path: str | Path | None,
     output_stem: str | Path | None,
@@ -222,29 +217,30 @@ def _run_codex_with_json_retry(
 ) -> Any:
     for attempt in (1, 2):
         attempt_prompt = prompt if attempt == 1 else f"{prompt}{STRICT_JSON_RETRY_REMINDER}"
-        codex_output_path = _codex_message_output_path(output_path, kind, item_index, attempt)
-        if codex_output_path.exists():
-            codex_output_path.unlink()
-        raw_output = run_codex_prompt(
-            attempt_prompt,
-            codex_output_path,
-            model,
-            reasoning_effort,
-            timeout_seconds,
-        )
-        _append_raw_codex_output(
-            output_path,
-            keep_raw_codex_output=keep_raw_codex_output,
-            kind=kind,
-            item_index=item_index,
-            attempt=attempt,
-            raw_output=raw_output,
-        )
-        try:
-            return parser(raw_output)
-        except ValueError:
-            if attempt == 2:
-                raise
+        with tempfile.TemporaryDirectory(prefix="llm-term-extract-") as tmp_dir:
+            codex_output_path = (
+                Path(tmp_dir) / f"{kind}-{item_index:04d}-attempt-{attempt}-output.txt"
+            )
+            raw_output = run_codex_prompt(
+                attempt_prompt,
+                codex_output_path,
+                model,
+                reasoning_effort,
+                timeout_seconds,
+            )
+            _append_raw_codex_output(
+                output_path,
+                keep_raw_codex_output=keep_raw_codex_output,
+                kind=kind,
+                item_index=item_index,
+                attempt=attempt,
+                raw_output=raw_output,
+            )
+            try:
+                return parser(raw_output)
+            except ValueError:
+                if attempt == 2:
+                    raise
     raise RuntimeError("unreachable Codex retry state")
 
 
@@ -513,10 +509,12 @@ def load_history_tb_mapping(
     mapping: dict[str, str] = {}
     for row_index in range(start_row, worksheet.max_row + 1):
         source_text = _cell_text(worksheet[f"{detected_source_column}{row_index}"].value)
+        target_text = _cell_text(worksheet[f"{detected_target_column}{row_index}"].value)
+        if not source_text or not target_text:
+            continue
         source_key = normalize_term_key(source_text)
         if not source_key:
             continue
-        target_text = _cell_text(worksheet[f"{detected_target_column}{row_index}"].value)
         if source_key not in mapping or (not mapping[source_key] and target_text):
             mapping[source_key] = target_text
     workbook.close()

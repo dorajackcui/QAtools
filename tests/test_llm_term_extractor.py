@@ -293,6 +293,73 @@ class LlmTermCodexOrchestrationTests(unittest.TestCase):
             self.assertEqual(raw_lines[0]["raw_output"], "not valid json")
             self.assertIn('"decisions"', raw_lines[1]["raw_output"])
 
+    def test_codex_extractors_do_not_leave_last_message_artifacts_when_raw_output_disabled(self) -> None:
+        from tools.llm_term_extractor.extract_llm_terms import (
+            build_codex_batch_extractor,
+            build_codex_conflict_reviewer,
+        )
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-codex-clean-") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            output_path = tmp_path / "input_llm_terms.xlsx"
+            dump_dir = tmp_path / "prompts"
+
+            def fake_run_codex_prompt(prompt, output_path_arg, model, reasoning_effort, timeout_seconds):
+                output_path_for_message = Path(output_path_arg)
+                if '"groups"' in prompt:
+                    raw_output = '{"decisions":[{"group_id":"apple","decision":"same"}]}'
+                else:
+                    raw_output = (
+                        '{"rows":[{"row_id":"2","terms":[{"source_term":"apple",'
+                        '"target_term":"苹果"}]}]}'
+                    )
+                output_path_for_message.write_text(raw_output, encoding="utf-8")
+                return raw_output
+
+            with patch(
+                "tools.llm_term_extractor.extract_llm_terms.run_codex_prompt",
+                side_effect=fake_run_codex_prompt,
+            ):
+                extractor = build_codex_batch_extractor(
+                    output_path=output_path,
+                    dump_prompts_dir=dump_dir,
+                )
+                list(
+                    extractor(
+                        [
+                            InputBatchRow(
+                                row_id="2",
+                                source_text="Collect apple.",
+                                target_text="收集苹果。",
+                            )
+                        ]
+                    )
+                )
+
+                reviewer = build_codex_conflict_reviewer(
+                    output_path=output_path,
+                    dump_prompts_dir=dump_dir,
+                )
+                reviewer(
+                    [
+                        ConflictGroup(
+                            group_id="apple",
+                            source_term="apple",
+                            target_terms=("苹果", "历史苹果"),
+                        )
+                    ]
+                )
+
+            self.assertTrue((dump_dir / "extract-batch-0001.md").exists())
+            self.assertTrue((dump_dir / "conflict-review.md").exists())
+            self.assertFalse((tmp_path / "input_llm_terms_codex_raw.jsonl").exists())
+            leftover_text_files = [
+                path.name
+                for path in tmp_path.iterdir()
+                if path.is_file() and path.suffix == ".txt"
+            ]
+            self.assertEqual(leftover_text_files, [])
+
     def test_prompt_if_missing_requires_input_and_source_in_noninteractive_mode(self) -> None:
         from tools.llm_term_extractor.extract_llm_terms import prompt_if_missing
 
@@ -536,6 +603,72 @@ class LlmTermWorkbookTests(unittest.TestCase):
             mapping = load_history_tb_mapping(history_path)
 
         self.assertEqual(mapping, {normalize_term_key("apple"): "历史苹果"})
+
+    def test_blank_history_target_does_not_suppress_import_candidate(self) -> None:
+        from openpyxl import Workbook, load_workbook
+
+        from tools.llm_term_extractor.codex_term_review import ExtractedLlmTerm, RowExtraction
+        from tools.llm_term_extractor.extract_llm_terms import load_history_tb_mapping, process_excel
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-blank-history-target-") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            history_path = tmp_path / "history.xlsx"
+            history = Workbook()
+            history_sheet = history.active
+            history_sheet.title = "术语表"
+            history_sheet["A1"] = "source"
+            history_sheet["B1"] = "target"
+            history_sheet["A2"] = "apple"
+            history_sheet["B2"] = "   "
+            history.save(history_path)
+
+            self.assertEqual(load_history_tb_mapping(history_path), {})
+
+            input_path = tmp_path / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Collect apple."
+            worksheet["B2"] = "收集苹果。"
+            workbook.save(input_path)
+
+            def fake_extractor(rows):
+                return [
+                    RowExtraction(
+                        row_id="2",
+                        terms=(
+                            ExtractedLlmTerm(
+                                source_term="apple",
+                                target_term="苹果",
+                                category="item",
+                                note="blank history target should be ignored",
+                            ),
+                        ),
+                    )
+                ]
+
+            summary = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+                batch_extractor=fake_extractor,
+                history_tb_file=history_path,
+            )
+
+            self.assertEqual(summary.already_in_history_count, 0)
+            self.assertEqual(summary.import_candidate_count, 1)
+            self.assertEqual(summary.review_before_import_count, 0)
+
+            result = load_workbook(summary.output_path)
+            history_output = result["Already_In_History"]
+            self.assertIsNone(history_output["A2"].value)
+            import_candidates = result["Import_Candidate"]
+            self.assertEqual(import_candidates["A2"].value, "apple")
+            self.assertEqual(import_candidates["B2"].value, "苹果")
 
     def test_load_history_tb_mapping_uses_other_fallback_column_when_source_detected(self) -> None:
         from openpyxl import Workbook
