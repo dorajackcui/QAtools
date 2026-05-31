@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from openpyxl import Workbook
@@ -10,6 +11,7 @@ from openpyxl import Workbook
 from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
 from tools.excel_line_splitter.split_excel_lines_gui import SplitExcelLinesApp
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
+from tools.llm_term_extractor.extract_llm_terms_gui import LlmTermExtractorApp
 from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
 from tools.term_glossary_checker.check_terms_against_glossary_gui import TermGlossaryCheckerApp
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
@@ -216,6 +218,16 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.term_history_source_column_var = FakeVar("")
         app.term_history_target_column_var = FakeVar("")
         app.term_history_sheet_combobox = FakeCombobox()
+        return app
+
+    def build_llm_term_extractor_app(self, input_path: Path) -> LlmTermExtractorApp:
+        app = LlmTermExtractorApp.__new__(LlmTermExtractorApp)
+        app.input_file_var = FakeVar(str(input_path))
+        app.output_file_var = FakeVar("")
+        app.sheet_var = FakeVar("")
+        app.source_column_var = FakeVar("A")
+        app.target_column_var = FakeVar("B")
+        app.sheet_combobox = FakeCombobox()
         return app
 
     def test_term_pair_refresh_populates_sheet_choices_and_detects_columns(self) -> None:
@@ -433,6 +445,75 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.term_history_sheet_var.get(), "术语表")
             self.assertEqual(app.term_history_source_column_var.get(), "A")
             self.assertEqual(app.term_history_target_column_var.get(), "B")
+
+    def test_llm_term_extractor_refresh_populates_sheet_choices_and_detects_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "llm_terms.xlsx"
+            self.create_data_workbook(workbook_path)
+            app = self.build_llm_term_extractor_app(workbook_path)
+
+            app.refresh_sheet_choices(show_error=False)
+
+            self.assertEqual(app.sheet_combobox["values"], ("Data", "Archive"))
+            self.assertEqual(app.sheet_var.get(), "Archive")
+            self.assertEqual(app.source_column_var.get(), "A")
+            self.assertEqual(app.target_column_var.get(), "B")
+
+    def test_llm_term_extractor_switching_sheet_redetects_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "llm_terms.xlsx"
+            self.create_data_workbook(workbook_path)
+            app = self.build_llm_term_extractor_app(workbook_path)
+
+            app.refresh_sheet_choices(show_error=False)
+            app.sheet_var.set("Data")
+            app.handle_sheet_selected(show_error=False)
+
+            self.assertEqual(app.source_column_var.get(), "C")
+            self.assertEqual(app.target_column_var.get(), "F")
+
+    def test_llm_term_extractor_blank_target_column_passes_none_to_processor(self) -> None:
+        app = LlmTermExtractorApp.__new__(LlmTermExtractorApp)
+        app.input_file_var = FakeVar("/tmp/input.xlsx")
+        app.output_file_var = FakeVar("/tmp/output.xlsx")
+        app.sheet_var = FakeVar("Data")
+        app.source_column_var = FakeVar("A")
+        app.target_column_var = FakeVar("")
+        app.start_row_var = FakeVar("3")
+        app.batch_size_var = FakeVar("25")
+        app.codex_model_var = FakeVar("codex-model")
+        app.codex_reasoning_effort_var = FakeVar("high")
+        app.extract_prompt_file_var = FakeVar("")
+        app.conflict_prompt_file_var = FakeVar("/tmp/conflict.md")
+        app.history_tb_file_var = FakeVar("")
+        app.keep_raw_codex_output_var = FakeBoolVar(True)
+        summary = SimpleNamespace(
+            output_path=Path("/tmp/output.xlsx"),
+            worksheet_title="Data",
+            source_column="A",
+            target_column="",
+            start_row=3,
+            scanned_row_count=10,
+            batch_count=1,
+            term_count=4,
+            conflict_count=2,
+        )
+
+        with (
+            patch(
+                "tools.llm_term_extractor.extract_llm_terms_gui.process_excel",
+                return_value=summary,
+            ) as process_excel_mock,
+            patch("tools.llm_term_extractor.extract_llm_terms_gui.messagebox.showinfo"),
+        ):
+            app.run_extraction()
+
+        process_excel_mock.assert_called_once()
+        self.assertIsNone(process_excel_mock.call_args.kwargs["target_column"])
+        self.assertEqual(process_excel_mock.call_args.kwargs["batch_size"], 25)
+        self.assertEqual(process_excel_mock.call_args.kwargs["extract_prompt_file"], None)
+        self.assertEqual(process_excel_mock.call_args.kwargs["conflict_prompt_file"], "/tmp/conflict.md")
+        self.assertEqual(process_excel_mock.call_args.kwargs["keep_raw_codex_output"], True)
 
     def test_term_pair_gui_defaults_to_square_and_angle_marks(self) -> None:
         app = ExtractTermsApp.__new__(ExtractTermsApp)
