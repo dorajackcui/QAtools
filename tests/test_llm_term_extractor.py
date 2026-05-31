@@ -151,3 +151,197 @@ class CodexTermReviewTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LlmTermWorkbookTests(unittest.TestCase):
+    def test_process_excel_handles_source_only_and_source_target_rows(self) -> None:
+        from openpyxl import Workbook, load_workbook
+
+        from tools.llm_term_extractor.codex_term_review import ExtractedLlmTerm, RowExtraction
+        from tools.llm_term_extractor.extract_llm_terms import process_excel
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-workbook-") as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Unlock the Abyssal Vault."
+            worksheet["B2"] = "解锁深渊宝库。"
+            worksheet["A3"] = ""
+            worksheet["B3"] = ""
+            worksheet["A4"] = "Claim the Heart Flower Gift Box."
+            worksheet["B4"] = ""
+            workbook.save(input_path)
+
+            def fake_extractor(rows):
+                self.assertEqual([row.row_id for row in rows], ["2", "4"])
+                return [
+                    RowExtraction(
+                        row_id="2",
+                        terms=(
+                            ExtractedLlmTerm(
+                                source_term="Abyssal Vault",
+                                target_term="深渊宝库",
+                                category="item",
+                                note="fixed item name",
+                            ),
+                        ),
+                    ),
+                    RowExtraction(
+                        row_id="4",
+                        terms=(
+                            ExtractedLlmTerm(
+                                source_term="Heart Flower Gift Box",
+                                target_term="",
+                                category="item",
+                                note="source-only item name",
+                            ),
+                        ),
+                    ),
+                    RowExtraction(
+                        row_id="99",
+                        terms=(ExtractedLlmTerm(source_term="Ignored Term", target_term="忽略"),),
+                    ),
+                ]
+
+            summary = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+                batch_extractor=fake_extractor,
+            )
+
+            self.assertEqual(summary.output_path, input_path.with_name("input_llm_terms.xlsx"))
+            self.assertEqual(summary.worksheet_title, "Data")
+            self.assertEqual(summary.scanned_row_count, 2)
+            self.assertEqual(summary.batch_count, 1)
+            self.assertEqual(summary.term_count, 2)
+            self.assertEqual(summary.evidence_count, 2)
+            self.assertEqual(summary.import_candidate_count, 1)
+            self.assertEqual(summary.review_before_import_count, 1)
+            self.assertEqual(summary.already_in_history_count, 0)
+
+            result = load_workbook(summary.output_path)
+            self.assertEqual(
+                result.sheetnames[-7:],
+                [
+                    "Terms_Source_Dedup",
+                    "Extraction_Evidence",
+                    "Conflicts_To_Review",
+                    "Import_Candidate",
+                    "Review_Before_Import",
+                    "Already_In_History",
+                    "Summary",
+                ],
+            )
+
+            terms = result["Terms_Source_Dedup"]
+            self.assertEqual(terms["A2"].value, "Abyssal Vault")
+            self.assertEqual(terms["B2"].value, "深渊宝库")
+            self.assertEqual(terms["A3"].value, "Heart Flower Gift Box")
+
+            import_candidates = result["Import_Candidate"]
+            self.assertEqual(import_candidates["A2"].value, "Abyssal Vault")
+            self.assertEqual(import_candidates["B2"].value, "深渊宝库")
+
+            review = result["Review_Before_Import"]
+            self.assertEqual(review["A2"].value, "Heart Flower Gift Box")
+            self.assertEqual(review["D2"].value, "target缺失")
+
+    def test_process_excel_routes_real_conflicts_to_review_sheets(self) -> None:
+        from openpyxl import Workbook, load_workbook
+
+        from tools.llm_term_extractor.codex_term_review import (
+            ConflictDecision,
+            ExtractedLlmTerm,
+            RowExtraction,
+        )
+        from tools.llm_term_extractor.extract_llm_terms import process_excel
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-conflict-") as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Flower Art gameplay"
+            worksheet["B2"] = "Art Floral"
+            worksheet["A3"] = "Flower Art piece"
+            worksheet["B3"] = "composition florale"
+            workbook.save(input_path)
+
+            def fake_extractor(rows):
+                return [
+                    RowExtraction(
+                        row_id="2",
+                        terms=(
+                            ExtractedLlmTerm(
+                                source_term="Flower Art",
+                                target_term="Art Floral",
+                                category="system_or_concept",
+                                note="fixed concept",
+                            ),
+                        ),
+                    ),
+                    RowExtraction(
+                        row_id="3",
+                        terms=(
+                            ExtractedLlmTerm(
+                                source_term="  flower   art ",
+                                target_term="composition florale",
+                                category="system_or_concept",
+                                note="same source with another target",
+                            ),
+                        ),
+                    ),
+                ]
+
+            def fake_conflict_reviewer(groups):
+                self.assertEqual(len(groups), 1)
+                self.assertEqual(groups[0].source_term, "Flower Art")
+                self.assertEqual(groups[0].target_terms, ("Art Floral", "composition florale"))
+                return [
+                    ConflictDecision(
+                        group_id=groups[0].group_id,
+                        decision="conflict",
+                        reason="substantial target wording difference",
+                    )
+                ]
+
+            summary = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+                batch_extractor=fake_extractor,
+                conflict_reviewer=fake_conflict_reviewer,
+            )
+
+            self.assertEqual(summary.term_count, 1)
+            self.assertEqual(summary.evidence_count, 2)
+            self.assertEqual(summary.conflict_count, 1)
+            self.assertEqual(summary.import_candidate_count, 0)
+            self.assertEqual(summary.review_before_import_count, 1)
+
+            result = load_workbook(summary.output_path)
+            terms = result["Terms_Source_Dedup"]
+            self.assertEqual(terms["A2"].value, "Flower Art")
+            self.assertIn("Art Floral", terms["B2"].value)
+            self.assertIn("composition florale", terms["B2"].value)
+
+            conflicts = result["Conflicts_To_Review"]
+            self.assertEqual(conflicts["A2"].value, "Flower Art")
+            self.assertIn("Art Floral", conflicts["B2"].value)
+            self.assertIn("composition florale", conflicts["B2"].value)
+            self.assertEqual(conflicts["D2"].value, "conflict")
+            self.assertEqual(conflicts["F2"].value, "substantial target wording difference")
+
+            review = result["Review_Before_Import"]
+            self.assertEqual(review["A2"].value, "Flower Art")
+            self.assertEqual(review["D2"].value, "conflict")
