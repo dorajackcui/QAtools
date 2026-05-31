@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import tempfile
 from collections import OrderedDict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from tools.codex_runner import run_codex_exec_prompt
 
 
 OUTPUT_HEADERS = ("fp_decision", "fp_category", "fp_confidence", "fp_note", "fp_by")
@@ -424,38 +425,15 @@ def review_cluster_batch_with_codex(
     prompt = build_codex_prompt(clusters, prompt_ids=list(prompt_id_to_cluster_key))
     with tempfile.TemporaryDirectory(prefix="tag-exactor-fp-") as tmp_dir:
         output_path = Path(tmp_dir) / "codex-output.txt"
-        command = [
-            codex_command,
-            "--ask-for-approval",
-            "never",
-            "--config",
-            f'model_reasoning_effort="{reasoning_effort}"',
-            "exec",
-            "--ephemeral",
-            "--ignore-rules",
-            "--skip-git-repo-check",
-            "--sandbox",
-            "read-only",
-            "--output-last-message",
-            str(output_path),
-        ]
-        if model:
-            command.extend(["--model", model])
-        command.append("-")
-
-        completed = subprocess.run(
-            command,
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
+        output_text = run_codex_exec_prompt(
+            prompt,
+            output_path=output_path,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            timeout_seconds=timeout_seconds,
+            codex_command=codex_command,
+            error_prefix="Codex 假阳性复核失败",
         )
-        if completed.returncode != 0:
-            error_text = completed.stderr.strip() or completed.stdout.strip()
-            raise RuntimeError(f"Codex 假阳性复核失败: {error_text}")
-
-        output_text = output_path.read_text(encoding="utf-8") if output_path.exists() else completed.stdout
     prompt_decisions = parse_codex_decisions(output_text)
     return {
         cluster_key: decision

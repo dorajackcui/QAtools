@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
 from typing import Any
+
+from tools.codex_runner import build_codex_exec_command, run_codex_exec_prompt
 
 
 DEFAULT_CODEX_MODEL = "gpt-5.3-codex-spark"
@@ -185,24 +186,11 @@ def parse_conflict_response(text: str) -> list[ConflictDecision]:
 
 
 def build_codex_command(output_path: str | Path, model: str, reasoning_effort: str) -> list[str]:
-    return [
-        "codex",
-        "--ask-for-approval",
-        "never",
-        "--config",
-        f'model_reasoning_effort="{reasoning_effort}"',
-        "exec",
-        "--ephemeral",
-        "--ignore-rules",
-        "--skip-git-repo-check",
-        "--sandbox",
-        "read-only",
-        "--output-last-message",
-        str(output_path),
-        "--model",
-        model,
-        "-",
-    ]
+    return build_codex_exec_command(
+        output_path=output_path,
+        model=model,
+        reasoning_effort=reasoning_effort,
+    )
 
 
 def run_codex_prompt(
@@ -212,21 +200,11 @@ def run_codex_prompt(
     reasoning_effort: str,
     timeout_seconds: int,
 ) -> str:
-    completed = subprocess.run(
-        build_codex_command(output_path, model, reasoning_effort),
-        input=prompt,
-        capture_output=True,
-        text=True,
-        timeout=timeout_seconds,
-        check=False,
+    return run_codex_exec_prompt(
+        prompt,
+        output_path=output_path,
+        model=model,
+        reasoning_effort=reasoning_effort,
+        timeout_seconds=timeout_seconds,
+        error_prefix="Codex term review failed",
     )
-    if completed.returncode != 0:
-        raise RuntimeError(
-            "Codex term review failed "
-            f"with exit code {completed.returncode}.\n"
-            f"stderr:\n{completed.stderr}\n"
-            f"stdout:\n{completed.stdout}"
-        )
-
-    output_file = Path(output_path)
-    return output_file.read_text(encoding="utf-8") if output_file.exists() else completed.stdout

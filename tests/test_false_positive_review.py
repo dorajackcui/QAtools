@@ -261,7 +261,7 @@ class FalsePositiveReviewTests(unittest.TestCase):
             )
             return CompletedProcess(command, 0, "", "")
 
-        with patch("tools.false_positive_review.subprocess.run", side_effect=fake_run):
+        with patch("tools.codex_runner.subprocess.run", side_effect=fake_run):
             decisions = review_cluster_batch_with_codex([cluster], model="gpt-5.3-codex-spark")
 
         self.assertEqual(set(decisions), {cluster.key})

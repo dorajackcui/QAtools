@@ -141,7 +141,7 @@ class CodexTermReviewTests(unittest.TestCase):
                 output_path.write_text('{"rows":[]}', encoding="utf-8")
                 return CompletedProcess(command, 0, stdout="stdout fallback", stderr="")
 
-            with patch("tools.llm_term_extractor.codex_term_review.subprocess.run", side_effect=fake_run):
+            with patch("tools.codex_runner.subprocess.run", side_effect=fake_run):
                 output = run_codex_prompt(
                     "prompt text",
                     output_path,
