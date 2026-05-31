@@ -508,6 +508,35 @@ class LlmTermWorkbookTests(unittest.TestCase):
 
         self.assertEqual(mapping, {"abyssal vault": "深渊宝库"})
 
+    def test_load_history_tb_mapping_prefers_toolshub_nomark_columns(self) -> None:
+        from openpyxl import Workbook
+
+        from tools.llm_term_extractor.extract_llm_terms import (
+            load_history_tb_mapping,
+            normalize_term_key,
+        )
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-toolshub-history-") as tmp_dir:
+            history_path = Path(tmp_dir) / "history.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "术语表"
+            worksheet["A1"] = "source术语"
+            worksheet["B1"] = "target术语"
+            worksheet["C1"] = "source术语（无mark）"
+            worksheet["D1"] = "target术语（无mark）"
+            worksheet["E1"] = "术语来源"
+            worksheet["A2"] = "<apple>"
+            worksheet["B2"] = "<历史苹果>"
+            worksheet["C2"] = "apple"
+            worksheet["D2"] = "历史苹果"
+            worksheet["E2"] = "历史TB"
+            workbook.save(history_path)
+
+            mapping = load_history_tb_mapping(history_path)
+
+        self.assertEqual(mapping, {normalize_term_key("apple"): "历史苹果"})
+
     def test_load_history_tb_mapping_uses_other_fallback_column_when_source_detected(self) -> None:
         from openpyxl import Workbook
 
@@ -589,6 +618,75 @@ class LlmTermWorkbookTests(unittest.TestCase):
                     source_column="shared term header",
                     target_column="shared term header",
                 )
+
+    def test_process_excel_routes_toolshub_nomark_history_match(self) -> None:
+        from openpyxl import Workbook, load_workbook
+
+        from tools.llm_term_extractor.codex_term_review import ExtractedLlmTerm, RowExtraction
+        from tools.llm_term_extractor.extract_llm_terms import process_excel
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-toolshub-route-") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            input_path = tmp_path / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Collect apple."
+            worksheet["B2"] = "收集苹果。"
+            workbook.save(input_path)
+
+            history_path = tmp_path / "history.xlsx"
+            history = Workbook()
+            history_sheet = history.active
+            history_sheet.title = "术语表"
+            history_sheet["A1"] = "source术语"
+            history_sheet["B1"] = "target术语"
+            history_sheet["C1"] = "source术语（无mark）"
+            history_sheet["D1"] = "target术语（无mark）"
+            history_sheet["E1"] = "术语来源"
+            history_sheet["A2"] = "<apple>"
+            history_sheet["B2"] = "<历史苹果>"
+            history_sheet["C2"] = "apple"
+            history_sheet["D2"] = "历史苹果"
+            history_sheet["E2"] = "历史TB"
+            history.save(history_path)
+
+            def fake_extractor(rows):
+                return [
+                    RowExtraction(
+                        row_id="2",
+                        terms=(
+                            ExtractedLlmTerm(
+                                source_term="apple",
+                                target_term="苹果",
+                                category="item",
+                                note="unmarked extracted term",
+                            ),
+                        ),
+                    )
+                ]
+
+            summary = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+                batch_extractor=fake_extractor,
+                history_tb_file=history_path,
+            )
+
+            self.assertEqual(summary.already_in_history_count, 1)
+            self.assertEqual(summary.import_candidate_count, 0)
+
+            result = load_workbook(summary.output_path)
+            history_output = result["Already_In_History"]
+            self.assertEqual(history_output["A2"].value, "apple")
+            self.assertEqual(history_output["B2"].value, "历史苹果")
+            import_candidates = result["Import_Candidate"]
+            self.assertIsNone(import_candidates["A2"].value)
 
     def test_process_excel_routes_real_conflicts_to_review_sheets(self) -> None:
         from openpyxl import Workbook, load_workbook

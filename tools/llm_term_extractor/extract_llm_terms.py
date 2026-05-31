@@ -48,17 +48,25 @@ STRICT_JSON_RETRY_REMINDER = (
     "\n\nYour previous response could not be parsed. "
     "Return strict JSON only, with no markdown fences, no prose, and the same schema."
 )
-HISTORY_SOURCE_HEADERS = {
+HISTORY_SOURCE_EXACT_HEADERS = {
     "source",
+}
+HISTORY_TARGET_EXACT_HEADERS = {
+    "target",
+}
+HISTORY_SOURCE_NO_MARK_HEADERS = {
     "source(无mark)",
-    "source术语",
     "source术语(无mark)",
 }
-HISTORY_TARGET_HEADERS = {
-    "target",
+HISTORY_TARGET_NO_MARK_HEADERS = {
     "target(无mark)",
-    "target术语",
     "target术语(无mark)",
+}
+HISTORY_SOURCE_MARKED_HEADERS = {
+    "source术语",
+}
+HISTORY_TARGET_MARKED_HEADERS = {
+    "target术语",
 }
 
 BatchExtractor = Callable[[list[InputBatchRow]], Iterable[RowExtraction]]
@@ -400,6 +408,17 @@ def _column_from_history_argument(worksheet: Any, column: str | None, header_row
         raise
 
 
+def _find_history_header_column(
+    headers: list[tuple[str, str]],
+    candidate_groups: tuple[set[str], ...],
+) -> str:
+    for candidates in candidate_groups:
+        for column_letter, normalized_header in headers:
+            if normalized_header in candidates:
+                return column_letter
+    return ""
+
+
 def _detect_history_columns(
     worksheet: Any,
     *,
@@ -417,10 +436,25 @@ def _detect_history_columns(
         if not normalized_header:
             continue
         non_empty_headers.append((column_letter, normalized_header))
-        if not detected_source_column and normalized_header in HISTORY_SOURCE_HEADERS:
-            detected_source_column = column_letter
-        if not detected_target_column and normalized_header in HISTORY_TARGET_HEADERS:
-            detected_target_column = column_letter
+
+    if not detected_source_column:
+        detected_source_column = _find_history_header_column(
+            non_empty_headers,
+            (
+                HISTORY_SOURCE_EXACT_HEADERS,
+                HISTORY_SOURCE_NO_MARK_HEADERS,
+                HISTORY_SOURCE_MARKED_HEADERS,
+            ),
+        )
+    if not detected_target_column:
+        detected_target_column = _find_history_header_column(
+            non_empty_headers,
+            (
+                HISTORY_TARGET_EXACT_HEADERS,
+                HISTORY_TARGET_NO_MARK_HEADERS,
+                HISTORY_TARGET_MARKED_HEADERS,
+            ),
+        )
 
     if (not detected_source_column or not detected_target_column) and len(non_empty_headers) == 2:
         fallback_columns = [column for column, _header in non_empty_headers]
