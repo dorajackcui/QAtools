@@ -467,6 +467,35 @@ def _write_output_sheets(
             )
             continue
 
+        if len(term.target_terms) > 1 and term.conflict_decision is None:
+            conflict_count += 1
+            review_before_import_count += 1
+            conflicts_sheet.append(
+                [
+                    term.source_term,
+                    target_terms,
+                    rows,
+                    "review",
+                    "",
+                    "多译法需确认",
+                    unique_join(term.source_examples, separator=" | "),
+                    unique_join(term.target_examples, separator=" | "),
+                    notes,
+                ]
+            )
+            review_sheet.append(
+                [
+                    term.source_term,
+                    target_terms,
+                    rows,
+                    "多译法需确认",
+                    "",
+                    "",
+                    notes,
+                ]
+            )
+            continue
+
         effective_target = _effective_target(term)
         if effective_target and (decision != "same" or len(term.target_terms) == 1 or canonical_target):
             import_candidate_count += 1

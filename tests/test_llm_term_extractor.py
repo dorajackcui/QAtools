@@ -345,3 +345,74 @@ class LlmTermWorkbookTests(unittest.TestCase):
             review = result["Review_Before_Import"]
             self.assertEqual(review["A2"].value, "Flower Art")
             self.assertEqual(review["D2"].value, "conflict")
+
+    def test_process_excel_routes_unreviewed_multi_target_terms_as_conflicts(self) -> None:
+        from openpyxl import Workbook, load_workbook
+
+        from tools.llm_term_extractor.codex_term_review import ExtractedLlmTerm, RowExtraction
+        from tools.llm_term_extractor.extract_llm_terms import process_excel
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-unreviewed-conflict-") as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Guild Trial stage"
+            worksheet["B2"] = "Epreuve de guilde"
+            worksheet["A3"] = "Guild Trial reward"
+            worksheet["B3"] = "Defi de guilde"
+            workbook.save(input_path)
+
+            def fake_extractor(rows):
+                return [
+                    RowExtraction(
+                        row_id="2",
+                        terms=(
+                            ExtractedLlmTerm(
+                                source_term="Guild Trial",
+                                target_term="Epreuve de guilde",
+                                category="event",
+                                note="event name",
+                            ),
+                        ),
+                    ),
+                    RowExtraction(
+                        row_id="3",
+                        terms=(
+                            ExtractedLlmTerm(
+                                source_term="Guild Trial",
+                                target_term="Defi de guilde",
+                                category="event",
+                                note="same event different target",
+                            ),
+                        ),
+                    ),
+                ]
+
+            summary = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+                batch_extractor=fake_extractor,
+            )
+
+            self.assertEqual(summary.term_count, 1)
+            self.assertEqual(summary.conflict_count, 1)
+            self.assertEqual(summary.import_candidate_count, 0)
+            self.assertEqual(summary.review_before_import_count, 1)
+
+            result = load_workbook(summary.output_path)
+            conflicts = result["Conflicts_To_Review"]
+            self.assertEqual(conflicts["A2"].value, "Guild Trial")
+            self.assertIn("Epreuve de guilde", conflicts["B2"].value)
+            self.assertIn("Defi de guilde", conflicts["B2"].value)
+            self.assertEqual(conflicts["D2"].value, "review")
+            self.assertEqual(conflicts["F2"].value, "多译法需确认")
+
+            review = result["Review_Before_Import"]
+            self.assertEqual(review["A2"].value, "Guild Trial")
+            self.assertEqual(review["D2"].value, "多译法需确认")
