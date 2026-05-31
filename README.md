@@ -180,7 +180,7 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp_gui.py
 ### 7. LLM 术语提取
 
 - 目录：`tools/llm_term_extractor`
-- 用途：从 Excel 的 `source` 列抽取游戏术语；如果 `target` 列有内容则抽取 source-target 对并做冲突复核；`target` 留空时则仅做 source-only 术语收集
+- 用途：从 Excel 的 `source` 列抽取游戏术语；同行 `target` 有内容则记录已有译法并做冲突复核，空 target 行按 source-only 术语收集处理
 - 默认模型：`gpt-5.3-codex-spark`，`reasoning effort` 默认 `high`
 - prompt 管理：默认使用 `tools/llm_term_extractor/prompts/` 下的 `extract_terms_zh_target.md` 与 `conflict_review_zh_target.md`，支持 CLI 覆盖对应文件
 - 输出方式：生成新的结果 Excel（默认文件名 `<原文件名>_llm_terms.xlsx`），不会覆盖原文件

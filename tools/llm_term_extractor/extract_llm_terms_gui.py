@@ -7,8 +7,6 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from openpyxl import load_workbook
-
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
 
 try:
@@ -19,8 +17,8 @@ try:
         DEFAULT_REASONING_EFFORT,
         build_default_output_path,
         default_prompt_path,
+        detect_history_tb_columns,
         process_excel,
-        _detect_history_columns,
     )
 except ImportError:
     from extract_llm_terms import (
@@ -30,46 +28,12 @@ except ImportError:
         DEFAULT_REASONING_EFFORT,
         build_default_output_path,
         default_prompt_path,
+        detect_history_tb_columns,
         process_excel,
-        _detect_history_columns,
     )
 
 
 HISTORY_TERM_SHEET_NAME = "术语表"
-
-
-def _detect_history_tb_columns(
-    history_tb_file: str | Path,
-    sheet: str | None = None,
-) -> tuple[str, str | None, str | None]:
-    history_path = Path(history_tb_file).expanduser().resolve()
-    if not history_path.exists():
-        raise FileNotFoundError(f"历史 TB 文件不存在: {history_path}")
-
-    workbook = load_workbook(history_path, read_only=True, data_only=True)
-    try:
-        if sheet:
-            if sheet not in workbook.sheetnames:
-                raise ValueError(f"历史 TB 工作表不存在: {sheet}")
-            worksheet = workbook[sheet]
-        elif HISTORY_TERM_SHEET_NAME in workbook.sheetnames:
-            worksheet = workbook[HISTORY_TERM_SHEET_NAME]
-        else:
-            worksheet = workbook.active
-
-        try:
-            source_column, target_column = _detect_history_columns(
-                worksheet,
-                header_row=1,
-                source_column=None,
-                target_column=None,
-            )
-        except ValueError:
-            source_column, target_column = "", ""
-
-        return worksheet.title, source_column or None, target_column or None
-    finally:
-        workbook.close()
 
 
 class LlmTermExtractorApp(ttk.Frame):
@@ -374,11 +338,20 @@ class LlmTermExtractorApp(ttk.Frame):
         if not history_tb_file or not selected_sheet:
             return
 
+        history_start_row = self._parse_history_start_row(show_error=show_error)
+        if history_start_row is None:
+            return
+
         try:
-            _sheet_title, source_column, target_column = _detect_history_tb_columns(
+            _sheet_title, source_column, target_column = detect_history_tb_columns(
                 history_tb_file,
                 sheet=selected_sheet,
+                start_row=history_start_row,
             )
+        except ValueError:
+            self.history_source_column_var.set("")
+            self.history_target_column_var.set("")
+            return
         except Exception as exc:
             if show_error:
                 messagebox.showerror("读取失败", str(exc))
@@ -401,6 +374,7 @@ class LlmTermExtractorApp(ttk.Frame):
         history_sheet = self.history_sheet_var.get().strip() or None
         history_source_column = self.history_source_column_var.get().strip() or None
         history_target_column = self.history_target_column_var.get().strip() or None
+        history_start_row = 2
 
         if not input_file:
             messagebox.showerror("缺少文件", "请先选择输入 Excel 文件。")
@@ -427,11 +401,15 @@ class LlmTermExtractorApp(ttk.Frame):
             messagebox.showerror("批大小错误", "批大小必须大于 0。")
             return
 
-        try:
-            history_start_row = int(self.history_start_row_var.get().strip() or "2")
-        except ValueError:
-            messagebox.showerror("历史 TB 开始行错误", "历史 TB 开始行必须是整数。")
-            return
+        if history_tb_file:
+            parsed_history_start_row = self._parse_history_start_row()
+            if parsed_history_start_row is None:
+                return
+            history_start_row = parsed_history_start_row
+        else:
+            history_sheet = None
+            history_source_column = None
+            history_target_column = None
 
         try:
             summary = process_excel(
@@ -475,6 +453,19 @@ class LlmTermExtractorApp(ttk.Frame):
                 ]
             ),
         )
+
+    def _parse_history_start_row(self, show_error: bool = True) -> int | None:
+        try:
+            history_start_row = int(self.history_start_row_var.get().strip() or "2")
+        except ValueError:
+            if show_error:
+                messagebox.showerror("历史 TB 开始行错误", "历史 TB 开始行必须是整数。")
+            return None
+        if history_start_row < 1:
+            if show_error:
+                messagebox.showerror("历史 TB 开始行错误", "历史 TB 开始行必须大于 0。")
+            return None
+        return history_start_row
 
 
 def main() -> None:

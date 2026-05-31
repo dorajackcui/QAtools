@@ -355,7 +355,7 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp.py ./input.xlsx \
 
 ### 7. LLM 术语提取
 
-推荐完整调用（target 模式）：
+推荐完整调用（target / mixed 模式，空 target 行会按 source-only 处理）：
 
 ```bash
 python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
@@ -369,7 +369,7 @@ python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
   -o ./artifacts/input_llm_terms.xlsx
 ```
 
-如果是 source-only 模式（`target` 为空，或不传 `-t`）：
+如果是 source-only 模式（不传 `-t`，或所选 target 列单元格为空）：
 
 ```bash
 python3 tools/llm_term_extractor/extract_llm_terms.py ./source_only.xlsx \

@@ -476,6 +476,41 @@ def _detect_history_columns(
     return detected_source_column, detected_target_column
 
 
+def detect_history_tb_columns(
+    history_tb_file: str | Path,
+    *,
+    sheet: str | None = None,
+    source_column: str | None = None,
+    target_column: str | None = None,
+    start_row: int = 2,
+) -> tuple[str, str, str]:
+    """Return history TB worksheet title and detected source/target columns."""
+    history_path = Path(history_tb_file).expanduser().absolute()
+    if not history_path.exists():
+        raise FileNotFoundError(f"History TB file does not exist: {history_path}")
+    if start_row < 1:
+        raise ValueError("history start_row must be at least 1.")
+
+    workbook = load_workbook(history_path, read_only=True, data_only=True)
+    try:
+        if sheet:
+            worksheet = workbook[sheet]
+        elif "术语表" in workbook.sheetnames:
+            worksheet = workbook["术语表"]
+        else:
+            worksheet = workbook.active
+
+        detected_source_column, detected_target_column = _detect_history_columns(
+            worksheet,
+            header_row=max(1, start_row - 1),
+            source_column=source_column,
+            target_column=target_column,
+        )
+        return worksheet.title, detected_source_column, detected_target_column
+    finally:
+        workbook.close()
+
+
 def load_history_tb_mapping(
     history_tb_file: str | Path,
     *,

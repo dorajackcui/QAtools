@@ -1,10 +1,10 @@
 # LLM 术语提取
 
-用于从 Excel 提取术语并形成可导入的术语表候选。可直接从 `source` 与 `target` 列联合抽取，也可在 `target` 留空时只收集 source 术语。工具会对同源术语多译法做冲突复核，并按工作表输出分类结果。
+用于从 Excel 提取术语并形成可导入的术语表候选。可从 `source` 识别术语，并在同一行 `target` 有内容时记录已有译法；也可在 `target` 未指定或为空时只收集 source 术语。工具会对同源术语多译法做冲突复核，并按工作表输出分类结果。
 
 ## 两种模式
 
-- **target 模式**：提供 `-t/--target-column` 时，按每行 `source` + `target` 组合抽取术语。模型在 `source` 中识别术语候选，同时保留该行出现的 `target` 表达。
+- **target / mixed 模式**：提供 `-t/--target-column` 时，模型仍由 `source` 识别术语候选；同行 `target` 有内容则记录已有译法，空 target 行按 source-only 处理。
 - **source-only 模式**：`target` 列不传（或留空）时，仅依据 `source` 抽取术语。常用于已有未标记术语、无 target 的场景快速建池。
 
 ## Prompt 文件
@@ -61,8 +61,8 @@ python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
   --history-sheet Glossary \
   --history-source-column source \
   --history-target-column target \
-  --extract-prompt-file ./prompts/custom_extract.md \
-  --conflict-prompt-file ./prompts/custom_conflict.md \
+  --extract-prompt-file ./tools/llm_term_extractor/prompts/extract_terms_zh_target.md \
+  --conflict-prompt-file ./tools/llm_term_extractor/prompts/conflict_review_zh_target.md \
   --codex-model gpt-5.3-codex-spark \
   --dump-prompts-dir ./artifacts/prompts \
   --keep-raw-codex-output \
