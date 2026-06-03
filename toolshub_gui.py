@@ -19,9 +19,11 @@ from tools.workflow.workflow_gui import WorkflowRunnerApp
 class ToolshubApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
+        self.root.withdraw()
         self.root.title("Toolshub")
         self.root.resizable(False, False)
         self._build_ui()
+        self._fit_window_to_content()
 
     def _build_ui(self) -> None:
         frame = ttk.Frame(self.root, padding=12)
@@ -59,6 +61,15 @@ class ToolshubApp:
         notebook.add(french_nbsp_tab, text="法语NBSP恢复")
 
         frame.columnconfigure(0, weight=1)
+
+    def _fit_window_to_content(self) -> None:
+        self.root.update_idletasks()
+        width = self.root.winfo_reqwidth()
+        height = self.root.winfo_reqheight()
+        x = max((self.root.winfo_screenwidth() - width) // 2, 0)
+        y = max((self.root.winfo_screenheight() - height) // 2, 30)
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        self.root.deiconify()
 
 
 def main() -> None:
