@@ -16,7 +16,6 @@ try:
         DEFAULT_CONFLICT_PROMPT,
         DEFAULT_EXTRACTION_PROMPT,
         DEFAULT_REASONING_EFFORT,
-        build_default_output_path,
         default_prompt_path,
         detect_history_tb_columns,
         process_excel,
@@ -27,7 +26,6 @@ except ImportError:
         DEFAULT_CONFLICT_PROMPT,
         DEFAULT_EXTRACTION_PROMPT,
         DEFAULT_REASONING_EFFORT,
-        build_default_output_path,
         default_prompt_path,
         detect_history_tb_columns,
         process_excel,
@@ -41,7 +39,6 @@ class LlmTermExtractorApp(ttk.Frame):
     def __init__(self, master: tk.Misc) -> None:
         super().__init__(master, padding=16)
         self.input_file_var = tk.StringVar()
-        self.output_file_var = tk.StringVar()
         self.sheet_var = tk.StringVar()
         self.source_column_var = tk.StringVar(value="A")
         self.target_column_var = tk.StringVar()
@@ -71,14 +68,6 @@ class LlmTermExtractorApp(ttk.Frame):
         )
         ttk.Button(self, text="选择", command=self.choose_input_file).grid(
             row=0, column=2, padx=(8, 0), pady=(0, 8)
-        )
-
-        ttk.Label(self, text="输出 Excel").grid(row=1, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.output_file_var, width=48).grid(
-            row=1, column=1, sticky="ew", pady=(0, 8)
-        )
-        ttk.Button(self, text="另存为", command=self.choose_output_file).grid(
-            row=1, column=2, padx=(8, 0), pady=(0, 8)
         )
 
         ttk.Label(self, text="工作表名").grid(row=2, column=0, sticky="w", pady=(0, 8))
@@ -200,29 +189,7 @@ class LlmTermExtractorApp(ttk.Frame):
             return
 
         self.input_file_var.set(file_path)
-        if not self.output_file_var.get().strip():
-            self.output_file_var.set(str(build_default_output_path(Path(file_path))))
         self.refresh_sheet_choices()
-
-    def choose_output_file(self) -> None:
-        input_file = self.input_file_var.get().strip()
-        initial_file = ""
-        initial_dir = ""
-
-        if input_file:
-            input_path = Path(input_file)
-            initial_dir = str(input_path.parent)
-            initial_file = build_default_output_path(input_path).name
-
-        file_path = filedialog.asksaveasfilename(
-            title="选择输出 Excel 文件",
-            defaultextension=".xlsx",
-            filetypes=[("Excel 文件", "*.xlsx"), ("Excel 启用宏", "*.xlsm"), ("所有文件", "*.*")],
-            initialdir=initial_dir or None,
-            initialfile=initial_file or None,
-        )
-        if file_path:
-            self.output_file_var.set(file_path)
 
     def choose_extract_prompt_file(self) -> None:
         self._choose_prompt_file("选择抽取 prompt 文件", self.extract_prompt_file_var)
@@ -363,7 +330,6 @@ class LlmTermExtractorApp(ttk.Frame):
 
     def run_extraction(self) -> None:
         input_file = self.input_file_var.get().strip()
-        output_file = self.output_file_var.get().strip()
         sheet = self.sheet_var.get().strip() or None
         source_column = self.source_column_var.get().strip()
         target_column = self.target_column_var.get().strip() or None
@@ -417,7 +383,7 @@ class LlmTermExtractorApp(ttk.Frame):
                 sheet=sheet,
                 start_row=start_row,
                 batch_size=batch_size,
-                output_file=output_file or None,
+                output_file=None,
                 history_tb_file=history_tb_file,
                 history_sheet=history_sheet,
                 history_source_column=history_source_column,
@@ -433,7 +399,6 @@ class LlmTermExtractorApp(ttk.Frame):
             messagebox.showerror("处理失败", str(exc))
             return
 
-        self.output_file_var.set(str(summary.output_path))
         messagebox.showinfo(
             "处理完成",
             "\n".join(

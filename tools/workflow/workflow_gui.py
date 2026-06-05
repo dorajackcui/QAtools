@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import tkinter as tk
-from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
@@ -15,14 +14,13 @@ from tools.term_pair_checker.extract_terms_from_excel import (
     detect_history_tb_columns,
 )
 
-from .workflow_runner import build_default_output_path, run_workflow
+from .workflow_runner import run_workflow
 
 
 class WorkflowRunnerApp(ttk.Frame):
     def __init__(self, master: tk.Misc) -> None:
         super().__init__(master, padding=16)
         self.input_file_var = tk.StringVar()
-        self.output_file_var = tk.StringVar()
         self.sheet_var = tk.StringVar()
         self.term_history_tb_file_var = tk.StringVar()
         self.term_history_sheet_var = tk.StringVar()
@@ -55,14 +53,6 @@ class WorkflowRunnerApp(ttk.Frame):
         )
         ttk.Button(self, text="选择", command=self.choose_input_file).grid(
             row=0, column=2, padx=(8, 0), pady=(0, 8)
-        )
-
-        ttk.Label(self, text="输出 Excel").grid(row=1, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.output_file_var, width=42).grid(
-            row=1, column=1, sticky="ew", pady=(0, 8)
-        )
-        ttk.Button(self, text="另存为", command=self.choose_output_file).grid(
-            row=1, column=2, padx=(8, 0), pady=(0, 8)
         )
 
         ttk.Label(self, text="术语历史 TB Excel").grid(row=2, column=0, sticky="w", pady=(0, 8))
@@ -174,7 +164,7 @@ class WorkflowRunnerApp(ttk.Frame):
 
         ttk.Label(
             self,
-            text="说明：按顺序复用现有 checker，把术语对检查和 Tag检查结果写进同一份输出 Excel。",
+            text="说明：按顺序复用现有 checker，把术语对检查和 Tag检查结果写进同一份结果文件。",
         ).grid(row=14, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.columnconfigure(1, weight=1)
@@ -188,29 +178,7 @@ class WorkflowRunnerApp(ttk.Frame):
             return
 
         self.input_file_var.set(file_path)
-        if not self.output_file_var.get().strip():
-            self.output_file_var.set(str(build_default_output_path(file_path)))
         self.refresh_sheet_choices()
-
-    def choose_output_file(self) -> None:
-        input_file = self.input_file_var.get().strip()
-        initial_file = ""
-        initial_dir = ""
-
-        if input_file:
-            input_path = Path(input_file)
-            initial_dir = str(input_path.parent)
-            initial_file = build_default_output_path(input_path).name
-
-        file_path = filedialog.asksaveasfilename(
-            title="选择输出 Excel 文件",
-            defaultextension=".xlsx",
-            filetypes=[("Excel 文件", "*.xlsx"), ("Excel 启用宏", "*.xlsm"), ("所有文件", "*.*")],
-            initialdir=initial_dir or None,
-            initialfile=initial_file or None,
-        )
-        if file_path:
-            self.output_file_var.set(file_path)
 
     def choose_term_history_tb_file(self) -> None:
         file_path = filedialog.askopenfilename(
@@ -342,7 +310,6 @@ class WorkflowRunnerApp(ttk.Frame):
 
     def run_selected_tasks(self) -> None:
         input_file = self.input_file_var.get().strip()
-        output_file = self.output_file_var.get().strip()
         term_history_tb_file = self.term_history_tb_file_var.get().strip()
         term_history_sheet = self.term_history_sheet_var.get().strip() or None
         term_history_source_column = self.term_history_source_column_var.get().strip() or None
@@ -391,7 +358,7 @@ class WorkflowRunnerApp(ttk.Frame):
         try:
             summary = run_workflow(
                 input_file=input_file,
-                output_file=output_file or None,
+                output_file=None,
                 source_column=source_column,
                 target_column=target_column,
                 sheet=self.sheet_var.get().strip() or None,
@@ -410,8 +377,6 @@ class WorkflowRunnerApp(ttk.Frame):
         except Exception as exc:
             messagebox.showerror("处理失败", str(exc))
             return
-
-        self.output_file_var.set(str(summary.output_path))
 
         lines = [
             "Workflow 执行完成。",

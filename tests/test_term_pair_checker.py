@@ -99,7 +99,7 @@ class ProcessExcelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
             self.create_workbook(input_path)
-            expected_output_path = Path(tmp_dir) / "input_term_pairs.xlsx"
+            expected_output_path = Path(tmp_dir) / "term_pair_check_input.xlsx"
 
             worksheet_title, source_col, target_col, saved_path, term_count, problem_count = process_excel(
                 input_file=input_path,

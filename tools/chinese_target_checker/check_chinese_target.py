@@ -9,8 +9,13 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string, get_column_letter
+
+from tools.excel_output import build_prefixed_output_path
 
 
 PROBLEM_SHEET_NAME = "中文检查问题"
@@ -41,8 +46,7 @@ def normalize_column(column_name: str) -> str:
 
 
 def build_default_output_path(input_file: str | Path) -> Path:
-    input_path = Path(input_file).expanduser().resolve()
-    return input_path.with_name(f"{input_path.stem}_chinese_target_checked{input_path.suffix}")
+    return build_prefixed_output_path(input_file, "target_chinese_check_")
 
 
 def build_default_result_column(target_column: str) -> str:
@@ -82,7 +86,7 @@ def process_excel(
     output_path = (
         Path(output_file).expanduser().resolve()
         if output_file
-        else input_path
+        else build_default_output_path(input_path)
     )
 
     workbook = load_workbook(input_path)
@@ -136,7 +140,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-o",
         "--output",
-        help="输出 Excel 文件路径；不填则直接修改原文件",
+        help="输出 Excel 文件路径，默认生成 target_chinese_check_<原文件名>",
     )
     return parser.parse_args()
 

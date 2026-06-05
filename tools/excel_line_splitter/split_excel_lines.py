@@ -8,8 +8,13 @@ import re
 import sys
 from pathlib import Path
 
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
+
+from tools.excel_output import build_prefixed_output_path
 
 
 LINE_BREAK_PATTERN = re.compile(r"\r\n|\n|\r")
@@ -33,7 +38,7 @@ def split_cell_lines(value: object) -> list[str]:
 
 
 def build_default_output_path(input_path: Path) -> Path:
-    return input_path.with_name(f"{input_path.stem}_split_lines{input_path.suffix}")
+    return build_prefixed_output_path(input_path, "split_lines_")
 
 
 def parse_args() -> argparse.Namespace:
@@ -65,7 +70,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-o",
         "--output",
-        help="输出 Excel 文件路径，默认生成 <原文件名>_split_lines.xlsx",
+        help="输出 Excel 文件路径，默认生成 split_lines_<原文件名>",
     )
     return parser.parse_args()
 

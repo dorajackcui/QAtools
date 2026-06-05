@@ -84,7 +84,7 @@ class ProcessExcelTests(unittest.TestCase):
     def test_process_excel_writes_problem_and_summary_sheets(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
-            expected_output_path = Path(tmp_dir) / "input_tag_placeholder_checked.xlsx"
+            expected_output_path = Path(tmp_dir) / "tag_check_input.xlsx"
             self.create_workbook(input_path)
 
             summary = process_excel(

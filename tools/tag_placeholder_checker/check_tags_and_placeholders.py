@@ -11,8 +11,13 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
+
+from tools.excel_output import build_prefixed_output_path
 
 
 PROBLEM_SHEET_NAME = "标签占位问题"
@@ -70,7 +75,7 @@ def normalize_column(column_name: str) -> str:
 
 
 def build_default_output_path(input_path: Path) -> Path:
-    return input_path.with_name(f"{input_path.stem}_tag_placeholder_checked{input_path.suffix}")
+    return build_prefixed_output_path(input_path, "tag_check_")
 
 
 def build_default_angle_config_path() -> Path:
@@ -329,7 +334,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-o",
         "--output",
-        help="输出 Excel 文件路径，默认生成 <原文件名>_tag_placeholder_checked.xlsx",
+        help="输出 Excel 文件路径，默认生成 tag_check_<原文件名>",
     )
     return parser.parse_args()
 

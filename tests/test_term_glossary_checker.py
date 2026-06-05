@@ -272,7 +272,7 @@ class ProcessExcelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             glossary_path = Path(tmp_dir) / "glossary.xlsx"
             data_path = Path(tmp_dir) / "data.xlsx"
-            output_path = Path(tmp_dir) / "data_glossary_checked.xlsx"
+            output_path = Path(tmp_dir) / "glossary_check_data.xlsx"
             self.create_glossary_workbook(glossary_path)
             self.create_data_workbook(data_path)
 

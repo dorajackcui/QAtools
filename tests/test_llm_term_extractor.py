@@ -154,12 +154,12 @@ class CodexTermReviewTests(unittest.TestCase):
 
 
 class LlmTermCodexOrchestrationTests(unittest.TestCase):
-    def test_default_output_path_uses_llm_terms_suffix(self) -> None:
+    def test_default_output_path_uses_llm_terms_prefix(self) -> None:
         from tools.llm_term_extractor.extract_llm_terms import build_default_output_path
 
         output_path = build_default_output_path("/tmp/source-workbook.xlsx")
 
-        self.assertEqual(output_path, Path("/tmp/source-workbook_llm_terms.xlsx"))
+        self.assertEqual(output_path, Path("/tmp/llm_terms_source-workbook.xlsx"))
 
     def test_default_batch_extractor_renders_prompt_dumps_raw_output_and_retries_invalid_json(self) -> None:
         from tools.llm_term_extractor.extract_llm_terms import build_codex_batch_extractor
@@ -450,7 +450,7 @@ class LlmTermWorkbookTests(unittest.TestCase):
                 batch_extractor=fake_extractor,
             )
 
-            self.assertEqual(summary.output_path, input_path.with_name("input_llm_terms.xlsx"))
+            self.assertEqual(summary.output_path, input_path.with_name("llm_terms_input.xlsx"))
             self.assertEqual(summary.worksheet_title, "Data")
             self.assertEqual(summary.scanned_row_count, 2)
             self.assertEqual(summary.batch_count, 1)

@@ -4,22 +4,20 @@
 from __future__ import annotations
 
 import tkinter as tk
-from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
 
 try:
-    from .restore_french_nbsp import build_default_output_path, process_excel
+    from .restore_french_nbsp import process_excel
 except ImportError:
-    from restore_french_nbsp import build_default_output_path, process_excel
+    from restore_french_nbsp import process_excel
 
 
 class FrenchNbspRestorerApp(ttk.Frame):
     def __init__(self, master: tk.Misc) -> None:
         super().__init__(master, padding=16)
         self.input_file_var = tk.StringVar()
-        self.output_file_var = tk.StringVar()
         self.sheet_var = tk.StringVar()
         self.target_column_var = tk.StringVar(value="B")
         self.result_column_var = tk.StringVar()
@@ -34,14 +32,6 @@ class FrenchNbspRestorerApp(ttk.Frame):
         )
         ttk.Button(self, text="选择", command=self.choose_input_file).grid(
             row=0, column=2, padx=(8, 0), pady=(0, 8)
-        )
-
-        ttk.Label(self, text="输出 Excel").grid(row=1, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.output_file_var, width=42).grid(
-            row=1, column=1, sticky="ew", pady=(0, 8)
-        )
-        ttk.Button(self, text="另存为", command=self.choose_output_file).grid(
-            row=1, column=2, padx=(8, 0), pady=(0, 8)
         )
 
         ttk.Label(self, text="工作表名").grid(row=2, column=0, sticky="w", pady=(0, 8))
@@ -82,29 +72,7 @@ class FrenchNbspRestorerApp(ttk.Frame):
             return
 
         self.input_file_var.set(file_path)
-        if not self.output_file_var.get().strip():
-            self.output_file_var.set(str(build_default_output_path(Path(file_path))))
         self.refresh_sheet_choices()
-
-    def choose_output_file(self) -> None:
-        input_file = self.input_file_var.get().strip()
-        initial_file = ""
-        initial_dir = ""
-
-        if input_file:
-            input_path = Path(input_file)
-            initial_dir = str(input_path.parent)
-            initial_file = build_default_output_path(input_path).name
-
-        file_path = filedialog.asksaveasfilename(
-            title="选择输出 Excel 文件",
-            defaultextension=".xlsx",
-            filetypes=[("Excel 文件", "*.xlsx"), ("Excel 启用宏", "*.xlsm"), ("所有文件", "*.*")],
-            initialdir=initial_dir or None,
-            initialfile=initial_file or None,
-        )
-        if file_path:
-            self.output_file_var.set(file_path)
 
     def clear_sheet_choices(self) -> None:
         self.sheet_combobox["values"] = ()
@@ -150,7 +118,6 @@ class FrenchNbspRestorerApp(ttk.Frame):
 
     def run_restore(self) -> None:
         input_file = self.input_file_var.get().strip()
-        output_file = self.output_file_var.get().strip()
         sheet = self.sheet_var.get().strip() or None
         target_column = self.target_column_var.get().strip()
         result_column = self.result_column_var.get().strip() or None
@@ -175,13 +142,12 @@ class FrenchNbspRestorerApp(ttk.Frame):
                 result_column=result_column,
                 sheet=sheet,
                 start_row=start_row,
-                output_file=output_file or None,
+                output_file=None,
             )
         except Exception as exc:
             messagebox.showerror("处理失败", str(exc))
             return
 
-        self.output_file_var.set(str(summary.output_path))
         messagebox.showinfo(
             "处理完成",
             "\n".join(

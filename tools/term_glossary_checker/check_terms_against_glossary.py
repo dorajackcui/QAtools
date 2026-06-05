@@ -31,6 +31,7 @@ from tools.false_positive_review import (
     apply_false_positive_review_to_sheet,
     review_clusters_with_codex,
 )
+from tools.excel_output import build_prefixed_output_path
 
 
 PROBLEM_SHEET_NAME = "术语命中问题"
@@ -66,7 +67,7 @@ def normalize_column(column_name: str) -> str:
 
 
 def build_default_output_path(data_path: Path) -> Path:
-    return data_path.with_name(f"{data_path.stem}_glossary_checked{data_path.suffix}")
+    return build_prefixed_output_path(data_path, "glossary_check_")
 
 
 def parse_args() -> argparse.Namespace:
@@ -96,7 +97,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-o",
         "--output",
-        help="输出 Excel 文件路径，默认生成 <原文件名>_glossary_checked.xlsx",
+        help="输出 Excel 文件路径，默认生成 glossary_check_<原文件名>",
     )
     parser.add_argument(
         "--codex-fp-review",

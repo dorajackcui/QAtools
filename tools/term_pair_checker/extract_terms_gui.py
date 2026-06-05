@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import tkinter as tk
-from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
@@ -15,7 +14,6 @@ try:
     from .extract_terms_from_excel import (
         DEFAULT_EXCLUSION_CONFIG_NAME,
         TERM_SHEET_NAME,
-        build_default_output_path,
         detect_history_tb_columns,
         process_excel,
     )
@@ -23,7 +21,6 @@ except ImportError:
     from extract_terms_from_excel import (
         DEFAULT_EXCLUSION_CONFIG_NAME,
         TERM_SHEET_NAME,
-        build_default_output_path,
         detect_history_tb_columns,
         process_excel,
     )
@@ -33,7 +30,6 @@ class ExtractTermsApp(ttk.Frame):
     def __init__(self, master: tk.Misc) -> None:
         super().__init__(master, padding=16)
         self.input_file_var = tk.StringVar()
-        self.output_file_var = tk.StringVar()
         self.history_tb_file_var = tk.StringVar()
         self.history_sheet_var = tk.StringVar()
         self.history_source_column_var = tk.StringVar()
@@ -59,14 +55,6 @@ class ExtractTermsApp(ttk.Frame):
         )
         ttk.Button(self, text="选择", command=self.choose_input_file).grid(
             row=0, column=2, padx=(8, 0), pady=(0, 8)
-        )
-
-        ttk.Label(self, text="输出 Excel").grid(row=1, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.output_file_var, width=42).grid(
-            row=1, column=1, sticky="ew", pady=(0, 8)
-        )
-        ttk.Button(self, text="另存为", command=self.choose_output_file).grid(
-            row=1, column=2, padx=(8, 0), pady=(0, 8)
         )
 
         ttk.Label(self, text="历史 TB Excel").grid(row=2, column=0, sticky="w", pady=(0, 8))
@@ -167,31 +155,7 @@ class ExtractTermsApp(ttk.Frame):
         if not file_path:
             return
         self.input_file_var.set(file_path)
-        if not self.output_file_var.get().strip():
-            self.output_file_var.set(str(build_default_output_path(Path(file_path))))
         self.refresh_sheet_choices()
-
-    def choose_output_file(self) -> None:
-        input_file = self.input_file_var.get().strip()
-        initial_file = ""
-        initial_dir = ""
-
-        if input_file:
-            input_path = Path(input_file)
-            initial_dir = str(input_path.parent)
-            initial_file = build_default_output_path(input_path).name
-
-        file_path = filedialog.asksaveasfilename(
-            title="选择输出 Excel 文件",
-            defaultextension=".xlsx",
-            filetypes=[("Excel 文件", "*.xlsx"), ("Excel 启用宏", "*.xlsm"), ("所有文件", "*.*")],
-            initialdir=initial_dir or None,
-            initialfile=initial_file or None,
-        )
-        if not file_path:
-            return
-
-        self.output_file_var.set(file_path)
 
     def choose_history_tb_file(self) -> None:
         file_path = filedialog.askopenfilename(
@@ -304,7 +268,6 @@ class ExtractTermsApp(ttk.Frame):
 
     def run_extraction(self) -> None:
         input_file = self.input_file_var.get().strip()
-        output_file = self.output_file_var.get().strip()
         history_tb_file = self.history_tb_file_var.get().strip()
         history_sheet = self.history_sheet_var.get().strip() or None
         history_source_column = self.history_source_column_var.get().strip() or None
@@ -367,14 +330,13 @@ class ExtractTermsApp(ttk.Frame):
                 history_source_column=history_source_column,
                 history_target_column=history_target_column,
                 history_start_row=history_start_row,
-                output_file=output_file or None,
+                output_file=None,
                 false_positive_reviewer=review_clusters_with_codex if self.codex_fp_review_var.get() else None,
             )
         except Exception as exc:
             messagebox.showerror("处理失败", str(exc))
             return
 
-        self.output_file_var.set(str(saved_path))
         message_lines = [
             "术语检查已完成。",
             f"工作表: {worksheet_title}",

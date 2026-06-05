@@ -38,6 +38,7 @@ from tools.history_tb import (
     detect_history_tb_columns as shared_detect_history_tb_columns,
     iter_history_rows,
 )
+from tools.excel_output import build_prefixed_output_path
 
 
 TERMS_SHEET_NAME = "Terms_Source_Dedup"
@@ -122,8 +123,7 @@ def normalize_term_key(value: str) -> str:
 
 
 def build_default_output_path(input_file: str | Path) -> Path:
-    input_path = Path(input_file).expanduser().absolute()
-    return input_path.with_name(f"{input_path.stem}_llm_terms.xlsx")
+    return build_prefixed_output_path(input_file, "llm_terms_")
 
 
 def default_prompt_path(name: str) -> Path:

@@ -37,6 +37,7 @@ from tools.false_positive_review import (
     apply_false_positive_review_to_sheet,
     review_clusters_with_codex,
 )
+from tools.excel_output import build_prefixed_output_path
 
 
 SUPPORTED_MARKS = ("【】", "[]", "<>")
@@ -306,7 +307,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-o",
         "--output",
-        help="输出 Excel 文件路径，默认生成 <原文件名>_term_pairs.xlsx",
+        help="输出 Excel 文件路径，默认生成 term_pair_check_<原文件名>",
     )
     parser.add_argument(
         "--codex-fp-review",
@@ -447,7 +448,7 @@ def load_history_tb_mapping(
 
 
 def build_default_output_path(input_path: Path) -> Path:
-    return input_path.with_name(f"{input_path.stem}_term_pairs{input_path.suffix}")
+    return build_prefixed_output_path(input_path, "term_pair_check_")
 
 
 def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):

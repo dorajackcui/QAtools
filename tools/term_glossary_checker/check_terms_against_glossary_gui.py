@@ -4,16 +4,15 @@
 from __future__ import annotations
 
 import tkinter as tk
-from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
 from tools.false_positive_review import review_clusters_with_codex
 
 try:
-    from .check_terms_against_glossary import build_default_output_path, process_excel
+    from .check_terms_against_glossary import process_excel
 except ImportError:
-    from check_terms_against_glossary import build_default_output_path, process_excel
+    from check_terms_against_glossary import process_excel
 
 
 class TermGlossaryCheckerApp(ttk.Frame):
@@ -21,7 +20,6 @@ class TermGlossaryCheckerApp(ttk.Frame):
         super().__init__(master, padding=16)
         self.glossary_file_var = tk.StringVar()
         self.data_file_var = tk.StringVar()
-        self.output_file_var = tk.StringVar()
         self.glossary_sheet_var = tk.StringVar()
         self.glossary_source_column_var = tk.StringVar(value="A")
         self.glossary_target_column_var = tk.StringVar(value="B")
@@ -50,14 +48,6 @@ class TermGlossaryCheckerApp(ttk.Frame):
         )
         ttk.Button(self, text="选择", command=self.choose_data_file).grid(
             row=1, column=2, padx=(8, 0), pady=(0, 8)
-        )
-
-        ttk.Label(self, text="输出 Excel").grid(row=2, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.output_file_var, width=42).grid(
-            row=2, column=1, sticky="ew", pady=(0, 8)
-        )
-        ttk.Button(self, text="另存为", command=self.choose_output_file).grid(
-            row=2, column=2, padx=(8, 0), pady=(0, 8)
         )
 
         ttk.Label(self, text="术语表工作表").grid(row=3, column=0, sticky="w", pady=(0, 8))
@@ -149,31 +139,7 @@ class TermGlossaryCheckerApp(ttk.Frame):
         )
         if file_path:
             self.data_file_var.set(file_path)
-            if not self.output_file_var.get().strip():
-                self.output_file_var.set(str(build_default_output_path(Path(file_path))))
             self.refresh_data_sheet_choices()
-
-    def choose_output_file(self) -> None:
-        data_file = self.data_file_var.get().strip()
-        initial_file = ""
-        initial_dir = ""
-
-        if data_file:
-            data_path = Path(data_file)
-            initial_dir = str(data_path.parent)
-            initial_file = build_default_output_path(data_path).name
-
-        file_path = filedialog.asksaveasfilename(
-            title="选择输出 Excel 文件",
-            defaultextension=".xlsx",
-            filetypes=[("Excel 文件", "*.xlsx"), ("Excel 启用宏", "*.xlsm"), ("所有文件", "*.*")],
-            initialdir=initial_dir or None,
-            initialfile=initial_file or None,
-        )
-        if not file_path:
-            return
-
-        self.output_file_var.set(file_path)
 
     def clear_glossary_sheet_choices(self) -> None:
         self.glossary_sheet_combobox["values"] = ()
@@ -285,7 +251,6 @@ class TermGlossaryCheckerApp(ttk.Frame):
     def run_check(self) -> None:
         glossary_file = self.glossary_file_var.get().strip()
         data_file = self.data_file_var.get().strip()
-        output_file = self.output_file_var.get().strip()
         glossary_source_column = self.glossary_source_column_var.get().strip()
         glossary_target_column = self.glossary_target_column_var.get().strip()
         data_source_column = self.data_source_column_var.get().strip()
@@ -323,14 +288,13 @@ class TermGlossaryCheckerApp(ttk.Frame):
                 start_row=start_row,
                 case_sensitive=self.case_sensitive_var.get(),
                 match_mode=self.match_mode_var.get().strip() or "hybrid-boundary",
-                output_file=output_file or None,
+                output_file=None,
                 false_positive_reviewer=review_clusters_with_codex if self.codex_fp_review_var.get() else None,
             )
         except Exception as exc:
             messagebox.showerror("处理失败", str(exc))
             return
 
-        self.output_file_var.set(str(summary.output_path))
         messagebox.showinfo(
             "处理完成",
             "\n".join(

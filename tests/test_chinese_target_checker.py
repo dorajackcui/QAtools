@@ -62,7 +62,7 @@ class ChineseTargetExcelTests(unittest.TestCase):
                 start_row=2,
             )
 
-            self.assertEqual(summary.output_path, input_path.resolve())
+            self.assertEqual(summary.output_path, input_path.with_name("target_chinese_check_input.xlsx").resolve())
             self.assertEqual(summary.worksheet_title, "Data")
             self.assertEqual(summary.target_column, "B")
             self.assertEqual(summary.result_column, "C")
@@ -70,7 +70,7 @@ class ChineseTargetExcelTests(unittest.TestCase):
             self.assertEqual(summary.processed_count, 3)
             self.assertEqual(summary.matched_count, 1)
 
-            workbook = load_workbook(input_path)
+            workbook = load_workbook(summary.output_path)
             worksheet = workbook["Data"]
             self.assertEqual(worksheet["C1"].value, "中文检查")
             self.assertIsNone(worksheet["C2"].value)
@@ -123,14 +123,14 @@ class ChineseTargetExcelTests(unittest.TestCase):
             workbook.create_sheet("中文检查问题")
             workbook.save(input_path)
 
-            process_excel(
+            summary = process_excel(
                 input_file=input_path,
                 target_column="B",
                 sheet="Data",
                 start_row=2,
             )
 
-            output_workbook = load_workbook(input_path)
+            output_workbook = load_workbook(summary.output_path)
             self.assertNotIn("中文检查问题", output_workbook.sheetnames)
 
     def test_process_excel_reuses_existing_adjacent_result_column(self) -> None:
