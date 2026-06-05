@@ -968,6 +968,138 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(rows[2][1], "登录失败")
             self.assertEqual(rows[3][1], "全新文本")
 
+    def test_target_column_fill_writes_restore_audit_workbook(self):
+        from phraseloom.workflow import fill_target_column_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            source_input = tmp_path / "source.xlsx"
+            todo_path = tmp_path / "todo.xlsx"
+            filled_path = tmp_path / "filled.xlsx"
+            audit_path = tmp_path / "filled_restore_audit.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Keep {0}", ""])
+            ws.append(["Missing line", ""])
+            ws.append(["Bad <color>tag", ""])
+            wb.save(source_input)
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "to_translate"
+            ws.append(["unit_type", "source", "target"])
+            ws.append(["segment", "Keep {1}", "Garde {1} {2}"])
+            ws.append(["segment", "Bad {1>tag", "Balise {1>"])
+            wb.save(todo_path)
+
+            stats = fill_target_column_workbook(
+                source_input,
+                filled_path,
+                source_col="source",
+                target_col="target",
+                template_workbook=todo_path,
+            )
+
+            self.assertIn("audit_output_path", stats)
+            self.assertEqual(stats["audit_output_path"], str(audit_path))
+            self.assertTrue(audit_path.exists())
+
+            audit = load_workbook(audit_path, data_only=True)
+            try:
+                self.assertEqual(
+                    audit.sheetnames[:2],
+                    ["summary", "restore_warnings"],
+                )
+                self.assertIn("_metadata", audit.sheetnames)
+
+                summary = {
+                    row[0]: row[1]
+                    for row in audit["summary"].iter_rows(min_row=2, values_only=True)
+                }
+                self.assertEqual(summary["filled_rows"], 2)
+                self.assertEqual(summary["unfilled_rows"], 1)
+                self.assertEqual(summary["warning_rows"], 3)
+                self.assertEqual(summary["source_warning_rows"], 1)
+                self.assertEqual(summary["target_warning_rows"], 1)
+                self.assertEqual(summary["restore_warning_rows"], 1)
+
+                warning_headers = [
+                    cell.value for cell in audit["restore_warnings"][1]
+                ]
+                warnings = list(
+                    audit["restore_warnings"].iter_rows(min_row=2, values_only=True)
+                )
+                warning_rows = {
+                    row[warning_headers.index("row_number")]: dict(
+                        zip(warning_headers, row)
+                    )
+                    for row in warnings
+                }
+                self.assertEqual(len(warning_rows), 3)
+                self.assertIn(
+                    "protected_token_mismatch",
+                    warning_rows[2]["target_warning"],
+                )
+                self.assertIsNone(warning_rows[2]["source_warning"])
+                self.assertEqual(
+                    warning_rows[3]["restore_warning"],
+                    "fill target in to_translate, then rerun fill",
+                )
+                self.assertIn(
+                    "open tag has no close partner",
+                    warning_rows[4]["source_warning"],
+                )
+                self.assertIsNone(warning_rows[4]["target_warning"])
+            finally:
+                audit.close()
+
+    def test_fill_cli_accepts_restore_audit_output_path(self):
+        from phraseloom.cli import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            source_input = tmp_path / "source.xlsx"
+            todo_path = tmp_path / "todo.xlsx"
+            filled_path = tmp_path / "filled.xlsx"
+            audit_path = tmp_path / "audit.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Keep {0}", ""])
+            wb.save(source_input)
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "to_translate"
+            ws.append(["unit_type", "source", "target"])
+            ws.append(["segment", "Keep {1}", "Garde {1}"])
+            wb.save(todo_path)
+
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                exit_code = main(
+                    [
+                        "fill",
+                        str(source_input),
+                        "--templates",
+                        str(todo_path),
+                        "--mode",
+                        "target-column",
+                        "-o",
+                        str(filled_path),
+                        "--audit-output",
+                        str(audit_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(filled_path.exists())
+            self.assertTrue(audit_path.exists())
+            self.assertIn(f"Restore audit workbook: {audit_path}", stdout.getvalue())
+
     def test_tm_prefill_restores_current_row_color_attributes(self):
         from phraseloom.workflow import (
             fill_target_column_workbook,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Iterable
 
@@ -316,6 +317,10 @@ def _default_fill_output_path(input_path: Path) -> Path:
     return _default_work_dir(input_path) / f"{input_path.stem}_filled_result.xlsx"
 
 
+def _default_restore_audit_output_path(output_path: Path) -> Path:
+    return output_path.with_name(f"{output_path.stem}_restore_audit{output_path.suffix}")
+
+
 def _default_legacy_output_path(input_path: Path) -> Path:
     return _default_work_dir(input_path) / f"{input_path.stem}_phraseloom_result.xlsx"
 
@@ -595,6 +600,165 @@ def _write_target_column_workbook(
         wb.close()
 
 
+def _write_restore_audit_workbook(
+    output_path: Path,
+    source_path: Path,
+    filled_output_path: Path,
+    result_rows: list[RowFillResult],
+    *,
+    tag_rules: TagRules | None = None,
+) -> None:
+    wb = Workbook()
+    summary = wb.active
+    summary.title = "summary"
+    summary.append(["metric", "value"])
+
+    audit_rows = [
+        _restore_audit_row(result_row)
+        for result_row in result_rows
+    ]
+    filled_rows = [
+        row for row in audit_rows if row[schema.FILL_STATUS_COLUMN] == "filled"
+    ]
+    unfilled_rows = [
+        row for row in audit_rows if row[schema.FILL_STATUS_COLUMN] != "filled"
+    ]
+    warning_rows = [
+        row for row in audit_rows if row[schema.WARNING_COLUMN]
+    ]
+    summary_rows = [
+        ("source_workbook", str(source_path)),
+        ("filled_workbook", str(filled_output_path)),
+        ("total_source_rows", len(audit_rows)),
+        ("filled_rows", len(filled_rows)),
+        ("unfilled_rows", len(unfilled_rows)),
+        ("warning_rows", len(warning_rows)),
+        (
+            "source_warning_rows",
+            sum(1 for row in audit_rows if row["source_warning"]),
+        ),
+        (
+            "target_warning_rows",
+            sum(1 for row in audit_rows if row["target_warning"]),
+        ),
+        (
+            "restore_warning_rows",
+            sum(1 for row in audit_rows if row["restore_warning"]),
+        ),
+        (
+            "protected_token_mismatch_rows",
+            sum(
+                1
+                for row in audit_rows
+                if "protected_token_mismatch:" in str(row["target_warning"] or "")
+            ),
+        ),
+        (
+            "missing_target_unit_rows",
+            sum(
+                1
+                for row in audit_rows
+                if row[schema.FILL_STATUS_COLUMN] == "missing_target_unit"
+            ),
+        ),
+        (
+            "unit_not_found_rows",
+            sum(
+                1
+                for row in audit_rows
+                if row[schema.FILL_STATUS_COLUMN] == "unit_not_found"
+            ),
+        ),
+    ]
+    for row in summary_rows:
+        summary.append(row)
+    _append_schema_version(summary)
+
+    columns = [
+        schema.ROW_NUMBER_COLUMN,
+        schema.SOURCE_COLUMN,
+        schema.AUTO_TARGET_COLUMN,
+        schema.FILL_STATUS_COLUMN,
+        "source_warning",
+        "target_warning",
+        "restore_warning",
+        schema.WARNING_COLUMN,
+    ]
+    ws = wb.create_sheet("restore_warnings")
+    ws.append(columns)
+    for row in warning_rows:
+        ws.append([row[column] for column in columns])
+
+    _add_metadata_sheet(wb, tag_rules)
+    wb[schema.METADATA_SHEET].sheet_state = "hidden"
+    for ws in wb.worksheets:
+        _style_sheet(ws)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(output_path)
+
+
+def _restore_audit_row(result_row: RowFillResult) -> dict[str, object]:
+    row = result_row.row
+    unit = result_row.unit
+    source_warning = _restore_source_warning(result_row)
+    target_warning = _restore_target_warning(result_row)
+    if unit is None:
+        restore_warning = "no translation unit"
+        fill_status = "unit_not_found"
+    elif not unit.target_unit:
+        restore_warning = "fill target in to_translate, then rerun fill"
+        fill_status = "missing_target_unit"
+    else:
+        restore_warning = ""
+        fill_status = "filled"
+    warning = _merge_warnings(source_warning, target_warning, restore_warning)
+    return {
+        schema.ROW_NUMBER_COLUMN: row.row_number,
+        schema.SOURCE_COLUMN: row.raw_source or row.source,
+        schema.AUTO_TARGET_COLUMN: result_row.auto_target,
+        schema.FILL_STATUS_COLUMN: fill_status,
+        "source_warning": source_warning or None,
+        "target_warning": target_warning or None,
+        "restore_warning": restore_warning or None,
+        schema.WARNING_COLUMN: warning or None,
+    }
+
+
+def _restore_source_warning(result_row: RowFillResult) -> str:
+    row = result_row.row
+    unit = result_row.unit
+    warnings = list(row.tag_warnings)
+    source_unit = unit.source_unit if unit else row.source
+    if "$" in source_unit:
+        warnings.append("price-like text; review manually")
+    if re.search(r"\b1\s+(day|time|attempt|task|star|pack)s\b", source_unit):
+        warnings.append("plural-sensitive text; review manually")
+    return _merge_warnings(*warnings)
+
+
+def _restore_target_warning(result_row: RowFillResult) -> str:
+    row = result_row.row
+    unit = result_row.unit
+    warnings = list(row.target_tag_warnings)
+    if unit and unit.unit_type == "template" and unit.target_unit:
+        source_placeholders = {
+            placeholder
+            for placeholder in PLACEHOLDER_RE.findall(unit.source_unit)
+            if not is_tag_placeholder(placeholder)
+        }
+        target_placeholders = {
+            placeholder
+            for placeholder in PLACEHOLDER_RE.findall(unit.target_unit)
+            if not is_tag_placeholder(placeholder)
+        }
+        if source_placeholders - target_placeholders:
+            warnings.append("target_unit is missing source variables")
+    if result_row.warning:
+        warnings.append(result_row.warning)
+    return _merge_warnings(*warnings)
+
+
 def _resolve_or_create_column(ws, col: str | int) -> int:
     try:
         return _resolve_column(ws, col)
@@ -787,6 +951,7 @@ __all__ = [
     "_default_extract_output_path",
     "_default_fill_output_path",
     "_default_legacy_output_path",
+    "_default_restore_audit_output_path",
     "_default_tm_output_path",
     "_default_to_translate_output_path",
     "_default_work_dir",
@@ -796,6 +961,7 @@ __all__ = [
     "_read_source_rows",
     "_resolve_column",
     "_write_output_workbook",
+    "_write_restore_audit_workbook",
     "_write_target_column_workbook",
     "_write_tm_workbook",
     "_write_to_translate_workbook",

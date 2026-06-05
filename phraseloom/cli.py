@@ -183,6 +183,11 @@ def _main_fill(argv: list[str]) -> int:
         help="Translated template pack workbook",
     )
     parser.add_argument("-o", "--output", type=Path, help="Output .xlsx file")
+    parser.add_argument(
+        "--audit-output",
+        type=Path,
+        help="Restore audit workbook path for target-column mode",
+    )
     parser.add_argument("--source-col", default="source", help="Header name or 1-based index")
     parser.add_argument("--target-col", default="target", help="Header name or 1-based index")
     parser.add_argument("--min-group-size", type=int, default=2)
@@ -212,6 +217,7 @@ def _main_fill(argv: list[str]) -> int:
             template_workbook=args.templates,
             min_group_size=args.min_group_size,
             tag_config=args.tag_config,
+            audit_output_path=args.audit_output,
         )
     else:
         stats = generate_workbook(
@@ -450,6 +456,8 @@ def _print_stats(output: Path, stats: dict[str, int]) -> None:
     print(f"Wrote: {output}")
     if "to_translate_path" in stats:
         print(f"To-translate workbook: {stats['to_translate_path']}")
+    if "audit_output_path" in stats:
+        print(f"Restore audit workbook: {stats['audit_output_path']}")
     print(f"Units to translate: {stats['new_translation_unit_count']}")
     print(f"Source rows to translate: {stats['new_source_segment_count']}")
     print(f"Already filled units: {stats['prefilled_translation_unit_count']}")

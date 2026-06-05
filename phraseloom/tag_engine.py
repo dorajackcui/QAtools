@@ -189,11 +189,12 @@ def is_tag_only_segment(source: str) -> bool:
 
 
 def restore_tags(text: str, tags: tuple[TagToken, ...]) -> str:
-    result = "" if text is None else str(text)
     by_placeholder = {tag.placeholder: tag.raw for tag in tags}
-    for placeholder, raw in by_placeholder.items():
-        result = result.replace(placeholder, raw)
-    return result
+    source = "" if text is None else str(text)
+    return PROTECTED_TOKEN_RE.sub(
+        lambda found: by_placeholder.get(found.group(0), found.group(0)),
+        source,
+    )
 
 
 def validate_tag_placeholders(text: str, tags: tuple[TagToken, ...]) -> TagValidation:

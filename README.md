@@ -141,6 +141,14 @@ phraseloom fill '/path/to/source.xlsx' \
 /path/to/source_l10n/source_filled_result.xlsx
 ```
 
+交付模式会同时生成 restore audit workbook，默认在输出文件旁边：
+
+```text
+/path/to/source_l10n/source_filled_result_restore_audit.xlsx
+```
+
+audit workbook 包含 `summary` 和 `restore_warnings`，只列出需要筛查的 warning / unfilled 行，不输出全量逐行流水账。`restore_warnings` 会把问题拆成 `source_warning`、`target_warning`、`restore_warning`，方便按原文问题、译文问题、回填流程问题过滤。可用 `--audit-output` 指定 audit 输出路径。
+
 不会覆盖原始源文件。
 
 ## 独立 Entity Engine

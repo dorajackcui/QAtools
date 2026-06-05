@@ -409,6 +409,15 @@ class TagEngineTests(unittest.TestCase):
 
         self.assertEqual(restored, "<color=#fff>VIP{0}</color> {9}")
 
+    def test_restore_tags_does_not_cascade_raw_brace_replacements(self):
+        from phraseloom.tag_engine import extract_tags, restore_tags
+
+        extraction = extract_tags("The No. {2} grand prize winner: {1}")
+
+        restored = restore_tags("Gagnant du gros lot n° {1} : {2}", extraction.tags)
+
+        self.assertEqual(restored, "Gagnant du gros lot n° {2} : {1}")
+
     def test_validate_tag_placeholders_reports_extra_counts(self):
         from phraseloom.tag_engine import extract_tags, validate_tag_placeholders
 

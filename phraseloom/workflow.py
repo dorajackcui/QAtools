@@ -6,10 +6,12 @@ from pathlib import Path
 from typing import Iterable
 
 from .excel_io import (
+    _default_restore_audit_output_path,
     _default_to_translate_output_path,
     _load_translated_units,
     _read_source_rows,
     _write_output_workbook,
+    _write_restore_audit_workbook,
     _write_target_column_workbook,
     _write_tm_workbook,
     _write_to_translate_workbook,
@@ -90,7 +92,8 @@ def fill_target_column_workbook(
     tm_workbook: str | Path | None = None,
     min_group_size: int = 2,
     tag_config: str | Path | None = None,
-) -> dict[str, int]:
+    audit_output_path: str | Path | None = None,
+) -> dict[str, int | str]:
     input_path = Path(input_path)
     output_path = Path(output_path)
     tag_rules = load_tag_rules(tag_config)
@@ -106,7 +109,21 @@ def fill_target_column_workbook(
         tag_rules=tag_rules,
     )
     _write_target_column_workbook(output_path, input_path, target_col, result_rows)
-    return _workbook_stats(rows, units, autofilled_count)
+    audit_path = (
+        Path(audit_output_path)
+        if audit_output_path is not None
+        else _default_restore_audit_output_path(output_path)
+    )
+    _write_restore_audit_workbook(
+        audit_path,
+        input_path,
+        output_path,
+        result_rows,
+        tag_rules=tag_rules,
+    )
+    stats = _workbook_stats(rows, units, autofilled_count)
+    stats["audit_output_path"] = str(audit_path)
+    return stats
 
 
 def _build_fill_context(
