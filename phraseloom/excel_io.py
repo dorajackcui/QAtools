@@ -566,7 +566,6 @@ def _write_to_translate_workbook(
                 unit.target_unit_source or None,
             ]
         )
-    prefilled.sheet_state = "hidden"
     _add_metadata_sheet(wb, tag_rules)
 
     for ws in wb.worksheets:

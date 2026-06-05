@@ -676,7 +676,7 @@ class TemplateDemoTests(unittest.TestCase):
                 todo_book.sheetnames,
                 ["to_translate", "prefilled_units", "_metadata"],
             )
-            self.assertEqual(todo_book["prefilled_units"].sheet_state, "hidden")
+            self.assertEqual(todo_book["prefilled_units"].sheet_state, "visible")
 
     def test_non_translatable_numeric_and_symbol_segments_are_autofilled(self):
         from phraseloom.workflow import generate_workbook

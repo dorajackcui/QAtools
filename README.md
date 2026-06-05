@@ -107,7 +107,9 @@ phraseloom extract '/path/to/source.xlsx' \
 source_translator_todo.xlsx
 ```
 
-只填写 `to_translate` sheet 里的 `target` 列即可。
+填写 `to_translate` sheet 里的 `target` 列即可。已经由 TM 命中的内容在
+`prefilled_units` sheet 里；这个 sheet 会保留为可见，方便人工复核和修改，
+restore/fill 时也会一起读取。
 
 ## 3. 回填译者交付的 to_translate
 
@@ -271,7 +273,8 @@ docs/entity-engine-flow.html
 
 `*_translator_todo.xlsx`
 
-给译者的独立文件。只需要翻译 `target` 为空的行。
+给译者的独立文件。`to_translate` 里是需要翻译的空 target；
+`prefilled_units` 里是 TM 已命中的内容，保留可见，必要时也可以改 target。
 
 `*_filled_result.xlsx`
 
