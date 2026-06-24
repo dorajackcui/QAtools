@@ -86,11 +86,15 @@ def text_contains_term(text: str, term: str, match_mode: str) -> bool:
 def simple_s_plural_variant(term: str) -> str:
     if not term or term.endswith(SIMPLE_PLURAL_SUFFIX):
         return ""
+    if not (term[-1].isascii() and term[-1].isalpha()):
+        return ""
     return f"{term}{SIMPLE_PLURAL_SUFFIX}"
 
 
 def simple_plural_token_variant(token: str) -> str:
     if not token or token.endswith(SIMPLE_PLURAL_SUFFIX):
+        return ""
+    if not (token[-1].isascii() and token[-1].isalpha()):
         return ""
     if len(token) > 1 and token.endswith("y"):
         return f"{token[:-1]}ies"
@@ -120,7 +124,13 @@ def iter_simple_s_variants(term: str) -> tuple[str, ...]:
     return (term, plural_term)
 
 
+def _has_ascii_alpha(term: str) -> bool:
+    return any(c.isascii() and c.isalpha() for c in term)
+
+
 def iter_source_match_variants(term: str) -> tuple[str, ...]:
+    if not _has_ascii_alpha(term):
+        return (term,)
     variants = list(iter_simple_s_variants(term))
     seen = set(variants)
     matches = list(WORD_PATTERN.finditer(term))
