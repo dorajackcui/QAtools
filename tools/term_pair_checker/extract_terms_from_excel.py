@@ -58,7 +58,6 @@ from tools.term_pair_checker.workbook_output import (
     build_default_output_path,
     build_row_problem_summaries,
     delete_legacy_term_sheets,
-    rebuild_output_sheet,
     write_problem_sheet,
     write_term_sheet,
 )

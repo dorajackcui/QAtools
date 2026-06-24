@@ -4,12 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from tools.excel_output import (
     ROW_PROBLEM_SEPARATOR,
     build_prefixed_output_path,
     format_row_problem_text,
+    rebuild_output_sheet,
 )
+
+if TYPE_CHECKING:
+    from tools.term_pair_checker.extract_terms_from_excel import (
+        ProblemEntry,
+        RecordedTermPair,
+    )
 
 
 TERM_SHEET_NAME = "术语表"
@@ -21,15 +29,7 @@ def build_default_output_path(input_path: Path) -> Path:
     return build_prefixed_output_path(input_path, "term_pair_check_")
 
 
-def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):
-    if current_sheet_name == sheet_name:
-        raise ValueError(f"数据工作表名称不能为 {sheet_name}")
-    if sheet_name in workbook.sheetnames:
-        del workbook[sheet_name]
-    return workbook.create_sheet(title=sheet_name)
-
-
-def build_row_problem_summaries(problem_entries: Iterable[object]) -> dict[int, str]:
+def build_row_problem_summaries(problem_entries: Iterable["ProblemEntry"]) -> dict[int, str]:
     summaries_by_row: dict[int, list[str]] = {}
     for problem_entry in problem_entries:
         summary = format_row_problem_text(
@@ -45,7 +45,7 @@ def build_row_problem_summaries(problem_entries: Iterable[object]) -> dict[int, 
     }
 
 
-def write_term_sheet(workbook, worksheet_title: str, term_pairs: Iterable[object]) -> None:
+def write_term_sheet(workbook, worksheet_title: str, term_pairs: Iterable["RecordedTermPair"]) -> None:
     term_sheet = rebuild_output_sheet(workbook, worksheet_title, TERM_SHEET_NAME)
     term_sheet["A1"] = "source术语"
     term_sheet["B1"] = "target术语"
@@ -60,7 +60,7 @@ def write_term_sheet(workbook, worksheet_title: str, term_pairs: Iterable[object
         term_sheet[f"E{row_index}"] = term_pair.term_source
 
 
-def write_problem_sheet(workbook, worksheet_title: str, problem_entries: Iterable[object]) -> None:
+def write_problem_sheet(workbook, worksheet_title: str, problem_entries: Iterable["ProblemEntry"]) -> None:
     problem_sheet = rebuild_output_sheet(workbook, worksheet_title, PROBLEM_SHEET_NAME)
     problem_sheet["A1"] = "问题行号"
     problem_sheet["B1"] = "问题source术语"

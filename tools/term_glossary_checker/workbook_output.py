@@ -9,6 +9,7 @@ from tools.excel_output import (
     ROW_PROBLEM_SEPARATOR,
     build_prefixed_output_path,
     format_row_problem_text,
+    rebuild_output_sheet,
 )
 from tools.term_matching import normalize_text
 
@@ -27,13 +28,6 @@ GlossaryProblemEntry = tuple[int, str, str, str, str, str]
 def build_default_output_path(data_path: Path) -> Path:
     return build_prefixed_output_path(data_path, "glossary_check_")
 
-
-def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):
-    if current_sheet_name == sheet_name:
-        raise ValueError(f"数据工作表名称不能为 {sheet_name}")
-    if sheet_name in workbook.sheetnames:
-        del workbook[sheet_name]
-    return workbook.create_sheet(title=sheet_name)
 
 
 def write_problem_sheet(workbook, worksheet_title: str, problem_entries: list[GlossaryProblemEntry]) -> None:

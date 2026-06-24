@@ -13,6 +13,14 @@ ROW_PROBLEM_COLUMN_HEADER = "术语QA问题"
 ROW_PROBLEM_SEPARATOR = "；"
 
 
+def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):
+    if current_sheet_name == sheet_name:
+        raise ValueError(f"数据工作表名称不能为 {sheet_name}")
+    if sheet_name in workbook.sheetnames:
+        del workbook[sheet_name]
+    return workbook.create_sheet(title=sheet_name)
+
+
 def build_prefixed_output_path(input_file: str | Path, prefix: str) -> Path:
     input_path = Path(input_file).expanduser()
     return input_path.with_name(f"{prefix}{input_path.name}")
