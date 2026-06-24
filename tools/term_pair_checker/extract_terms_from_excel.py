@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
-import re
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -37,40 +35,40 @@ from tools.false_positive_review import (
     apply_false_positive_review_to_sheet,
     review_clusters_with_codex,
 )
-from tools.excel_output import build_prefixed_output_path
+from tools.excel_output import insert_row_problem_column
+from tools.term_pair_checker.term_marks import (
+    DEFAULT_EXCLUSION_CONFIG_NAME,
+    DEFAULT_MARK_STYLES,
+    SUPPORTED_MARKS,
+    ExtractedTerm,
+    build_default_exclusion_config_path,
+    compile_exclusion_patterns,
+    extract_term_details,
+    extract_terms,
+    load_exclusion_patterns_from_file,
+    normalize_exclusion_patterns,
+    normalize_mark_styles,
+    resolve_exclusion_patterns,
+    should_exclude_term,
+    strip_supported_marks,
+)
+from tools.term_pair_checker.workbook_output import (
+    PROBLEM_SHEET_NAME,
+    TERM_SHEET_NAME,
+    build_default_output_path,
+    build_row_problem_summaries,
+    delete_legacy_term_sheets,
+    rebuild_output_sheet,
+    write_problem_sheet,
+    write_term_sheet,
+)
 
 
-SUPPORTED_MARKS = ("【】", "[]", "<>")
-TERM_SHEET_NAME = "术语表"
-PROBLEM_SHEET_NAME = "问题列"
-DEFAULT_MARK_STYLES = ("【】",)
-DEFAULT_EXCLUSION_CONFIG_NAME = "false_positive_exclusions.json"
 PAIR_CHECK_MATCH_MODE = "hybrid-boundary"
 PAIR_CHECK_CASE_SENSITIVE = False
-SINGLE_ASCII_LETTER_PATTERN = re.compile(r"^[A-Za-z]$")
-NUMERIC_TAG_BOUNDARY_SPAN_PATTERN = re.compile(r"^\d+\}.*\{\d+$", re.DOTALL)
 HISTORY_EMPTY_ROW_STOP_THRESHOLD = 1000
 TERM_SOURCE_HISTORY = "历史TB"
 TERM_SOURCE_BATCH = "本批次新增"
-MARK_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
-    "【】": (re.compile(r"【([^【】]+)】"),),
-    "[]": (
-        re.compile(r"\[([^\[\]]+)\]"),
-        re.compile(r"［([^［］]+)］"),
-    ),
-    "<>": (
-        re.compile(r"<([^<>]+)>"),
-        re.compile(r"＜([^＜＞]+)＞"),
-    ),
-}
-
-
-@dataclass(frozen=True)
-class ExtractedTerm:
-    display_text: str
-    plain_text: str
-    start: int
-    end: int
 
 
 @dataclass(frozen=True)
@@ -91,155 +89,6 @@ class ProblemEntry:
     description: str
     source_snapshot: str
     target_snapshot: str
-
-
-def normalize_mark_styles(
-    mark_styles: Iterable[str] | None = None,
-    mark_style: str | None = None,
-) -> tuple[str, ...]:
-    if mark_styles is None:
-        raw_mark_styles: list[str] = [mark_style] if mark_style else list(DEFAULT_MARK_STYLES)
-    elif isinstance(mark_styles, str):
-        raw_mark_styles = [mark_styles]
-    else:
-        raw_mark_styles = [style for style in mark_styles if style]
-
-    invalid_mark_styles = [style for style in raw_mark_styles if style not in SUPPORTED_MARKS]
-    if invalid_mark_styles:
-        raise ValueError(f"不支持的 mark 类型: {'、'.join(invalid_mark_styles)}")
-
-    normalized_mark_styles = tuple(style for style in SUPPORTED_MARKS if style in raw_mark_styles)
-    if not normalized_mark_styles:
-        raise ValueError("请至少选择一种 mark 类型。")
-    return normalized_mark_styles
-
-
-def extract_terms(
-    text: object,
-    mark_styles: Iterable[str] | None = None,
-    mark_style: str | None = None,
-    exclusion_patterns: Iterable[str] | None = None,
-    exclusion_config_file: str | Path | None = None,
-) -> list[str]:
-    return [
-        extracted_term.display_text
-        for extracted_term in extract_term_details(
-            text,
-            mark_styles=mark_styles,
-            mark_style=mark_style,
-            exclusion_patterns=exclusion_patterns,
-            exclusion_config_file=exclusion_config_file,
-        )
-    ]
-
-
-def build_default_exclusion_config_path() -> Path:
-    return Path(__file__).with_name(DEFAULT_EXCLUSION_CONFIG_NAME)
-
-
-def normalize_exclusion_patterns(exclusion_patterns: Iterable[str] | None) -> tuple[str, ...]:
-    if exclusion_patterns is None:
-        raw_patterns: list[str] = []
-    elif isinstance(exclusion_patterns, str):
-        raw_patterns = [exclusion_patterns]
-    else:
-        raw_patterns = [pattern.strip() for pattern in exclusion_patterns if pattern and pattern.strip()]
-    return tuple(raw_patterns)
-
-
-def load_exclusion_patterns_from_file(config_file: str | Path | None = None) -> tuple[str, ...]:
-    config_path = (
-        Path(config_file).expanduser().resolve()
-        if config_file
-        else build_default_exclusion_config_path().resolve()
-    )
-    if not config_path.exists():
-        raise FileNotFoundError(f"误判排除配置文件不存在: {config_path}")
-
-    try:
-        config_data = json.loads(config_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"误判排除配置文件不是有效 JSON: {config_path} ({exc})") from exc
-
-    patterns = config_data.get("patterns")
-    if not isinstance(patterns, list) or any(not isinstance(pattern, str) for pattern in patterns):
-        raise ValueError(f"误判排除配置格式错误: {config_path}，需要 JSON 对象中的 patterns 字符串数组。")
-    return normalize_exclusion_patterns(patterns)
-
-
-def resolve_exclusion_patterns(
-    exclusion_patterns: Iterable[str] | None,
-    exclusion_config_file: str | Path | None = None,
-) -> tuple[str, ...]:
-    if exclusion_patterns is not None:
-        return normalize_exclusion_patterns(exclusion_patterns)
-    return load_exclusion_patterns_from_file(exclusion_config_file)
-
-
-def compile_exclusion_patterns(
-    exclusion_patterns: Iterable[str] | None,
-    exclusion_config_file: str | Path | None = None,
-) -> tuple[re.Pattern[str], ...]:
-    normalized_patterns = resolve_exclusion_patterns(exclusion_patterns, exclusion_config_file)
-    compiled_patterns: list[re.Pattern[str]] = []
-    for pattern in normalized_patterns:
-        try:
-            compiled_patterns.append(re.compile(pattern, re.IGNORECASE))
-        except re.error as exc:
-            raise ValueError(f"误判排除正则无效: {pattern} ({exc})") from exc
-    return tuple(compiled_patterns)
-
-
-def should_exclude_term(
-    display_text: str,
-    plain_text: str,
-    exclusion_regexes: Iterable[re.Pattern[str]],
-) -> bool:
-    if SINGLE_ASCII_LETTER_PATTERN.fullmatch(plain_text):
-        return True
-    if not any(character.isalpha() for character in plain_text):
-        return True
-    if NUMERIC_TAG_BOUNDARY_SPAN_PATTERN.fullmatch(plain_text):
-        return True
-    return any(
-        regex.search(plain_text) or regex.search(display_text)
-        for regex in exclusion_regexes
-    )
-
-
-def extract_term_details(
-    text: object,
-    mark_styles: Iterable[str] | None = None,
-    mark_style: str | None = None,
-    exclusion_patterns: Iterable[str] | None = None,
-    exclusion_config_file: str | Path | None = None,
-) -> list[ExtractedTerm]:
-    if text is None:
-        return []
-
-    normalized_mark_styles = normalize_mark_styles(mark_styles=mark_styles, mark_style=mark_style)
-    exclusion_regexes = compile_exclusion_patterns(exclusion_patterns, exclusion_config_file)
-    text_value = str(text)
-    matches: list[ExtractedTerm] = []
-
-    for current_mark_style in normalized_mark_styles:
-        for pattern in MARK_PATTERNS[current_mark_style]:
-            for match in pattern.finditer(text_value):
-                display_text = match.group(0)
-                plain_text = match.group(1).strip()
-                if should_exclude_term(display_text, plain_text, exclusion_regexes):
-                    continue
-                matches.append(
-                    ExtractedTerm(
-                        display_text=display_text,
-                        plain_text=plain_text,
-                        start=match.start(),
-                        end=match.end(),
-                    )
-                )
-
-    matches.sort(key=lambda item: (item.start, item.end))
-    return matches
 
 
 def parse_args() -> argparse.Namespace:
@@ -445,50 +294,6 @@ def load_history_tb_mapping(
             ),
         )
     return history_mapping
-
-
-def build_default_output_path(input_path: Path) -> Path:
-    return build_prefixed_output_path(input_path, "term_pair_check_")
-
-
-def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):
-    if current_sheet_name == sheet_name:
-        raise ValueError(f"数据工作表名称不能为 {sheet_name}")
-    if sheet_name in workbook.sheetnames:
-        del workbook[sheet_name]
-    return workbook.create_sheet(title=sheet_name)
-
-
-def strip_supported_marks(
-    text: object,
-    mark_styles: Iterable[str] | None = None,
-    exclusion_patterns: Iterable[str] | None = None,
-    exclusion_config_file: str | Path | None = None,
-) -> str:
-    text_value = "" if text is None else str(text)
-    if not text_value:
-        return ""
-
-    normalized_mark_styles = normalize_mark_styles(
-        mark_styles=SUPPORTED_MARKS if mark_styles is None else mark_styles
-    )
-    extracted_terms = extract_term_details(
-        text_value,
-        mark_styles=normalized_mark_styles,
-        exclusion_patterns=exclusion_patterns,
-        exclusion_config_file=exclusion_config_file,
-    )
-    if not extracted_terms:
-        return text_value
-
-    parts: list[str] = []
-    last_index = 0
-    for extracted_term in extracted_terms:
-        parts.append(text_value[last_index : extracted_term.start])
-        parts.append(extracted_term.plain_text)
-        last_index = extracted_term.end
-    parts.append(text_value[last_index:])
-    return "".join(parts)
 
 
 def build_term_mapping_entries(term_pairs: Iterable[RecordedTermPair]) -> list[TermMappingEntry]:
@@ -930,27 +735,18 @@ def process_excel(
                 build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
             )
 
-    term_sheet = rebuild_output_sheet(workbook, worksheet.title, TERM_SHEET_NAME)
-    term_sheet["A1"] = "source术语"
-    term_sheet["B1"] = "target术语"
-    term_sheet["C1"] = "source术语（无mark）"
-    term_sheet["D1"] = "target术语（无mark）"
-    term_sheet["E1"] = "术语来源"
-    for row_index, term_pair in enumerate(sorted_output_term_pairs(output_term_mapping.values()), start=2):
-        term_sheet[f"A{row_index}"] = term_pair.source_display_text
-        term_sheet[f"B{row_index}"] = term_pair.target_display_text
-        term_sheet[f"C{row_index}"] = term_pair.source_plain_text
-        term_sheet[f"D{row_index}"] = term_pair.target_plain_text
-        term_sheet[f"E{row_index}"] = term_pair.term_source
+    insert_row_problem_column(
+        worksheet,
+        target_column,
+        build_row_problem_summaries(problem_entries),
+    )
 
-    problem_sheet = rebuild_output_sheet(workbook, worksheet.title, PROBLEM_SHEET_NAME)
-    problem_sheet["A1"] = "问题行号"
-    problem_sheet["B1"] = "问题source术语"
-    problem_sheet["C1"] = "预期target术语"
-    problem_sheet["D1"] = "术语来源"
-    problem_sheet["E1"] = "问题简述"
-    problem_sheet["F1"] = "source原文"
-    problem_sheet["G1"] = "target原文"
+    write_term_sheet(
+        workbook,
+        worksheet.title,
+        sorted_output_term_pairs(output_term_mapping.values()),
+    )
+
     sorted_problem_entries = sorted(
         problem_entries,
         key=lambda entry: (
@@ -960,17 +756,11 @@ def process_excel(
             entry.row_index,
         ),
     )
-    for row_index, problem_entry in enumerate(
+    write_problem_sheet(
+        workbook,
+        worksheet.title,
         sorted_problem_entries,
-        start=2,
-    ):
-        problem_sheet[f"A{row_index}"] = problem_entry.row_index
-        problem_sheet[f"B{row_index}"] = problem_entry.problem_source_term
-        problem_sheet[f"C{row_index}"] = problem_entry.expected_target_term
-        problem_sheet[f"D{row_index}"] = problem_entry.term_source
-        problem_sheet[f"E{row_index}"] = problem_entry.description
-        problem_sheet[f"F{row_index}"] = problem_entry.source_snapshot
-        problem_sheet[f"G{row_index}"] = problem_entry.target_snapshot
+    )
 
     if false_positive_reviewer is not None:
         apply_false_positive_review_to_sheet(
@@ -981,10 +771,7 @@ def process_excel(
             sample_size=false_positive_sample_size,
         )
 
-    if "术语表（无mark）" in workbook.sheetnames:
-        del workbook["术语表（无mark）"]
-    if "术语汇总" in workbook.sheetnames:
-        del workbook["术语汇总"]
+    delete_legacy_term_sheets(workbook)
 
     workbook.save(output_path)
 

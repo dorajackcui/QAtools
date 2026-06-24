@@ -17,6 +17,59 @@ from tools.false_positive_review import ReviewDecision
 
 
 class ExtractTermsTests(unittest.TestCase):
+    def test_term_mark_helpers_are_available_from_focused_module(self) -> None:
+        from tools.term_pair_checker.term_marks import (
+            extract_terms as extract_terms_from_marks,
+            strip_supported_marks,
+        )
+
+        text = "建立 [Alpha] 和 <Beta>"
+
+        self.assertEqual(
+            extract_terms_from_marks(text, mark_styles=("[]", "<>")),
+            ["[Alpha]", "<Beta>"],
+        )
+        self.assertEqual(
+            strip_supported_marks(text, mark_styles=("[]", "<>")),
+            "建立 Alpha 和 Beta",
+        )
+
+    def test_workbook_output_helpers_are_available_from_focused_module(self) -> None:
+        from tools.term_pair_checker.workbook_output import build_row_problem_summaries
+
+        summaries = build_row_problem_summaries(
+            [
+                term_pair_module.ProblemEntry(
+                    row_index=7,
+                    problem_source_term="Alpha",
+                    expected_target_term="ALPHA_OK",
+                    term_source="本批次新增",
+                    description="target缺少预期术语",
+                    source_snapshot="source",
+                    target_snapshot="target",
+                ),
+                term_pair_module.ProblemEntry(
+                    row_index=7,
+                    problem_source_term="Beta",
+                    expected_target_term="BETA_OK",
+                    term_source="本批次新增",
+                    description="target术语不匹配：实际术语 - WRONG",
+                    source_snapshot="source",
+                    target_snapshot="target",
+                ),
+            ]
+        )
+
+        self.assertEqual(
+            summaries,
+            {
+                7: (
+                    "Alpha -> ALPHA_OK：target缺少预期术语；"
+                    "Beta -> BETA_OK：target术语不匹配：实际术语 - WRONG"
+                )
+            },
+        )
+
     def test_extract_terms_supports_multiple_selected_tag_types_in_text_order(self) -> None:
         text = "前缀[方括号]中间<尖括号>后缀【书名号】"
         self.assertEqual(
@@ -299,6 +352,20 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_count, 2)
 
             result_workbook = load_workbook(saved_path)
+            data_sheet = result_workbook["Data"]
+            self.assertEqual(data_sheet["A1"].value, "source")
+            self.assertEqual(data_sheet["B1"].value, "target")
+            self.assertEqual(data_sheet["C1"].value, "术语QA问题")
+            self.assertIsNone(data_sheet["C2"].value)
+            self.assertIsNone(data_sheet["C3"].value)
+            self.assertEqual(
+                data_sheet["C4"].value,
+                (
+                    "Alpha、Beta -> ALPHA_OK、BETA_OK：source/target术语数量不一致："
+                    "2（预期数量）- 1（实际数量）；Beta -> BETA_OK：target缺少预期术语"
+                ),
+            )
+
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet["A2"].value, 4)
             self.assertEqual(problem_sheet["B2"].value, "Alpha、Beta")

@@ -31,11 +31,18 @@ from tools.false_positive_review import (
     apply_false_positive_review_to_sheet,
     review_clusters_with_codex,
 )
-from tools.excel_output import build_prefixed_output_path
+from tools.excel_output import insert_row_problem_column
+from tools.term_glossary_checker.workbook_output import (
+    PROBLEM_SHEET_NAME,
+    SUMMARY_SHEET_NAME,
+    GlossaryProblemEntry,
+    build_default_output_path,
+    build_row_problem_summaries,
+    write_problem_sheet,
+    write_summary_sheet,
+)
 
 
-PROBLEM_SHEET_NAME = "术语命中问题"
-SUMMARY_SHEET_NAME = "检查汇总"
 GLOSSARY_EMPTY_ROW_STOP_THRESHOLD = 1000
 
 
@@ -64,10 +71,6 @@ def normalize_column(column_name: str) -> str:
     normalized = column_name.strip().upper()
     column_index_from_string(normalized)
     return normalized
-
-
-def build_default_output_path(data_path: Path) -> Path:
-    return build_prefixed_output_path(data_path, "glossary_check_")
 
 
 def parse_args() -> argparse.Namespace:
@@ -164,14 +167,6 @@ def prompt_if_missing(args: argparse.Namespace) -> argparse.Namespace:
     return args
 
 
-def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):
-    if current_sheet_name == sheet_name:
-        raise ValueError(f"数据工作表名称不能为 {sheet_name}")
-    if sheet_name in workbook.sheetnames:
-        del workbook[sheet_name]
-    return workbook.create_sheet(title=sheet_name)
-
-
 def row_value(row: tuple[object, ...], column_index: int) -> object:
     return row[column_index - 1] if len(row) >= column_index else None
 
@@ -263,72 +258,6 @@ def load_glossary_entries(
     return worksheet_title, entries, conflicts
 
 
-def write_problem_sheet(workbook, worksheet_title: str, problem_entries: list[tuple[int, str, str, str, str, str]]):
-    problem_sheet = rebuild_output_sheet(workbook, worksheet_title, PROBLEM_SHEET_NAME)
-    headers = ["行号", "问题类型", "source术语", "期望target术语", "source文本", "target文本"]
-    for column_index, header in enumerate(headers, start=1):
-        problem_sheet.cell(1, column_index, header)
-
-    sorted_problem_entries = sorted(
-        problem_entries,
-        key=lambda entry: (
-            entry[2] == "",
-            normalize_text(entry[2], case_sensitive=False),
-            entry[0],
-        ),
-    )
-    for row_index, entry in enumerate(sorted_problem_entries, start=2):
-        for column_index, value in enumerate(entry, start=1):
-            problem_sheet.cell(row_index, column_index, value)
-
-
-def write_summary_sheet(
-    workbook,
-    worksheet_title: str,
-    summary: CheckSummary,
-    conflicts: list[GlossaryConflict],
-    glossary_source_column: str,
-    glossary_target_column: str,
-    data_source_column: str,
-    data_target_column: str,
-    start_row: int,
-    match_mode: str,
-):
-    summary_sheet = rebuild_output_sheet(workbook, worksheet_title, SUMMARY_SHEET_NAME)
-    summary_sheet["A1"] = "统计项"
-    summary_sheet["B1"] = "值"
-
-    summary_rows = [
-        ("术语表工作表", summary.glossary_sheet_title),
-        ("检查工作表", summary.data_sheet_title),
-        ("术语表source列", glossary_source_column),
-        ("术语表target列", glossary_target_column),
-        ("检查source列", data_source_column),
-        ("检查target列", data_target_column),
-        ("开始行", start_row),
-        ("大小写模式", "严格区分" if summary.case_sensitive else "忽略大小写"),
-        ("匹配模式", "混合边界" if match_mode == "hybrid-boundary" else "纯包含"),
-        ("总行数", summary.total_rows_checked),
-        ("命中术语行数", summary.matched_rows),
-        ("问题行数", summary.problem_rows),
-        ("问题条数", summary.problem_count),
-        ("术语表条数", summary.glossary_term_count),
-        ("冲突术语数", summary.conflict_count),
-    ]
-    for row_index, (label, value) in enumerate(summary_rows, start=2):
-        summary_sheet.cell(row_index, 1, label)
-        summary_sheet.cell(row_index, 2, value)
-
-    summary_sheet["D1"] = "冲突source术语"
-    summary_sheet["E1"] = "候选target术语"
-    if conflicts:
-        for row_index, conflict in enumerate(conflicts, start=2):
-            summary_sheet.cell(row_index, 4, conflict.source_term)
-            summary_sheet.cell(row_index, 5, " / ".join(conflict.target_terms))
-    else:
-        summary_sheet["D2"] = "无"
-
-
 def process_excel(
     glossary_file: str | Path,
     data_file: str | Path,
@@ -380,7 +309,7 @@ def process_excel(
     total_rows_checked = max(0, worksheet.max_row - start_row + 1)
     matched_rows = 0
     problem_row_set: set[int] = set()
-    problem_entries: list[tuple[int, str, str, str, str, str]] = []
+    problem_entries: list[GlossaryProblemEntry] = []
 
     for row_index in range(start_row, worksheet.max_row + 1):
         source_text = worksheet[f"{data_source_column}{row_index}"].value
@@ -444,6 +373,11 @@ def process_excel(
         match_mode=match_mode,
     )
 
+    insert_row_problem_column(
+        worksheet,
+        data_target_column,
+        build_row_problem_summaries(problem_entries),
+    )
     write_problem_sheet(workbook, worksheet.title, problem_entries)
     write_summary_sheet(
         workbook=workbook,

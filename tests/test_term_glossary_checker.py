@@ -18,6 +18,23 @@ from tools.false_positive_review import ReviewDecision
 
 
 class GlossaryLoadingTests(unittest.TestCase):
+    def test_workbook_output_helpers_are_available_from_focused_module(self) -> None:
+        from tools.term_glossary_checker.workbook_output import build_row_problem_summaries
+
+        summaries = build_row_problem_summaries(
+            [
+                (9, "术语未按术语表翻译", "API", "接口", "source", "target"),
+                (9, "术语未按术语表翻译", "UI", "界面", "source", "target"),
+            ]
+        )
+
+        self.assertEqual(
+            summaries,
+            {
+                9: "API -> 接口：术语未按术语表翻译；UI -> 界面：术语未按术语表翻译",
+            },
+        )
+
     def test_conflicting_targets_are_reported_and_duplicates_are_deduped(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             glossary_path = Path(tmp_dir) / "glossary.xlsx"
@@ -352,6 +369,60 @@ class ProcessExcelTests(unittest.TestCase):
             rerun_workbook = load_workbook(output_path)
             rerun_problem_sheet = rerun_workbook["术语命中问题"]
             self.assertEqual(rerun_problem_sheet.max_row, 2)
+
+    def test_process_excel_writes_row_level_problem_column_next_to_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            glossary_path = Path(tmp_dir) / "glossary.xlsx"
+            data_path = Path(tmp_dir) / "data.xlsx"
+
+            glossary = Workbook()
+            glossary_sheet = glossary.active
+            glossary_sheet["A1"] = "source"
+            glossary_sheet["B1"] = "target"
+            glossary_sheet["A2"] = "API"
+            glossary_sheet["B2"] = "接口"
+            glossary_sheet["A3"] = "UI"
+            glossary_sheet["B3"] = "界面"
+            glossary.save(glossary_path)
+
+            data = Workbook()
+            data_sheet = data.active
+            data_sheet.title = "Data"
+            data_sheet["A1"] = "source"
+            data_sheet["B1"] = "target"
+            data_sheet["C1"] = "备注"
+            data_sheet["A2"] = "Open API and UI."
+            data_sheet["B2"] = "打开错误文本。"
+            data_sheet["C2"] = "keep me"
+            data_sheet["A3"] = "Open API."
+            data_sheet["B3"] = "打开接口。"
+            data_sheet["C3"] = "also keep"
+            data.save(data_path)
+
+            summary = process_excel(
+                glossary_file=glossary_path,
+                data_file=data_path,
+                glossary_source_column="A",
+                glossary_target_column="B",
+                data_source_column="A",
+                data_target_column="B",
+                start_row=2,
+            )
+
+            self.assertEqual(summary.problem_count, 2)
+            result_workbook = load_workbook(summary.output_path)
+            output_data = result_workbook["Data"]
+            self.assertEqual(output_data["A1"].value, "source")
+            self.assertEqual(output_data["B1"].value, "target")
+            self.assertEqual(output_data["C1"].value, "术语QA问题")
+            self.assertEqual(output_data["D1"].value, "备注")
+            self.assertEqual(
+                output_data["C2"].value,
+                "API -> 接口：术语未按术语表翻译；UI -> 界面：术语未按术语表翻译",
+            )
+            self.assertIsNone(output_data["C3"].value)
+            self.assertEqual(output_data["D2"].value, "keep me")
+            self.assertEqual(output_data["D3"].value, "also keep")
 
     def test_case_sensitive_mode_changes_source_hits(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
