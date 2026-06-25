@@ -215,6 +215,22 @@ python3 toolshub_gui.py
 
 详情见 `tools/llm_term_extractor/README.md`。
 
+### 8. Xbench QA Report 转换
+
+- 目录：`tools/xbench_report_transformer`
+- 用途：把 Xbench 导出的 QA Report 转换成 `文件名, key, source, target, QA问题` 五列表格
+- 聚类：优先按 Metadata 第一行的 key 聚类；没有 key 时按文件名+source 或 source 降级聚类
+- 输出方式：生成新的结果 Excel，默认文件名 `xbench_transform_<原文件名>`
+- CLI：
+
+```bash
+python3 tools/xbench_report_transformer/transform_xbench_report.py Xbench_QA_Report.xlsx \
+  -s "Xbench QA" \
+  -o xbench_flat.xlsx
+```
+
+详情见 `tools/xbench_report_transformer/README.md`。
+
 ## 依赖安装
 
 ```bash
@@ -231,6 +247,7 @@ pip install -r requirements.txt
 - Target 中文检查详细说明：`tools/chinese_target_checker/README.md`
 - 法语 NBSP 恢复详细说明：`tools/french_nbsp_restorer/README.md`
 - LLM 术语提取详细说明：`tools/llm_term_extractor/README.md`
+- Xbench QA Report 转换详细说明：`tools/xbench_report_transformer/README.md`
 
 ## 统一 GUI 入口
 

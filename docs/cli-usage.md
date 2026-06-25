@@ -36,6 +36,9 @@
 - `tools/llm_term_extractor/extract_llm_terms.py`
   - 必填：`input_file`、`-c/--source-column`
   - 常用可选：`-s/--sheet`、`-t/--target-column`、`--start-row`、`--batch-size`、`--codex-model`、`--codex-reasoning-effort`、`--extract-prompt-file`、`--conflict-prompt-file`、`--dump-prompts-dir`、`--keep-raw-codex-output`、`--history-tb`、`--history-sheet`、`--history-source-column`、`--history-target-column`、`--history-start-row`、`-o/--output`
+- `tools/xbench_report_transformer/transform_xbench_report.py`
+  - 必填：`input_file`
+  - 常用可选：`-s/--sheet`、`-o/--output`
 
 ## 推荐命令模板
 
@@ -416,6 +419,37 @@ python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
 - 冲突数
 - 输出文件路径
 
+### 8. Xbench QA Report 转换
+
+推荐完整调用：
+
+```bash
+python3 tools/xbench_report_transformer/transform_xbench_report.py ./Xbench_QA_Report.xlsx \
+  -s "Xbench QA" \
+  -o ./artifacts/xbench_flat.xlsx
+```
+
+输出列固定为：
+
+```text
+文件名, key, source, target, QA问题
+```
+
+说明：
+
+- `QA问题` 使用 `源术语 -> 目标术语：问题类型` 格式。
+- 同一 key 下多个问题用中文分号 `；` 合并。
+- `Metadata` 第一行作为 key，第二行作为文件名；没有 key 时按文件名+source 或 source 降级聚类。
+- 默认输出文件名为 `xbench_transform_<原文件名>`。
+- 工具会生成新的结果 Excel，不会覆盖原始 Xbench 报告；如果 `-o` 指向输入文件本身，会报错。
+
+标准输出会打印：
+
+- 工作表名
+- 读取明细数
+- 输出行数
+- 输出文件路径
+
 ## Agent 调用注意事项
 
 - 不要把 GUI 的自动列识别能力当成 CLI 的默认能力；CLI 场景下请自己明确传列字母。
@@ -429,3 +463,4 @@ python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
   - `<原文件名>_split_lines.xlsx`
   - `<原文件名>_french_nbsp_restored.xlsx`
   - `<原文件名>_llm_terms.xlsx`
+  - `xbench_transform_<原文件名>`
