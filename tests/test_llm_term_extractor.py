@@ -127,7 +127,10 @@ class CodexTermReviewTests(unittest.TestCase):
         self.assertIn("--ignore-rules", command)
         self.assertIn("--skip-git-repo-check", command)
         self.assertIn("read-only", command)
-        self.assertEqual(command[command.index("--output-last-message") + 1], "/tmp/codex-output.txt")
+        self.assertEqual(
+            command[command.index("--output-last-message") + 1],
+            str(Path("/tmp/codex-output.txt")),
+        )
         self.assertEqual(command[command.index("--model") + 1], "gpt-5.3-codex-spark")
         self.assertEqual(command[-1], "-")
 
