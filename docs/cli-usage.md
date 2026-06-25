@@ -438,7 +438,7 @@ python3 tools/xbench_report_transformer/transform_xbench_report.py ./Xbench_QA_R
 说明：
 
 - `QA问题` 使用 `源术语 -> 目标术语：问题类型` 格式。
-- 同一 key 下多个问题用中文分号 `；` 合并。
+- 同一组内多个问题用中文分号 `；` 合并。
 - `Metadata` 第一行作为 key，第二行作为文件名；没有 key 时按文件名+source 或 source 降级聚类。
 - 默认输出文件名为 `xbench_transform_<原文件名>`。
 - 工具会生成新的结果 Excel，不会覆盖原始 Xbench 报告；如果 `-o` 指向输入文件本身，会报错。
