@@ -113,6 +113,15 @@ def is_qa_group_title(value: object, source: str, target: str, metadata: str) ->
     return bool(value_to_text(value)) and not source and not target and not metadata
 
 
+def choose_qa_group_title(first_cell: object, comments: str, source: str, target: str, metadata: str) -> str:
+    first_cell_text = value_to_text(first_cell)
+    if first_cell_text and not source and not target and not metadata:
+        return first_cell_text
+    if comments and not first_cell_text and not source and not target and not metadata:
+        return comments
+    return ""
+
+
 def collect_detail_rows(worksheet) -> list[XbenchDetailRow]:
     header_row, columns = find_header_columns(worksheet)
     detail_rows: list[XbenchDetailRow] = []
@@ -126,10 +135,12 @@ def collect_detail_rows(worksheet) -> list[XbenchDetailRow]:
         first_cell = worksheet.cell(row=row_index, column=1).value
         source = value_to_text(worksheet.cell(row=row_index, column=columns[HEADER_SOURCE]).value)
         target = value_to_text(worksheet.cell(row=row_index, column=columns[HEADER_TARGET]).value)
+        comments = value_to_text(worksheet.cell(row=row_index, column=columns[HEADER_COMMENTS]).value)
         metadata_text = value_to_text(worksheet.cell(row=row_index, column=columns[HEADER_METADATA]).value)
 
-        if is_qa_group_title(first_cell, source, target, metadata_text):
-            current_issue = parse_qa_title(first_cell)
+        group_title = choose_qa_group_title(first_cell, comments, source, target, metadata_text)
+        if group_title:
+            current_issue = parse_qa_title(group_title)
             continue
 
         if not source and not target and not metadata_text:

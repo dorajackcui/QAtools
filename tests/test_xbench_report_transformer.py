@@ -120,6 +120,35 @@ class RowExtractionAndGroupingTests(unittest.TestCase):
         self.assertEqual(detail_rows[0].qa_issue, "提示 -> Avis：Key Term Mismatch")
         self.assertEqual(detail_rows[0].group_key, "key:Key_1")
 
+    def test_collect_detail_rows_uses_comments_column_for_qa_issue_when_a_cell_is_empty(self) -> None:
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet["C1"] = "Source"
+        worksheet["D1"] = "Target"
+        worksheet["E1"] = "Comments"
+        worksheet["F1"] = "Metadata"
+        worksheet["E2"] = "Key Term Mismatch (提示 / Avis)"
+        worksheet["C3"] = "提示"
+        worksheet["D3"] = "Avis"
+        detail_rows = collect_detail_rows(worksheet)
+        self.assertEqual(len(detail_rows), 1)
+        self.assertEqual(detail_rows[0].qa_issue, "提示 -> Avis：Key Term Mismatch")
+
+    def test_collect_detail_rows_prefers_a_column_title_over_comments_value(self) -> None:
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet["C1"] = "Source"
+        worksheet["D1"] = "Target"
+        worksheet["E1"] = "Comments"
+        worksheet["F1"] = "Metadata"
+        worksheet["A2"] = "Key Term Mismatch (提示 / Avis)"
+        worksheet["E2"] = "terms.xlsx"
+        worksheet["C3"] = "提示"
+        worksheet["D3"] = "Avis"
+        detail_rows = collect_detail_rows(worksheet)
+        self.assertEqual(len(detail_rows), 1)
+        self.assertEqual(detail_rows[0].qa_issue, "提示 -> Avis：Key Term Mismatch")
+
     def test_group_detail_rows_merges_duplicate_key_issues_with_chinese_semicolon(self) -> None:
         workbook = self.build_xbench_workbook()
         worksheet = workbook["Xbench QA"]
