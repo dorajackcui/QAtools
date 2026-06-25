@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+import argparse
 import re
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from openpyxl import Workbook, load_workbook
+
+from tools.excel_output import build_prefixed_output_path
 
 FILE_NAME_EXTENSIONS = (".xlsx", ".xls", ".xlsm", ".csv", ".txt")
 OUTPUT_HEADERS = ("文件名", "key", "source", "target", "QA问题")
+OUTPUT_SHEET_NAME = "Xbench QA整理"
 HEADER_SOURCE = "source"
 HEADER_TARGET = "target"
 HEADER_COMMENTS = "comments"
@@ -36,6 +47,14 @@ class XbenchDetailRow:
     target: str
     qa_issue: str
     group_key: str
+
+
+@dataclass(frozen=True)
+class TransformSummary:
+    worksheet_title: str
+    output_path: Path
+    detail_count: int
+    grouped_count: int
 
 
 def value_to_text(value: object) -> str:
@@ -107,10 +126,6 @@ def build_group_key(metadata: ParsedMetadata, source: str) -> str:
     if metadata.file_name:
         return f"file_source:{metadata.file_name}{GROUP_KEY_SEPARATOR}{source}"
     return f"source:{source}"
-
-
-def is_qa_group_title(value: object, source: str, target: str, metadata: str) -> bool:
-    return bool(value_to_text(value)) and not source and not target and not metadata
 
 
 def choose_qa_group_title(first_cell: object, comments: str, source: str, target: str, metadata: str) -> str:
@@ -186,3 +201,109 @@ def group_detail_rows(detail_rows: Iterable[XbenchDetailRow]) -> list[dict[str, 
             output_row["QA问题"] = "；".join(issues)
 
     return list(grouped.values())
+
+
+def build_default_output_path(input_path: Path) -> Path:
+    return build_prefixed_output_path(input_path, "xbench_transform_")
+
+
+def write_output_workbook(output_path: Path, rows: list[dict[str, str]]) -> None:
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = OUTPUT_SHEET_NAME
+    worksheet.append(list(OUTPUT_HEADERS))
+
+    for row in rows:
+        worksheet.append([row[header] for header in OUTPUT_HEADERS])
+
+    workbook.save(output_path)
+
+
+def process_excel(
+    input_file: str | Path,
+    sheet: str | None = None,
+    output_file: str | Path | None = None,
+) -> TransformSummary:
+    input_path = Path(input_file).expanduser().resolve()
+    if not input_path.exists():
+        raise FileNotFoundError(f"输入文件不存在: {input_path}")
+
+    output_path = (
+        Path(output_file).expanduser().resolve()
+        if output_file
+        else build_default_output_path(input_path).resolve()
+    )
+
+    workbook = load_workbook(input_path)
+    try:
+        if sheet:
+            if sheet not in workbook.sheetnames:
+                raise ValueError(f"工作表不存在: {sheet}")
+            worksheet = workbook[sheet]
+        else:
+            worksheet = workbook.active
+
+        worksheet_title = worksheet.title
+        detail_rows = collect_detail_rows(worksheet)
+        grouped_rows = group_detail_rows(detail_rows)
+    finally:
+        workbook.close()
+
+    write_output_workbook(output_path, grouped_rows)
+    return TransformSummary(
+        worksheet_title=worksheet_title,
+        output_path=output_path,
+        detail_count=len(detail_rows),
+        grouped_count=len(grouped_rows),
+    )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="将 Xbench QA Report 整理为按 key/source 合并的扁平 Excel 工作簿。"
+    )
+    parser.add_argument("input_file", nargs="?", help="输入 Xbench QA Report Excel 文件路径")
+    parser.add_argument(
+        "-s",
+        "--sheet",
+        help="工作表名称，不填则默认处理当前活动工作表",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        help="输出 Excel 文件路径，默认生成 xbench_transform_<原文件名>",
+    )
+    return parser.parse_args()
+
+
+def prompt_if_missing(args: argparse.Namespace) -> argparse.Namespace:
+    interactive_mode = sys.stdin.isatty()
+
+    if not args.input_file and not interactive_mode:
+        raise ValueError("缺少输入文件路径，请传入 input_file 参数。")
+    if not args.input_file:
+        args.input_file = input("请输入 Xbench QA Report Excel 文件路径: ").strip()
+    if not args.sheet and interactive_mode and len(sys.argv) == 1:
+        args.sheet = input("请输入工作表名称（直接回车使用当前活动工作表）: ").strip() or None
+    if not args.output and interactive_mode and len(sys.argv) == 1:
+        args.output = input("请输入输出文件路径（直接回车使用默认路径）: ").strip() or None
+    return args
+
+
+def main() -> None:
+    args = prompt_if_missing(parse_args())
+    summary = process_excel(
+        input_file=args.input_file,
+        sheet=args.sheet,
+        output_file=args.output,
+    )
+
+    print("处理完成。")
+    print(f"工作表: {summary.worksheet_title}")
+    print(f"读取明细数: {summary.detail_count}")
+    print(f"输出行数: {summary.grouped_count}")
+    print(f"输出文件: {summary.output_path}")
+
+
+if __name__ == "__main__":
+    main()

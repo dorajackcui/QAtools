@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 from tools.xbench_report_transformer.transform_xbench_report import (
     collect_detail_rows,
@@ -10,6 +12,7 @@ from tools.xbench_report_transformer.transform_xbench_report import (
     format_issue_text,
     group_detail_rows,
     parse_metadata,
+    process_excel,
     parse_qa_title,
 )
 
@@ -198,6 +201,72 @@ class RowExtractionAndGroupingTests(unittest.TestCase):
         detail_rows = collect_detail_rows(worksheet)
         self.assertEqual(len(detail_rows), 1)
         self.assertEqual(detail_rows[0].group_key, "source:提示")
+
+
+class ProcessExcelTests(unittest.TestCase):
+    def create_report(self, path: Path) -> None:
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Xbench QA"
+        worksheet["A1"] = "Exported QA Report"
+        worksheet["C4"] = "Source"
+        worksheet["D4"] = "Target"
+        worksheet["E4"] = "Comments"
+        worksheet["F4"] = "Metadata"
+        worksheet["A5"] = "Key Term Mismatch (提示 / Avis)"
+        worksheet["C6"] = "好刻意的提示！"
+        worksheet["D6"] = "Sans blague !"
+        worksheet["E6"] = "terms.xlsx"
+        worksheet["F6"] = "Key_1\nUI弹窗文字.xlsx"
+        worksheet["A7"] = 'Key Term Mismatch (“诗人” / "Poète")'
+        worksheet["C8"] = "“斑鸠”&“诗人”"
+        worksheet["D8"] = '"Colombe" & "Poète"'
+        worksheet["E8"] = "terms.xlsx"
+        worksheet["F8"] = "Key_2\n磐城【配音】.xlsx"
+        workbook.save(path)
+
+    def test_process_excel_writes_flat_output_workbook_and_preserves_input(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "Xbench_QA_Report.xlsx"
+            output_path = Path(tmp_dir) / "flat.xlsx"
+            self.create_report(input_path)
+            summary = process_excel(input_path, output_file=output_path)
+            self.assertEqual(summary.worksheet_title, "Xbench QA")
+            self.assertEqual(summary.output_path, output_path.resolve())
+            self.assertEqual(summary.detail_count, 2)
+            self.assertEqual(summary.grouped_count, 2)
+            original = load_workbook(input_path)
+            self.assertEqual(original.sheetnames, ["Xbench QA"])
+            result = load_workbook(output_path)
+            self.assertEqual(result.sheetnames, ["Xbench QA整理"])
+            sheet = result["Xbench QA整理"]
+            self.assertEqual(
+                [sheet.cell(1, column).value for column in range(1, 6)],
+                ["文件名", "key", "source", "target", "QA问题"],
+            )
+            self.assertEqual(sheet["A2"].value, "UI弹窗文字.xlsx")
+            self.assertEqual(sheet["B2"].value, "Key_1")
+            self.assertEqual(sheet["C2"].value, "好刻意的提示！")
+            self.assertEqual(sheet["D2"].value, "Sans blague !")
+            self.assertEqual(sheet["E2"].value, "提示 -> Avis：Key Term Mismatch")
+
+    def test_process_excel_uses_default_prefixed_output_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "Xbench_QA_Report.xlsx"
+            self.create_report(input_path)
+            summary = process_excel(input_path)
+            self.assertEqual(
+                summary.output_path,
+                (Path(tmp_dir) / "xbench_transform_Xbench_QA_Report.xlsx").resolve(),
+            )
+            self.assertTrue(summary.output_path.exists())
+
+    def test_process_excel_rejects_missing_sheet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "Xbench_QA_Report.xlsx"
+            self.create_report(input_path)
+            with self.assertRaisesRegex(ValueError, "工作表不存在"):
+                process_excel(input_path, sheet="Missing")
 
 
 if __name__ == "__main__":
