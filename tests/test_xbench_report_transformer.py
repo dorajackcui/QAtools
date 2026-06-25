@@ -48,6 +48,19 @@ class QaTitleParsingTests(unittest.TestCase):
         issue = parse_qa_title('Key Term Mismatch (“斑鸠” / "Colombe")')
         self.assertEqual(format_issue_text(issue), '“斑鸠” -> "Colombe"：Key Term Mismatch')
 
+    def test_format_issue_allows_slashes_inside_terms(self) -> None:
+        issue = parse_qa_title("Key Term Mismatch (HP/MP / PV/PM)")
+        self.assertEqual(issue.issue_type, "Key Term Mismatch")
+        self.assertEqual(issue.source_term, "HP/MP")
+        self.assertEqual(issue.target_term, "PV/PM")
+        self.assertEqual(format_issue_text(issue), "HP/MP -> PV/PM：Key Term Mismatch")
+
+    def test_title_without_spaced_term_separator_is_unparseable(self) -> None:
+        issue = parse_qa_title("Key Term Mismatch (HP/MP)")
+        self.assertEqual(issue.issue_type, "Key Term Mismatch (HP/MP)")
+        self.assertEqual(issue.source_term, "")
+        self.assertEqual(issue.target_term, "")
+
     def test_unparseable_title_is_used_as_issue_type(self) -> None:
         issue = parse_qa_title("Target same as Source")
         self.assertEqual(issue.issue_type, "Target same as Source")

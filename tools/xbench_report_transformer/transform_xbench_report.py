@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 
 FILE_NAME_EXTENSIONS = (".xlsx", ".xls", ".xlsm", ".csv", ".txt")
-QA_TITLE_PATTERN = re.compile(r"^\s*(?P<issue_type>.*?)\s*\((?P<source_term>.*?)\s*/\s*(?P<target_term>.*?)\)\s*$")
+QA_TITLE_PATTERN = re.compile(r"^\s*(?P<issue_type>.*?)\s*\((?P<terms>.*)\)\s*$")
 
 
 @dataclass(frozen=True)
@@ -47,10 +47,13 @@ def parse_qa_title(title: object) -> XbenchIssue:
     match = QA_TITLE_PATTERN.match(text)
     if match is None:
         return XbenchIssue(issue_type=text, source_term="", target_term="")
+    source_term, separator, target_term = match.group("terms").partition(" / ")
+    if not separator:
+        return XbenchIssue(issue_type=text, source_term="", target_term="")
     return XbenchIssue(
         issue_type=match.group("issue_type").strip(),
-        source_term=match.group("source_term").strip(),
-        target_term=match.group("target_term").strip(),
+        source_term=source_term.strip(),
+        target_term=target_term.strip(),
     )
 
 
