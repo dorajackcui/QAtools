@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import functools
 import re
 from dataclasses import dataclass
+from itertools import product
 from typing import Iterable
 
 try:
@@ -36,10 +38,21 @@ SIMPLE_PLURAL_SUFFIX = "s"
 SUSPECTED_PLURAL_VARIANT_LABEL = "疑似复数变体"
 SUSPECTED_PLURAL_VARIANT_SUFFIX = f"：{SUSPECTED_PLURAL_VARIANT_LABEL}"
 WORD_PATTERN = re.compile(r"\w+", re.UNICODE)
+LITERAL_WHITESPACE_ESCAPES = (
+    ("\\r\\n", " "),
+    ("\\n", " "),
+    ("\\r", " "),
+    ("\\t", " "),
+)
+WHITESPACE_PATTERN = re.compile(r"[\t\r\n\f\v\u00a0]+")
+TARGET_VARIANT_LIMIT = 256
 
 
 def normalize_text(value: object, case_sensitive: bool) -> str:
     text = "" if value is None else str(value)
+    for literal_escape, replacement in LITERAL_WHITESPACE_ESCAPES:
+        text = text.replace(literal_escape, replacement)
+    text = WHITESPACE_PATTERN.sub(" ", text)
     return text if case_sensitive else text.casefold()
 
 
@@ -178,11 +191,79 @@ def text_contains_plural_signature_variant(text: str, term: str) -> bool:
     return False
 
 
+def s_plural_token_variants(token: str) -> tuple[str, ...]:
+    if not token or not (token[-1].isascii() and token[-1].isalpha()):
+        return (token,)
+    if len(token) <= 2:
+        return (token,)
+
+    variants: list[str] = [token]
+    seen = {token}
+
+    def add_variant(variant: str) -> None:
+        if variant and variant not in seen:
+            seen.add(variant)
+            variants.append(variant)
+
+    if token.endswith(SIMPLE_PLURAL_SUFFIX):
+        if len(token) > 3 and token.endswith("ies"):
+            add_variant(f"{token[:-3]}y")
+        elif len(token) > 3 and not token.endswith(("is", "os", "ss", "us")):
+            add_variant(token[:-1])
+    else:
+        add_variant(f"{token}{SIMPLE_PLURAL_SUFFIX}")
+        if len(token) > 1 and token.endswith("y"):
+            add_variant(f"{token[:-1]}ies")
+
+    return tuple(variants)
+
+
+@functools.lru_cache(maxsize=1024)
+def iter_target_s_plural_variants(term: str) -> tuple[str, ...]:
+    matches = list(WORD_PATTERN.finditer(term))
+    if not matches:
+        return (term,)
+
+    literal_parts: list[str] = []
+    variant_lists: list[tuple[str, ...]] = []
+    last_index = 0
+    for match in matches:
+        literal_parts.append(term[last_index : match.start()])
+        variant_lists.append(s_plural_token_variants(match.group(0)))
+        last_index = match.end()
+    literal_parts.append(term[last_index:])
+
+    variants: list[str] = []
+    seen: set[str] = set()
+    for token_values in product(*variant_lists):
+        parts: list[str] = []
+        for index, token_value in enumerate(token_values):
+            parts.append(literal_parts[index])
+            parts.append(token_value)
+        parts.append(literal_parts[-1])
+        variant = "".join(parts)
+        if variant in seen:
+            continue
+        seen.add(variant)
+        variants.append(variant)
+        if len(variants) >= TARGET_VARIANT_LIMIT:
+            break
+    return tuple(variants)
+
+
+def text_contains_target_s_plural_variant(text: str, term: str, match_mode: str) -> bool:
+    return any(
+        text_contains_term(text, variant, match_mode=match_mode)
+        for variant in iter_target_s_plural_variants(term)
+    )
+
+
 def term_has_expected_target(
     source_text: str,
     target_text: str,
     entry: TermMappingEntry,
     match_mode: str,
+    allow_target_plural_variants: bool = False,
 ) -> bool:
     source_has_canonical = text_contains_term(source_text, entry.normalized_source, match_mode=match_mode)
     source_has_plural = text_contains_simple_s_plural(source_text, entry.normalized_source, match_mode)
@@ -193,7 +274,13 @@ def term_has_expected_target(
         return False
     if not source_has_canonical:
         return False
-    return text_contains_term(target_text, entry.normalized_target, match_mode=match_mode)
+    if not allow_target_plural_variants:
+        return text_contains_term(target_text, entry.normalized_target, match_mode=match_mode)
+    return text_contains_target_s_plural_variant(
+        target_text,
+        entry.normalized_target,
+        match_mode=match_mode,
+    )
 
 
 def term_has_simple_s_plural_variant(

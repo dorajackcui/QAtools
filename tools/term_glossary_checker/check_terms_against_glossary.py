@@ -44,6 +44,7 @@ from tools.term_glossary_checker.workbook_output import (
 
 
 GLOSSARY_EMPTY_ROW_STOP_THRESHOLD = 1000
+PLACEHOLDER_TARGET_VALUES = {"#N/A", "N/A", "NA", "#NA", "NAN"}
 
 
 @dataclass(frozen=True)
@@ -175,6 +176,10 @@ def row_values_are_empty(*values: object) -> bool:
     return all(value is None or str(value).strip() == "" for value in values)
 
 
+def is_placeholder_glossary_entry(target_term: str) -> bool:
+    return target_term.strip().upper() in PLACEHOLDER_TARGET_VALUES
+
+
 def load_glossary_entries(
     glossary_file: str | Path,
     source_column: str,
@@ -220,6 +225,8 @@ def load_glossary_entries(
             target_term = "" if raw_target is None else str(raw_target).strip()
 
             if not source_term or not target_term:
+                continue
+            if is_placeholder_glossary_entry(target_term):
                 continue
 
             normalized_source = normalize_text(source_term, case_sensitive=case_sensitive)
@@ -335,6 +342,7 @@ def process_excel(
                 normalized_target_text,
                 entry,
                 match_mode=match_mode,
+                allow_target_plural_variants=True,
             ):
                 continue
 

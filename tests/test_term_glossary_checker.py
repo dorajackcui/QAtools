@@ -14,6 +14,7 @@ from tools.term_glossary_checker.check_terms_against_glossary import (
     process_excel,
     text_contains_term,
 )
+from tools.term_matching import TermMappingEntry, normalize_text, s_plural_token_variants, term_has_expected_target
 from tools.false_positive_review import ReviewDecision
 
 
@@ -91,6 +92,30 @@ class GlossaryLoadingTests(unittest.TestCase):
                 )
 
             self.assertEqual([(entry.source_term, entry.target_term) for entry in entries], [("API", "接口")])
+
+    def test_loading_filters_placeholder_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            glossary_path = Path(tmp_dir) / "glossary.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "API"
+            worksheet["B2"] = "Interface"
+            worksheet["A3"] = "0"
+            worksheet["B3"] = "#N/A"
+            workbook.save(glossary_path)
+
+            _, entries, conflicts = load_glossary_entries(
+                glossary_file=glossary_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                case_sensitive=False,
+            )
+
+            self.assertEqual([(entry.source_term, entry.target_term) for entry in entries], [("API", "Interface")])
+            self.assertEqual(conflicts, [])
 
 
 class MatchingTests(unittest.TestCase):
@@ -225,6 +250,25 @@ class MatchingTests(unittest.TestCase):
         )
         self.assertEqual([entry.source_term for entry in matches], ["接口"])
 
+    def test_chinese_overlapping_terms_still_prefer_longest_match(self) -> None:
+        class FallbackMatcher(list):
+            pass
+
+        entries = self.create_entries(
+            [
+                ("\u91d1\u5ead", "Golden Court"),
+                ("\u91d1\u5ead\u540e\u95e8", "Golden Court rear gate"),
+                ("\u91d1\u5ead\u540e\u95e8\u505c\u6cca\u5904", "Golden Court rear dock"),
+            ]
+        )
+        matches = find_row_terms(
+            "\u91d1\u5ead\u540e\u95e8\u505c\u6cca\u5904",
+            FallbackMatcher(entries),
+            case_sensitive=False,
+            match_mode="hybrid-boundary",
+        )
+        self.assertEqual([entry.source_term for entry in matches], ["\u91d1\u5ead\u540e\u95e8\u505c\u6cca\u5904"])
+
     def test_substring_mode_keeps_old_behavior(self) -> None:
         class FallbackMatcher(list):
             pass
@@ -242,6 +286,126 @@ class MatchingTests(unittest.TestCase):
         self.assertFalse(text_contains_term("account setup", "acc", match_mode="hybrid-boundary"))
         self.assertTrue(text_contains_term("api-key", "api", match_mode="hybrid-boundary"))
         self.assertTrue(text_contains_term("account setup", "acc", match_mode="substring"))
+
+    def test_s_plural_token_variants_skips_non_ascii_tokens(self) -> None:
+        self.assertEqual(s_plural_token_variants("应用程序"), ("应用程序",))
+        self.assertEqual(s_plural_token_variants("インターフェース"), ("インターフェース",))
+        self.assertEqual(s_plural_token_variants("cat"), ("cat", "cats"))
+
+    def test_s_plural_token_variants_handles_y_ies(self) -> None:
+        self.assertIn("policies", s_plural_token_variants("policy"))
+        self.assertIn("policy", s_plural_token_variants("policies"))
+        self.assertIn("categories", s_plural_token_variants("category"))
+        self.assertIn("category", s_plural_token_variants("categories"))
+
+    def test_target_y_ies_plural_variants_are_treated_as_aligned(self) -> None:
+        source_term = "源"
+        entry = TermMappingEntry(
+            source_term=source_term,
+            target_term="company policy",
+            normalized_source=normalize_text(source_term, case_sensitive=False),
+            normalized_target=normalize_text("company policy", case_sensitive=False),
+        )
+        self.assertTrue(
+            term_has_expected_target(
+                normalize_text(source_term, case_sensitive=False),
+                normalize_text("company policies", case_sensitive=False),
+                entry,
+                match_mode="hybrid-boundary",
+                allow_target_plural_variants=True,
+            ),
+            "'company policy' should match 'company policies'",
+        )
+
+    def test_target_simple_s_plural_variants_are_treated_as_aligned(self) -> None:
+        def assert_aligned(expected_target: str, target_text: str) -> None:
+            source_term = "\u6e90"
+            entry = TermMappingEntry(
+                source_term=source_term,
+                target_term=expected_target,
+                normalized_source=normalize_text(source_term, case_sensitive=False),
+                normalized_target=normalize_text(expected_target, case_sensitive=False),
+            )
+            self.assertTrue(
+                term_has_expected_target(
+                    normalize_text(source_term, case_sensitive=False),
+                    normalize_text(target_text, case_sensitive=False),
+                    entry,
+                    match_mode="hybrid-boundary",
+                    allow_target_plural_variants=True,
+                ),
+                f"{expected_target!r} should match {target_text!r}",
+            )
+
+        assert_aligned("Certificat", "des certificats")
+        assert_aligned("Rouge", "des lumieres rouges")
+        assert_aligned("Scaraphir", "des scaraphirs")
+        assert_aligned("Accessoires de dos", "un accessoire de dos")
+        assert_aligned("Membre de Mothis", "des membres de Mothis")
+        assert_aligned("Boite a musique", "des boites a musique")
+
+    def test_target_simple_s_plural_matching_does_not_accept_language_specific_inflections(self) -> None:
+        entry = TermMappingEntry(
+            source_term="\u84dd\u8272",
+            target_term="Bleu",
+            normalized_source=normalize_text("\u84dd\u8272", case_sensitive=False),
+            normalized_target=normalize_text("Bleu", case_sensitive=False),
+        )
+
+        self.assertFalse(
+            term_has_expected_target(
+                normalize_text("\u84dd\u8272", case_sensitive=False),
+                normalize_text("des etiquettes bleues", case_sensitive=False),
+                entry,
+                match_mode="hybrid-boundary",
+                allow_target_plural_variants=True,
+            )
+        )
+
+    def test_target_simple_s_plural_matching_does_not_accept_synonyms(self) -> None:
+        entry = TermMappingEntry(
+            source_term="\u5408\u683c\u8bc1",
+            target_term="Certificat",
+            normalized_source=normalize_text("\u5408\u683c\u8bc1", case_sensitive=False),
+            normalized_target=normalize_text("Certificat", case_sensitive=False),
+        )
+
+        self.assertFalse(
+            term_has_expected_target(
+                normalize_text("\u5408\u683c\u8bc1", case_sensitive=False),
+                normalize_text("Veuillez presenter votre autorisation.", case_sensitive=False),
+                entry,
+                match_mode="hybrid-boundary",
+                allow_target_plural_variants=True,
+            )
+        )
+
+    def test_allow_target_plural_variants_false_rejects_plural(self) -> None:
+        source_term = "源"
+        entry = TermMappingEntry(
+            source_term=source_term,
+            target_term="Certificat",
+            normalized_source=normalize_text(source_term, case_sensitive=False),
+            normalized_target=normalize_text("Certificat", case_sensitive=False),
+        )
+        self.assertFalse(
+            term_has_expected_target(
+                normalize_text(source_term, case_sensitive=False),
+                normalize_text("des certificats", case_sensitive=False),
+                entry,
+                match_mode="hybrid-boundary",
+                allow_target_plural_variants=False,
+            )
+        )
+
+    def test_literal_escaped_whitespace_is_treated_as_a_boundary(self) -> None:
+        self.assertTrue(
+            text_contains_term(
+                normalize_text("Intro\\n\\nVigo-09", case_sensitive=False),
+                normalize_text("Vigo-09", case_sensitive=False),
+                match_mode="hybrid-boundary",
+            )
+        )
 
 
 class ProcessExcelTests(unittest.TestCase):
@@ -531,7 +695,7 @@ class ProcessExcelTests(unittest.TestCase):
             result_workbook = load_workbook(summary.output_path)
             self.assertEqual(result_workbook["术语命中问题"].max_row, 1)
 
-    def test_target_only_simple_s_plural_is_reported_as_suspected_plural_variant(self) -> None:
+    def test_target_only_simple_s_plural_variant_is_treated_as_aligned(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             glossary_path = Path(tmp_dir) / "glossary.xlsx"
             data_path = Path(tmp_dir) / "data.xlsx"
@@ -564,11 +728,11 @@ class ProcessExcelTests(unittest.TestCase):
                 match_mode="hybrid-boundary",
             )
 
-            self.assertEqual(summary.problem_count, 1)
+            self.assertEqual(summary.problem_count, 0)
 
             result_workbook = load_workbook(summary.output_path)
             problem_sheet = result_workbook["术语命中问题"]
-            self.assertEqual(problem_sheet["B2"].value, "术语未按术语表翻译：疑似复数变体")
+            self.assertEqual(problem_sheet.max_row, 1)
 
     def test_plural_signature_variant_is_reported_as_suspected_plural_not_aligned(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
