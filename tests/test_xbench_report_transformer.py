@@ -35,6 +35,21 @@ class MetadataParsingTests(unittest.TestCase):
         self.assertEqual(metadata.key, "")
         self.assertEqual(metadata.file_name, "磐城【配音】.xlsx")
 
+    def test_parse_single_localization_file_name_line_without_key(self) -> None:
+        for file_name in (
+            "strings.po",
+            "dialogue.json",
+            "foo.xliff",
+            "bar.sdlxliff",
+            "data.xml",
+            "folder/file.json",
+            r"folder\file.xml",
+        ):
+            with self.subTest(file_name=file_name):
+                metadata = parse_metadata(file_name)
+                self.assertEqual(metadata.key, "")
+                self.assertEqual(metadata.file_name, file_name)
+
     def test_parse_single_non_file_line_as_key(self) -> None:
         metadata = parse_metadata("LDLG_Text_ZH_q203101_Line_3")
         self.assertEqual(metadata.key, "LDLG_Text_ZH_q203101_Line_3")
@@ -193,6 +208,26 @@ class RowExtractionAndGroupingTests(unittest.TestCase):
         self.assertEqual(len(grouped_rows), 2)
         self.assertEqual(detail_rows[0].group_key, "file_source:UI弹窗文字.xlsx\x1f提示")
         self.assertEqual(detail_rows[1].group_key, "file_source:另一个文件.xlsx\x1f提示")
+
+    def test_group_key_uses_file_name_and_source_for_localization_file_metadata(self) -> None:
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet["C1"] = "Source"
+        worksheet["D1"] = "Target"
+        worksheet["E1"] = "Comments"
+        worksheet["F1"] = "Metadata"
+        worksheet["A2"] = "Key Term Mismatch (提示 / Avis)"
+        worksheet["C3"] = "提示 A"
+        worksheet["D3"] = "Avis A"
+        worksheet["F3"] = "strings.po"
+        worksheet["C4"] = "提示 B"
+        worksheet["D4"] = "Avis B"
+        worksheet["F4"] = "strings.po"
+        detail_rows = collect_detail_rows(worksheet)
+        grouped_rows = group_detail_rows(detail_rows)
+        self.assertEqual(len(grouped_rows), 2)
+        self.assertEqual(detail_rows[0].group_key, "file_source:strings.po\x1f提示 A")
+        self.assertEqual(detail_rows[1].group_key, "file_source:strings.po\x1f提示 B")
 
     def test_group_key_uses_source_when_metadata_is_empty(self) -> None:
         workbook = Workbook()

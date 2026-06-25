@@ -14,7 +14,25 @@ from openpyxl import Workbook, load_workbook
 
 from tools.excel_output import build_prefixed_output_path
 
-FILE_NAME_EXTENSIONS = (".xlsx", ".xls", ".xlsm", ".csv", ".txt")
+FILE_NAME_EXTENSIONS = (
+    ".xlsx",
+    ".xls",
+    ".xlsm",
+    ".csv",
+    ".txt",
+    ".po",
+    ".pot",
+    ".json",
+    ".xliff",
+    ".xlf",
+    ".sdlxliff",
+    ".xml",
+    ".resx",
+    ".strings",
+    ".properties",
+    ".yml",
+    ".yaml",
+)
 OUTPUT_HEADERS = ("文件名", "key", "source", "target", "QA问题")
 OUTPUT_SHEET_NAME = "Xbench QA整理"
 HEADER_SOURCE = "source"
