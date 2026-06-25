@@ -426,7 +426,7 @@ python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
 ```bash
 python3 tools/xbench_report_transformer/transform_xbench_report.py ./Xbench_QA_Report.xlsx \
   -s "Xbench QA" \
-  -o ./artifacts/xbench_flat.xlsx
+  -o ./xbench_flat.xlsx
 ```
 
 输出列固定为：
