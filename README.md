@@ -229,6 +229,12 @@ python3 tools/xbench_report_transformer/transform_xbench_report.py Xbench_QA_Rep
   -o xbench_flat.xlsx
 ```
 
+- GUI：
+
+```bash
+python3 tools/xbench_report_transformer/transform_xbench_report_gui.py
+```
+
 详情见 `tools/xbench_report_transformer/README.md`。
 
 ## 依赖安装
@@ -257,4 +263,4 @@ python3 toolshub_gui.py
 
 会打开一个统一窗口，使用标签页管理这些工具；Workflow 编排页也支持给术语对检查选择历史 TB；原有各自的 GUI 入口仍然保留。
 
-统一入口同样包含 `LLM术语提取` 标签页，支持 source-only 与 target 两种模式和历史 TB 参数。GUI 内可选择或覆盖抽取 / 冲突复核的 prompt 文件。
+统一入口同样包含 `LLM术语提取` 和 `Xbench QA 转换` 页面；LLM 页面支持 source-only 与 target 两种模式和历史 TB 参数，GUI 内可选择或覆盖抽取 / 冲突复核的 prompt 文件。

@@ -16,6 +16,7 @@ from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPla
 from tools.term_glossary_checker.check_terms_against_glossary_gui import TermGlossaryCheckerApp
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
 from tools.workflow.workflow_gui import WorkflowRunnerApp
+from tools.xbench_report_transformer.transform_xbench_report_gui import XbenchReportTransformerApp
 
 
 ToolFactory = Callable[[tk.Misc], ttk.Frame]
@@ -84,6 +85,12 @@ TOOL_GROUPS = (
                 title="Target 中文检查",
                 description="扫描 target 文本中的中文字符，定位未翻译或混入中文的问题。",
                 factory=ChineseTargetCheckerApp,
+            ),
+            ToolItem(
+                key="xbench_report",
+                title="Xbench QA 转换",
+                description="把 Xbench QA Report 整理为按 key/source 聚合的行级 Excel。",
+                factory=XbenchReportTransformerApp,
             ),
         ),
     ),

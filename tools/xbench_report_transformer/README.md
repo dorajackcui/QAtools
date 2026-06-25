@@ -34,3 +34,19 @@ python3 tools/xbench_report_transformer/transform_xbench_report.py Xbench_QA_Rep
 ```
 
 默认输出文件名为 `xbench_transform_<原文件名>`。
+
+## GUI
+
+单独启动：
+
+```bash
+python3 tools/xbench_report_transformer/transform_xbench_report_gui.py
+```
+
+也可以从统一入口打开：
+
+```bash
+python3 toolshub_gui.py
+```
+
+GUI 会自动读取工作表列表，输出文件沿用默认命名规则。

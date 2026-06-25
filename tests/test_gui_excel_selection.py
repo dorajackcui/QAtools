@@ -16,6 +16,7 @@ from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPla
 from tools.term_glossary_checker.check_terms_against_glossary_gui import TermGlossaryCheckerApp
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
 from tools.workflow.workflow_gui import WorkflowRunnerApp
+from tools.xbench_report_transformer.transform_xbench_report_gui import XbenchReportTransformerApp
 
 
 class FakeVar:
@@ -137,6 +138,18 @@ class GuiSheetSelectionTests(unittest.TestCase):
         workbook.active = 0
         workbook.save(path)
 
+    def create_xbench_report_workbook(self, path: Path) -> None:
+        workbook = Workbook()
+        report_sheet = workbook.active
+        report_sheet.title = "Xbench QA"
+        report_sheet["C4"] = "Source"
+        report_sheet["D4"] = "Target"
+        report_sheet["E4"] = "Comments"
+        report_sheet["F4"] = "Metadata"
+        workbook.create_sheet("Other")
+        workbook.active = 0
+        workbook.save(path)
+
     def create_tag_checker_workbook(self, path: Path) -> None:
         workbook = Workbook()
         data_sheet = workbook.active
@@ -247,6 +260,13 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.sheet_var = FakeVar("")
         app.source_column_var = FakeVar("A")
         app.target_column_var = FakeVar("")
+        app.sheet_combobox = FakeCombobox()
+        return app
+
+    def build_xbench_report_transformer_app(self, input_path: Path) -> XbenchReportTransformerApp:
+        app = XbenchReportTransformerApp.__new__(XbenchReportTransformerApp)
+        app.input_file_var = FakeVar(str(input_path))
+        app.sheet_var = FakeVar("")
         app.sheet_combobox = FakeCombobox()
         return app
 
@@ -515,6 +535,43 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.sheet_var.get(), "SourceOnly")
             self.assertEqual(app.source_column_var.get(), "A")
             self.assertEqual(app.target_column_var.get(), "")
+
+    def test_xbench_report_transformer_refresh_populates_sheet_choices(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "xbench.xlsx"
+            self.create_xbench_report_workbook(workbook_path)
+            app = self.build_xbench_report_transformer_app(workbook_path)
+
+            app.refresh_sheet_choices(show_error=False)
+
+            self.assertEqual(app.sheet_combobox["values"], ("Xbench QA", "Other"))
+            self.assertEqual(app.sheet_var.get(), "Xbench QA")
+
+    def test_xbench_report_transformer_run_passes_selected_sheet_to_processor(self) -> None:
+        app = XbenchReportTransformerApp.__new__(XbenchReportTransformerApp)
+        app.input_file_var = FakeVar("/tmp/input.xlsx")
+        app.sheet_var = FakeVar("Xbench QA")
+        summary = SimpleNamespace(
+            output_path=Path("/tmp/xbench_transform_input.xlsx"),
+            worksheet_title="Xbench QA",
+            detail_count=249,
+            grouped_count=221,
+        )
+
+        with (
+            patch(
+                "tools.xbench_report_transformer.transform_xbench_report_gui.process_excel",
+                return_value=summary,
+            ) as process_excel_mock,
+            patch("tools.xbench_report_transformer.transform_xbench_report_gui.messagebox.showinfo"),
+        ):
+            app.run_transform()
+
+        process_excel_mock.assert_called_once_with(
+            input_file="/tmp/input.xlsx",
+            sheet="Xbench QA",
+            output_file=None,
+        )
 
     def test_llm_term_extractor_history_tb_defaults_to_term_sheet_and_detects_nomark_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

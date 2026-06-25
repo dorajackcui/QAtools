@@ -3,7 +3,7 @@ from __future__ import annotations
 import tkinter as tk
 import unittest
 
-from toolshub_gui import ToolshubApp
+from toolshub_gui import TOOL_GROUPS, ToolshubApp
 
 
 class ToolshubLayoutTests(unittest.TestCase):
@@ -28,23 +28,18 @@ class ToolshubLayoutTests(unittest.TestCase):
             root.destroy()
 
     def test_tools_are_grouped_by_workflow_terms_quality_and_text_repair(self) -> None:
-        root, app = self.make_app()
+        grouped_tools = {
+            group.title: [tool.title for tool in group.tools]
+            for group in TOOL_GROUPS
+        }
 
-        try:
-            grouped_tools = {
-                group.title: [tool.title for tool in group.tools]
-                for group in app.tool_groups
-            }
-
-            self.assertEqual(grouped_tools["常用流程"], ["Workflow 编排"])
-            self.assertEqual(
-                grouped_tools["术语处理"],
-                ["术语对检查", "LLM 术语提取", "术语表命中检查"],
-            )
-            self.assertEqual(grouped_tools["质量检查"], ["Tag 检查", "Target 中文检查"])
-            self.assertEqual(grouped_tools["文本修复"], ["分行拆列", "法语 NBSP 恢复"])
-        finally:
-            root.destroy()
+        self.assertEqual(grouped_tools["常用流程"], ["Workflow 编排"])
+        self.assertEqual(
+            grouped_tools["术语处理"],
+            ["术语对检查", "LLM 术语提取", "术语表命中检查"],
+        )
+        self.assertEqual(grouped_tools["质量检查"], ["Tag 检查", "Target 中文检查", "Xbench QA 转换"])
+        self.assertEqual(grouped_tools["文本修复"], ["分行拆列", "法语 NBSP 恢复"])
 
     def test_selecting_a_tool_updates_heading_and_visible_page(self) -> None:
         root, app = self.make_app()
