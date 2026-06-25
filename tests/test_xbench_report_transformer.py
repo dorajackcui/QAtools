@@ -2,18 +2,25 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from argparse import Namespace
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from openpyxl import Workbook, load_workbook
 
 from tools.xbench_report_transformer.transform_xbench_report import (
+    TransformSummary,
     collect_detail_rows,
     find_header_columns,
     format_issue_text,
     group_detail_rows,
+    main,
     parse_metadata,
-    process_excel,
+    parse_args,
     parse_qa_title,
+    process_excel,
+    prompt_if_missing,
 )
 
 
@@ -267,6 +274,48 @@ class ProcessExcelTests(unittest.TestCase):
             self.create_report(input_path)
             with self.assertRaisesRegex(ValueError, "工作表不存在"):
                 process_excel(input_path, sheet="Missing")
+
+    def test_process_excel_rejects_output_path_matching_input_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "Xbench_QA_Report.xlsx"
+            self.create_report(input_path)
+            with self.assertRaisesRegex(ValueError, "输出文件不能与输入文件相同"):
+                process_excel(input_path, output_file=input_path)
+
+
+class CliTests(unittest.TestCase):
+    def test_prompt_if_missing_rejects_missing_noninteractive_input(self) -> None:
+        args = Namespace(input_file=None, sheet=None, output=None)
+        with patch("sys.stdin.isatty", return_value=False):
+            with self.assertRaisesRegex(ValueError, "缺少输入文件路径"):
+                prompt_if_missing(args)
+
+    def test_parse_args_reads_cli_values(self) -> None:
+        with patch("sys.argv", ["prog", "input.xlsx", "-s", "Xbench QA", "-o", "out.xlsx"]):
+            args = parse_args()
+        self.assertEqual(args.input_file, "input.xlsx")
+        self.assertEqual(args.sheet, "Xbench QA")
+        self.assertEqual(args.output, "out.xlsx")
+
+    def test_main_prints_summary(self) -> None:
+        summary = TransformSummary(
+            worksheet_title="Xbench QA",
+            output_path=Path("out.xlsx"),
+            detail_count=2,
+            grouped_count=1,
+        )
+        with patch("sys.argv", ["prog", "input.xlsx", "-s", "Xbench QA", "-o", "out.xlsx"]):
+            with patch(
+                "tools.xbench_report_transformer.transform_xbench_report.process_excel",
+                return_value=summary,
+            ):
+                stdout = StringIO()
+                with patch("sys.stdout", stdout):
+                    main()
+        output = stdout.getvalue()
+        self.assertIn("处理完成。", output)
+        self.assertIn("读取明细数: 2", output)
+        self.assertIn("输出行数: 1", output)
 
 
 if __name__ == "__main__":

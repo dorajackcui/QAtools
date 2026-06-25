@@ -209,14 +209,17 @@ def build_default_output_path(input_path: Path) -> Path:
 
 def write_output_workbook(output_path: Path, rows: list[dict[str, str]]) -> None:
     workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = OUTPUT_SHEET_NAME
-    worksheet.append(list(OUTPUT_HEADERS))
+    try:
+        worksheet = workbook.active
+        worksheet.title = OUTPUT_SHEET_NAME
+        worksheet.append(list(OUTPUT_HEADERS))
 
-    for row in rows:
-        worksheet.append([row[header] for header in OUTPUT_HEADERS])
+        for row in rows:
+            worksheet.append([row[header] for header in OUTPUT_HEADERS])
 
-    workbook.save(output_path)
+        workbook.save(output_path)
+    finally:
+        workbook.close()
 
 
 def process_excel(
@@ -233,6 +236,8 @@ def process_excel(
         if output_file
         else build_default_output_path(input_path).resolve()
     )
+    if output_path == input_path:
+        raise ValueError("输出文件不能与输入文件相同")
 
     workbook = load_workbook(input_path)
     try:
