@@ -58,7 +58,7 @@ class FrenchNbspRestorerApp(ttk.Frame):
             row=6, column=0, columnspan=3, sticky="ew"
         )
 
-        note = "规则：恢复法语 target 中 ; : ? ! 前和 « » 内侧的 non-breaking space；结果列为空时直接修复 target 列。"
+        note = "规则：恢复法语 target 中 ; : ? ! % 前和 « » 内侧的 non-breaking space；结果列为空时直接修复 target 列。"
         ttk.Label(self, text=note).grid(row=7, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.columnconfigure(1, weight=1)

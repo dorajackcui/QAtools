@@ -1,6 +1,6 @@
 # LLM 术语提取
 
-用于从 Excel 提取术语并形成可导入的术语表候选。可从 `source` 识别术语，并在同一行 `target` 有内容时记录已有译法；也可在 `target` 未指定或为空时只收集 source 术语。工具会对同源术语多译法做冲突复核，并按工作表输出分类结果。
+用于从 Excel 提取术语并形成可导入的术语表候选。可从 `source` 识别术语，并在同一行 `target` 有内容时记录已有译法；也可在 `target` 未指定或为空时只收集 source 术语。工具会对同源术语多译法做冲突复核，最终结果只输出本批次术语汇总和冲突汇总两张工作表。
 
 ## 两种模式
 
@@ -73,13 +73,10 @@ python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
 
 ## 输出工作表
 
-- `Terms_Source_Dedup`：术语聚合结果（去重）。列：`source_term`, `target_terms_observed`, `row_count`, `rows`, `source_examples`, `target_examples`, `term_types`, `confidences`, `notes`, `decision`, `decision_reason`
-- `Extraction_Evidence`：逐条抽取证据，含行号与源/目标文本
-- `Conflicts_To_Review`：多译法复核输出，含 LLM 决策信息
-- `Import_Candidate`：可直接导入候选（`decision` 为 `same` 或无冲突且能确定唯一 target）
-- `Review_Before_Import`：待复核项（含 target 缺失、多译法或冲突）
-- `Already_In_History`：已在历史 TB 中命中的术语
-- `Summary`：统计信息与关键计数（包括 conflict/import/review/历史命中数）
+输出 workbook 只包含：
+
+- `本批次术语汇总表`：一行一个去重后的 source 术语，合并历史术语（如传入历史 TB）与本批次新增术语。包含 `target术语`、本批次 target 观察值、术语来源、原始行号、实例原文、实例译文、类型、备注和多译法判断信息。
+- `冲突汇总`：只列出需要人工确认的多译法冲突 / 复核项，包含 observed target、行号、建议统一 target、复核原因和实例原文/译文。
 
 ## GUI
 

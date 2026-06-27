@@ -175,7 +175,7 @@ class LlmTermExtractorApp(ttk.Frame):
 
         ttk.Label(
             self,
-            text="说明：target 列可留空；输出包含去重术语、证据、冲突复核和导入候选工作表。",
+            text="说明：target 列可留空；输出包含本批次术语汇总表和冲突汇总。",
         ).grid(row=18, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.columnconfigure(1, weight=1)

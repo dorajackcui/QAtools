@@ -20,6 +20,7 @@ from tools.excel_output import build_prefixed_output_path
 
 NBSP = "\u00a0"
 FRENCH_SPACING_CHARS = " \t\u00a0\u202f"
+FRENCH_PRECEDING_NBSP_CHARS = ";:?!%"
 OPEN_GUILLEMET_PATTERN = re.compile(rf"«[{FRENCH_SPACING_CHARS}]*")
 CLOSE_GUILLEMET_PATTERN = re.compile(rf"[{FRENCH_SPACING_CHARS}]*»")
 URL_SCHEME_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*$")
@@ -72,10 +73,10 @@ def _is_inside_url_token(text: str, index: int) -> bool:
     return bool(url_match and token_index >= url_match.start())
 
 
-def _restore_double_punctuation_spacing(text: str) -> str:
+def _restore_preceding_nbsp_spacing(text: str) -> str:
     result: list[str] = []
     for index, char in enumerate(text):
-        if char not in ";:?!":
+        if char not in FRENCH_PRECEDING_NBSP_CHARS:
             result.append(char)
             continue
 
@@ -106,7 +107,7 @@ def restore_french_nbsp(value: object) -> object:
         return value
 
     text = _restore_guillemet_spacing(value)
-    return _restore_double_punctuation_spacing(text)
+    return _restore_preceding_nbsp_spacing(text)
 
 
 def process_excel(

@@ -19,6 +19,12 @@ class RestoreFrenchNbspTextTests(unittest.TestCase):
             f"Bonjour{NBSP}! Attention{NBSP}; vraiment{NBSP}: oui{NBSP}?",
         )
 
+    def test_restores_nbsp_before_percent_sign(self) -> None:
+        self.assertEqual(
+            restore_french_nbsp("Progression 10% ou 20 %."),
+            f"Progression 10{NBSP}% ou 20{NBSP}%.",
+        )
+
     def test_restores_nbsp_inside_french_guillemets(self) -> None:
         self.assertEqual(
             restore_french_nbsp('Il dit « Bonjour ! »'),
@@ -35,6 +41,12 @@ class RestoreFrenchNbspTextTests(unittest.TestCase):
         self.assertEqual(
             restore_french_nbsp("Voir https://example.com/search?q=oui!"),
             "Voir https://example.com/search?q=oui!",
+        )
+
+    def test_keeps_url_percent_encoding_unchanged(self) -> None:
+        self.assertEqual(
+            restore_french_nbsp("Voir https://example.com/search?q=10%25."),
+            "Voir https://example.com/search?q=10%25.",
         )
 
     def test_returns_non_string_values_unchanged(self) -> None:

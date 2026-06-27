@@ -465,30 +465,33 @@ class LlmTermWorkbookTests(unittest.TestCase):
 
             result = load_workbook(summary.output_path)
             self.assertEqual(
-                result.sheetnames[-7:],
+                result.sheetnames,
                 [
-                    "Terms_Source_Dedup",
-                    "Extraction_Evidence",
-                    "Conflicts_To_Review",
-                    "Import_Candidate",
-                    "Review_Before_Import",
-                    "Already_In_History",
-                    "Summary",
+                    "本批次术语汇总表",
+                    "冲突汇总",
                 ],
             )
+            for removed_sheet_name in [
+                "Terms_Source_Dedup",
+                "Extraction_Evidence",
+                "Conflicts_To_Review",
+                "Import_Candidate",
+                "Review_Before_Import",
+                "Already_In_History",
+                "Summary",
+            ]:
+                self.assertNotIn(removed_sheet_name, result.sheetnames)
 
-            terms = result["Terms_Source_Dedup"]
+            terms = result["本批次术语汇总表"]
             self.assertEqual(terms["A2"].value, "Abyssal Vault")
             self.assertEqual(terms["B2"].value, "深渊宝库")
             self.assertEqual(terms["A3"].value, "Heart Flower Gift Box")
+            self.assertEqual(terms["D2"].value, "本批次新增")
+            self.assertIn("Unlock the Abyssal Vault", terms["G2"].value)
 
-            import_candidates = result["Import_Candidate"]
-            self.assertEqual(import_candidates["A2"].value, "Abyssal Vault")
-            self.assertEqual(import_candidates["B2"].value, "深渊宝库")
-
-            review = result["Review_Before_Import"]
-            self.assertEqual(review["A2"].value, "Heart Flower Gift Box")
-            self.assertEqual(review["D2"].value, "target缺失")
+            conflicts = result["冲突汇总"]
+            self.assertEqual(conflicts["A1"].value, "source术语")
+            self.assertIsNone(conflicts["A2"].value)
 
     def test_process_excel_routes_history_matches(self) -> None:
         from openpyxl import Workbook, load_workbook
@@ -549,12 +552,12 @@ class LlmTermWorkbookTests(unittest.TestCase):
             self.assertEqual(summary.already_in_history_count, 1)
 
             result = load_workbook(summary.output_path)
-            history_output = result["Already_In_History"]
-            self.assertEqual(history_output["A2"].value, "Abyssal Vault")
-            self.assertEqual(history_output["B2"].value, "深渊宝库")
-
-            import_candidates = result["Import_Candidate"]
-            self.assertIsNone(import_candidates["A2"].value)
+            self.assertEqual(result.sheetnames, ["本批次术语汇总表", "冲突汇总"])
+            terms = result["本批次术语汇总表"]
+            self.assertEqual(terms["A2"].value, "Abyssal Vault")
+            self.assertEqual(terms["B2"].value, "深渊宝库")
+            self.assertEqual(terms["C2"].value, "深渊宝库")
+            self.assertEqual(terms["D2"].value, "历史术语")
 
     def test_load_history_tb_mapping_detects_toolshub_nomark_headers(self) -> None:
         from openpyxl import Workbook
@@ -667,11 +670,10 @@ class LlmTermWorkbookTests(unittest.TestCase):
             self.assertEqual(summary.review_before_import_count, 0)
 
             result = load_workbook(summary.output_path)
-            history_output = result["Already_In_History"]
-            self.assertIsNone(history_output["A2"].value)
-            import_candidates = result["Import_Candidate"]
-            self.assertEqual(import_candidates["A2"].value, "apple")
-            self.assertEqual(import_candidates["B2"].value, "苹果")
+            terms = result["本批次术语汇总表"]
+            self.assertEqual(terms["A2"].value, "apple")
+            self.assertEqual(terms["B2"].value, "苹果")
+            self.assertEqual(terms["D2"].value, "本批次新增")
 
     def test_load_history_tb_mapping_uses_other_fallback_column_when_source_detected(self) -> None:
         from openpyxl import Workbook
@@ -818,11 +820,11 @@ class LlmTermWorkbookTests(unittest.TestCase):
             self.assertEqual(summary.import_candidate_count, 0)
 
             result = load_workbook(summary.output_path)
-            history_output = result["Already_In_History"]
-            self.assertEqual(history_output["A2"].value, "apple")
-            self.assertEqual(history_output["B2"].value, "历史苹果")
-            import_candidates = result["Import_Candidate"]
-            self.assertIsNone(import_candidates["A2"].value)
+            terms = result["本批次术语汇总表"]
+            self.assertEqual(terms["A2"].value, "apple")
+            self.assertEqual(terms["B2"].value, "历史苹果")
+            self.assertEqual(terms["C2"].value, "苹果")
+            self.assertEqual(terms["D2"].value, "历史术语")
 
     def test_process_excel_routes_real_conflicts_to_review_sheets(self) -> None:
         from openpyxl import Workbook, load_workbook
@@ -902,21 +904,21 @@ class LlmTermWorkbookTests(unittest.TestCase):
             self.assertEqual(summary.review_before_import_count, 1)
 
             result = load_workbook(summary.output_path)
-            terms = result["Terms_Source_Dedup"]
+            terms = result["本批次术语汇总表"]
             self.assertEqual(terms["A2"].value, "Flower Art")
-            self.assertIn("Art Floral", terms["B2"].value)
-            self.assertIn("composition florale", terms["B2"].value)
+            self.assertIsNone(terms["B2"].value)
+            self.assertIn("Art Floral", terms["C2"].value)
+            self.assertIn("composition florale", terms["C2"].value)
+            self.assertEqual(terms["D2"].value, "本批次新增")
+            self.assertEqual(terms["K2"].value, "conflict")
+            self.assertEqual(terms["L2"].value, "substantial target wording difference")
 
-            conflicts = result["Conflicts_To_Review"]
+            conflicts = result["冲突汇总"]
             self.assertEqual(conflicts["A2"].value, "Flower Art")
             self.assertIn("Art Floral", conflicts["B2"].value)
             self.assertIn("composition florale", conflicts["B2"].value)
             self.assertEqual(conflicts["D2"].value, "conflict")
             self.assertEqual(conflicts["F2"].value, "substantial target wording difference")
-
-            review = result["Review_Before_Import"]
-            self.assertEqual(review["A2"].value, "Flower Art")
-            self.assertEqual(review["D2"].value, "conflict")
 
     def test_process_excel_routes_unreviewed_multi_target_terms_as_conflicts(self) -> None:
         from openpyxl import Workbook, load_workbook
@@ -978,13 +980,9 @@ class LlmTermWorkbookTests(unittest.TestCase):
             self.assertEqual(summary.review_before_import_count, 1)
 
             result = load_workbook(summary.output_path)
-            conflicts = result["Conflicts_To_Review"]
+            conflicts = result["冲突汇总"]
             self.assertEqual(conflicts["A2"].value, "Guild Trial")
             self.assertIn("Epreuve de guilde", conflicts["B2"].value)
             self.assertIn("Defi de guilde", conflicts["B2"].value)
             self.assertEqual(conflicts["D2"].value, "review")
             self.assertEqual(conflicts["F2"].value, "多译法需确认")
-
-            review = result["Review_Before_Import"]
-            self.assertEqual(review["A2"].value, "Guild Trial")
-            self.assertEqual(review["D2"].value, "多译法需确认")

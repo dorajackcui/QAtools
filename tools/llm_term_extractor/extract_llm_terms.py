@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.utils import column_index_from_string
 
 if __package__ in {None, ""}:
@@ -41,13 +41,8 @@ from tools.history_tb import (
 from tools.excel_output import build_prefixed_output_path
 
 
-TERMS_SHEET_NAME = "Terms_Source_Dedup"
-EVIDENCE_SHEET_NAME = "Extraction_Evidence"
-CONFLICTS_SHEET_NAME = "Conflicts_To_Review"
-IMPORT_SHEET_NAME = "Import_Candidate"
-REVIEW_SHEET_NAME = "Review_Before_Import"
-HISTORY_SHEET_NAME = "Already_In_History"
-SUMMARY_SHEET_NAME = "Summary"
+TERMS_SHEET_NAME = "本批次术语汇总表"
+CONFLICTS_SHEET_NAME = "冲突汇总"
 DEFAULT_EXTRACTION_PROMPT = "extract_terms_zh_target.md"
 DEFAULT_CONFLICT_PROMPT = "conflict_review_zh_target.md"
 STRICT_JSON_RETRY_REMINDER = (
@@ -574,101 +569,46 @@ def _effective_target(term: AggregatedTerm) -> str:
     return ""
 
 
-def _rebuild_output_sheet(workbook: Any, data_sheet_name: str, sheet_name: str) -> Any:
-    if data_sheet_name == sheet_name:
-        raise ValueError(f"Data worksheet cannot be named {sheet_name}.")
-    if sheet_name in workbook.sheetnames:
-        del workbook[sheet_name]
-    return workbook.create_sheet(title=sheet_name)
-
-
 def _write_output_sheets(
     workbook: Any,
-    worksheet_title: str,
     observations: list[ExtractionObservation],
     aggregated_terms: dict[str, AggregatedTerm],
-    summary_values: dict[str, object],
     history_mapping: dict[str, str] | None = None,
 ) -> tuple[int, int, int, int]:
     history_mapping = history_mapping or {}
-    terms_sheet = _rebuild_output_sheet(workbook, worksheet_title, TERMS_SHEET_NAME)
+    terms_sheet = workbook.active
+    terms_sheet.title = TERMS_SHEET_NAME
     terms_sheet.append(
         [
-            "source_term",
-            "target_terms_observed",
-            "row_count",
-            "rows",
-            "source_examples",
-            "target_examples",
-            "term_types",
-            "confidences",
-            "notes",
-            "decision",
-            "decision_reason",
+            "source术语",
+            "target术语",
+            "本批次target观察值",
+            "术语来源",
+            "出现行数",
+            "原始行号",
+            "实例原文",
+            "实例译文",
+            "类型",
+            "备注",
+            "多译法判断",
+            "判断理由",
         ]
     )
 
-    evidence_sheet = _rebuild_output_sheet(workbook, worksheet_title, EVIDENCE_SHEET_NAME)
-    evidence_sheet.append(
-        [
-            "row_index",
-            "source_term",
-            "target_term",
-            "term_type",
-            "confidence",
-            "note",
-            "source_text",
-            "target_text",
-        ]
-    )
-
-    conflicts_sheet = _rebuild_output_sheet(workbook, worksheet_title, CONFLICTS_SHEET_NAME)
+    conflicts_sheet = workbook.create_sheet(title=CONFLICTS_SHEET_NAME)
     conflicts_sheet.append(
         [
-            "source_term",
-            "target_terms_observed",
-            "rows",
-            "decision",
-            "canonical_target",
-            "reason",
-            "source_examples",
-            "target_examples",
-            "notes",
+            "source术语",
+            "本批次target观察值",
+            "原始行号",
+            "决策",
+            "建议统一target",
+            "冲突/复核原因",
+            "实例原文",
+            "实例译文",
+            "备注",
         ]
     )
-
-    import_sheet = _rebuild_output_sheet(workbook, worksheet_title, IMPORT_SHEET_NAME)
-    import_sheet.append(["source_term", "target_term", "rows", "row_count", "notes"])
-
-    review_sheet = _rebuild_output_sheet(workbook, worksheet_title, REVIEW_SHEET_NAME)
-    review_sheet.append(
-        [
-            "source_term",
-            "target_terms_observed",
-            "rows",
-            "reason",
-            "decision",
-            "decision_reason",
-            "notes",
-        ]
-    )
-
-    history_sheet = _rebuild_output_sheet(workbook, worksheet_title, HISTORY_SHEET_NAME)
-    history_sheet.append(["source_term", "history_target", "rows", "target_terms_observed"])
-
-    for observation in observations:
-        evidence_sheet.append(
-            [
-                observation.row_index,
-                observation.source_term,
-                observation.target_term,
-                observation.term_type,
-                observation.confidence,
-                observation.note,
-                observation.source_text,
-                observation.target_text,
-            ]
-        )
 
     conflict_count = 0
     import_candidate_count = 0
@@ -678,6 +618,8 @@ def _write_output_sheets(
     for term in _ordered_terms(aggregated_terms):
         target_terms = unique_join(term.target_terms)
         rows = unique_join(term.row_indexes)
+        source_examples = unique_join(term.source_examples, separator=" | ")
+        target_examples = unique_join(term.target_examples, separator=" | ")
         notes = unique_join(term.notes, separator=" | ")
         decision = _decision_status(term.conflict_decision)
         decision_reason = _decision_value(term.conflict_decision, "reason", "note")
@@ -686,33 +628,28 @@ def _write_output_sheets(
             "canonical_target",
             "preferred_target",
         )
+        is_history_term = term.source_key in history_mapping
+        target_term = history_mapping[term.source_key] if is_history_term else _effective_target(term)
 
         terms_sheet.append(
             [
                 term.source_term,
+                target_term,
                 target_terms,
+                "历史术语" if is_history_term else "本批次新增",
                 len(term.row_indexes),
                 rows,
-                unique_join(term.source_examples, separator=" | "),
-                unique_join(term.target_examples, separator=" | "),
+                source_examples,
+                target_examples,
                 unique_join(term.term_types),
-                unique_join(term.confidences),
                 notes,
                 decision,
                 decision_reason,
             ]
         )
 
-        if term.source_key in history_mapping:
+        if is_history_term:
             already_in_history_count += 1
-            history_sheet.append(
-                [
-                    term.source_term,
-                    history_mapping[term.source_key],
-                    rows,
-                    target_terms,
-                ]
-            )
             continue
 
         if decision in {"conflict", "review"}:
@@ -726,19 +663,8 @@ def _write_output_sheets(
                     decision,
                     canonical_target,
                     decision_reason,
-                    unique_join(term.source_examples, separator=" | "),
-                    unique_join(term.target_examples, separator=" | "),
-                    notes,
-                ]
-            )
-            review_sheet.append(
-                [
-                    term.source_term,
-                    target_terms,
-                    rows,
-                    decision,
-                    decision,
-                    decision_reason,
+                    source_examples,
+                    target_examples,
                     notes,
                 ]
             )
@@ -755,19 +681,8 @@ def _write_output_sheets(
                     "review",
                     "",
                     "多译法需确认",
-                    unique_join(term.source_examples, separator=" | "),
-                    unique_join(term.target_examples, separator=" | "),
-                    notes,
-                ]
-            )
-            review_sheet.append(
-                [
-                    term.source_term,
-                    target_terms,
-                    rows,
-                    "多译法需确认",
-                    "",
-                    "",
+                    source_examples,
+                    target_examples,
                     notes,
                 ]
             )
@@ -776,29 +691,9 @@ def _write_output_sheets(
         effective_target = _effective_target(term)
         if effective_target and (decision != "same" or len(term.target_terms) == 1 or canonical_target):
             import_candidate_count += 1
-            import_sheet.append(
-                [
-                    term.source_term,
-                    effective_target,
-                    rows,
-                    len(term.row_indexes),
-                    notes,
-                ]
-            )
             continue
 
         review_before_import_count += 1
-        reason = "target缺失" if not term.target_terms else "多译法需确认"
-        review_sheet.append([term.source_term, target_terms, rows, reason, decision, decision_reason, notes])
-
-    summary_sheet = _rebuild_output_sheet(workbook, worksheet_title, SUMMARY_SHEET_NAME)
-    summary_sheet.append(["metric", "value"])
-    for key, value in summary_values.items():
-        summary_sheet.append([key, str(value) if isinstance(value, Path) else value])
-    summary_sheet.append(["conflict_count", conflict_count])
-    summary_sheet.append(["import_candidate_count", import_candidate_count])
-    summary_sheet.append(["review_before_import_count", review_before_import_count])
-    summary_sheet.append(["already_in_history_count", already_in_history_count])
 
     return (
         conflict_count,
@@ -898,31 +793,19 @@ def process_excel(
     conflict_groups = _build_conflict_groups(aggregated_terms)
     _apply_conflict_decisions(aggregated_terms, conflict_groups, conflict_reviewer)
 
-    summary_values: dict[str, object] = {
-        "output_path": output_path,
-        "worksheet_title": worksheet.title,
-        "source_column": source_column,
-        "target_column": normalized_target_column,
-        "start_row": start_row,
-        "scanned_row_count": len(source_rows),
-        "batch_count": batch_count,
-        "term_count": len(aggregated_terms),
-        "evidence_count": len(observations),
-    }
+    output_workbook = Workbook()
     (
         conflict_count,
         import_candidate_count,
         review_before_import_count,
         already_in_history_count,
     ) = _write_output_sheets(
-        workbook=workbook,
-        worksheet_title=worksheet.title,
+        workbook=output_workbook,
         observations=observations,
         aggregated_terms=aggregated_terms,
-        summary_values=summary_values,
         history_mapping=history_mapping,
     )
-    workbook.save(output_path)
+    output_workbook.save(output_path)
 
     return LlmTermExtractionSummary(
         output_path=output_path,
