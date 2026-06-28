@@ -35,8 +35,6 @@ class MatchSpan:
 
 
 SIMPLE_PLURAL_SUFFIX = "s"
-SUSPECTED_PLURAL_VARIANT_LABEL = "疑似复数变体"
-SUSPECTED_PLURAL_VARIANT_SUFFIX = f"：{SUSPECTED_PLURAL_VARIANT_LABEL}"
 WORD_PATTERN = re.compile(r"\w+", re.UNICODE)
 LITERAL_WHITESPACE_ESCAPES = (
     ("\\r\\n", " "),
@@ -304,12 +302,6 @@ def term_has_simple_s_plural_variant(
         target_text,
         entry.normalized_target,
     )
-
-
-def describe_with_simple_s_plural_hint(problem_description: str) -> str:
-    if problem_description.endswith(SUSPECTED_PLURAL_VARIANT_SUFFIX):
-        return problem_description
-    return f"{problem_description}{SUSPECTED_PLURAL_VARIANT_SUFFIX}"
 
 
 def build_matcher(entries: Iterable[TermMappingEntry]):

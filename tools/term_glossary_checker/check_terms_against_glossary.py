@@ -18,7 +18,6 @@ from tools.term_matching import (
     SUPPORTED_MATCH_MODES,
     TermMappingEntry as GlossaryEntry,
     build_matcher,
-    describe_with_simple_s_plural_hint,
     find_row_terms,
     normalize_text,
     term_has_expected_target,
@@ -346,20 +345,19 @@ def process_excel(
             ):
                 continue
 
-            problem_type = "术语未按术语表翻译"
             if term_has_simple_s_plural_variant(
                 normalized_source_text,
                 normalized_target_text,
                 entry,
                 match_mode=match_mode,
             ):
-                problem_type = describe_with_simple_s_plural_hint(problem_type)
+                continue
 
             problem_row_set.add(row_index)
             problem_entries.append(
                 (
                     row_index,
-                    problem_type,
+                    "术语未按术语表翻译",
                     entry.source_term,
                     entry.target_term,
                     source_snapshot,

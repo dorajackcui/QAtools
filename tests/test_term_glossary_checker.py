@@ -734,7 +734,7 @@ class ProcessExcelTests(unittest.TestCase):
             problem_sheet = result_workbook["术语命中问题"]
             self.assertEqual(problem_sheet.max_row, 1)
 
-    def test_plural_signature_variant_is_reported_as_suspected_plural_not_aligned(self) -> None:
+    def test_plural_signature_variants_are_skipped(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             glossary_path = Path(tmp_dir) / "glossary.xlsx"
             data_path = Path(tmp_dir) / "data.xlsx"
@@ -772,14 +772,11 @@ class ProcessExcelTests(unittest.TestCase):
             )
 
             self.assertEqual(summary.matched_rows, 2)
-            self.assertEqual(summary.problem_count, 2)
+            self.assertEqual(summary.problem_count, 0)
 
             result_workbook = load_workbook(summary.output_path)
             problem_sheet = result_workbook["术语命中问题"]
-            self.assertEqual(problem_sheet["B2"].value, "术语未按术语表翻译：疑似复数变体")
-            self.assertEqual(problem_sheet["C2"].value, "EXP Candy")
-            self.assertEqual(problem_sheet["B3"].value, "术语未按术语表翻译：疑似复数变体")
-            self.assertEqual(problem_sheet["C3"].value, "Gacha Coin")
+            self.assertEqual(problem_sheet.max_row, 1)
 
     def test_process_excel_can_run_false_positive_reviewer_on_problem_sheet(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

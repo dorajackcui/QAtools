@@ -473,7 +473,7 @@ class ProcessExcelTests(unittest.TestCase):
             result_workbook = load_workbook(saved_path)
             self.assertEqual(result_workbook["问题列"].max_row, 1)
 
-    def test_process_excel_reports_target_only_simple_s_plural_as_suspected_variant(self) -> None:
+    def test_process_excel_skips_target_only_simple_s_plural_variant(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
 
@@ -497,15 +497,13 @@ class ProcessExcelTests(unittest.TestCase):
             )
 
             self.assertEqual(term_count, 1)
-            self.assertEqual(problem_count, 1)
+            self.assertEqual(problem_count, 0)
 
             result_workbook = load_workbook(saved_path)
             problem_sheet = result_workbook["问题列"]
-            self.assertEqual(problem_sheet["B2"].value, "shard")
-            self.assertEqual(problem_sheet["C2"].value, "éclat")
-            self.assertEqual(problem_sheet["E2"].value, "疑似复数变体")
+            self.assertEqual(problem_sheet.max_row, 1)
 
-    def test_process_excel_reports_source_only_simple_s_plural_as_suspected_variant(self) -> None:
+    def test_process_excel_skips_source_only_simple_s_plural_variant(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
 
@@ -529,15 +527,13 @@ class ProcessExcelTests(unittest.TestCase):
             )
 
             self.assertEqual(term_count, 1)
-            self.assertEqual(problem_count, 1)
+            self.assertEqual(problem_count, 0)
 
             result_workbook = load_workbook(saved_path)
             problem_sheet = result_workbook["问题列"]
-            self.assertEqual(problem_sheet["B2"].value, "shard")
-            self.assertEqual(problem_sheet["C2"].value, "éclat")
-            self.assertEqual(problem_sheet["E2"].value, "疑似复数变体")
+            self.assertEqual(problem_sheet.max_row, 1)
 
-    def test_process_excel_reports_plural_signature_variant_as_suspected_not_aligned(self) -> None:
+    def test_process_excel_skips_plural_signature_variants(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
 
@@ -565,16 +561,11 @@ class ProcessExcelTests(unittest.TestCase):
             )
 
             self.assertEqual(term_count, 2)
-            self.assertEqual(problem_count, 2)
+            self.assertEqual(problem_count, 0)
 
             result_workbook = load_workbook(saved_path)
             problem_sheet = result_workbook["问题列"]
-            self.assertEqual(problem_sheet["B2"].value, "EXP Candy")
-            self.assertEqual(problem_sheet["C2"].value, "Bonbon Exp.")
-            self.assertEqual(problem_sheet["E2"].value, "疑似复数变体")
-            self.assertEqual(problem_sheet["B3"].value, "Gacha Coin")
-            self.assertEqual(problem_sheet["C3"].value, "Pièce de gacha")
-            self.assertEqual(problem_sheet["E3"].value, "疑似复数变体")
+            self.assertEqual(problem_sheet.max_row, 1)
 
     def test_process_excel_uses_hybrid_boundary_for_retroactive_checks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

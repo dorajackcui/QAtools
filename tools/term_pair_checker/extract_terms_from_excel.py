@@ -16,7 +16,6 @@ from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
 from tools.term_matching import (
-    SUSPECTED_PLURAL_VARIANT_LABEL,
     TermMappingEntry,
     build_matcher,
     find_row_terms,
@@ -714,14 +713,13 @@ def process_excel(
             ):
                 continue
 
-            problem_description = "target缺少预期术语"
             if term_has_simple_s_plural_variant(
                 normalized_source_text,
                 normalized_target_text,
                 entry,
                 match_mode=PAIR_CHECK_MATCH_MODE,
             ):
-                problem_description = SUSPECTED_PLURAL_VARIANT_LABEL
+                continue
 
             append_problem(
                 problem_entries,
@@ -729,7 +727,7 @@ def process_excel(
                 entry.source_term,
                 entry.target_term,
                 lookup_term_source(entry.source_term, term_mapping),
-                problem_description,
+                "target缺少预期术语",
                 build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                 build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
             )
