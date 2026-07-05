@@ -22,22 +22,24 @@ from tools.excel_output import build_prefixed_output_path
 
 PROBLEM_SHEET_NAME = "标签占位问题"
 SUMMARY_SHEET_NAME = "检查汇总"
-SUPPORTED_TOKEN_TYPES = ("angle", "square_color", "brace", "newline", "numeric")
-DEFAULT_TOKEN_TYPES = SUPPORTED_TOKEN_TYPES
-DEFAULT_ANGLE_CONFIG_NAME = "tools/term_pair_checker/false_positive_exclusions.json"
+CANONICAL_TOKEN_TYPES = ("angle", "square_color", "brace", "newline", "memoq")
+LEGACY_TOKEN_TYPE_ALIASES = {"numeric": "memoq"}
+SUPPORTED_TOKEN_TYPES = CANONICAL_TOKEN_TYPES + tuple(LEGACY_TOKEN_TYPE_ALIASES)
+DEFAULT_TOKEN_TYPES = CANONICAL_TOKEN_TYPES
 TOKEN_LABELS = {
     "angle": "尖括号tag",
     "square_color": "方括号color tag",
     "brace": "花括号placeholder",
     "newline": r"\n mark",
-    "numeric": "数字tag",
+    "memoq": "memoQ tag",
+    "numeric": "memoQ tag",
 }
 TOKEN_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
     "angle": (re.compile(r"<([^<>]+)>"),),
     "square_color": (re.compile(r"\[/color\]|\[color\s*=\s*[^\[\]]+\]", re.IGNORECASE),),
     "brace": (re.compile(r"\{([^{}]+)\}"),),
     "newline": (re.compile(r"\\n"),),
-    "numeric": (re.compile(r"\{\d+>|<\d+\}|\{\d+\}"),),
+    "memoq": (re.compile(r"\{\d+>|<\d+\}|\{\d+\}"),),
 }
 NUMERIC_BRACE_PATTERN = re.compile(r"^\d+$")
 NUMERIC_TAG_ENVELOPE_PATTERN = re.compile(r"^\d+>.*<\d+$", re.DOTALL)
@@ -62,10 +64,14 @@ class CheckSummary:
     square_color_rows: int
     brace_rows: int
     newline_rows: int
-    numeric_rows: int
+    memoq_rows: int
     problem_rows: int
     problem_count: int
     selected_token_types: tuple[str, ...]
+
+    @property
+    def numeric_rows(self) -> int:
+        return self.memoq_rows
 
 
 def normalize_column(column_name: str) -> str:
@@ -78,17 +84,19 @@ def build_default_output_path(input_path: Path) -> Path:
     return build_prefixed_output_path(input_path, "tag_check_")
 
 
-def build_default_angle_config_path() -> Path:
-    return Path(__file__).resolve().parents[1] / "term_pair_checker" / "false_positive_exclusions.json"
-
-
 def normalize_token_types(token_types: tuple[str, ...] | list[str] | None) -> tuple[str, ...]:
     raw_types = list(DEFAULT_TOKEN_TYPES if token_types is None else token_types)
     invalid_types = [token_type for token_type in raw_types if token_type not in SUPPORTED_TOKEN_TYPES]
     if invalid_types:
         raise ValueError(f"不支持的检查类型: {'、'.join(invalid_types)}")
 
-    normalized_types = tuple(token_type for token_type in SUPPORTED_TOKEN_TYPES if token_type in raw_types)
+    canonical_raw_types = {
+        LEGACY_TOKEN_TYPE_ALIASES.get(token_type, token_type)
+        for token_type in raw_types
+    }
+    normalized_types = tuple(
+        token_type for token_type in CANONICAL_TOKEN_TYPES if token_type in canonical_raw_types
+    )
     if not normalized_types:
         raise ValueError("请至少选择一种检查类型。")
     return normalized_types
@@ -101,11 +109,9 @@ def normalize_angle_patterns(angle_patterns: tuple[str, ...] | list[str] | None)
 
 
 def load_angle_patterns_from_file(config_file: str | Path | None = None) -> tuple[str, ...]:
-    config_path = (
-        Path(config_file).expanduser().resolve()
-        if config_file
-        else build_default_angle_config_path().resolve()
-    )
+    if config_file is None:
+        raise ValueError("请提供尖括号tag过滤配置文件路径。")
+    config_path = Path(config_file).expanduser().resolve()
     if not config_path.exists():
         raise FileNotFoundError(f"尖括号tag配置文件不存在: {config_path}")
 
@@ -126,7 +132,9 @@ def resolve_angle_patterns(
 ) -> tuple[str, ...]:
     if angle_patterns is not None:
         return normalize_angle_patterns(angle_patterns)
-    return load_angle_patterns_from_file(angle_config_file)
+    if angle_config_file is not None:
+        return load_angle_patterns_from_file(angle_config_file)
+    return ()
 
 
 def compile_angle_patterns(
@@ -299,7 +307,7 @@ def write_summary_sheet(
         ("含方括号color tag行数", summary.square_color_rows),
         ("含花括号placeholder行数", summary.brace_rows),
         (r"含\n mark行数", summary.newline_rows),
-        ("含数字tag行数", summary.numeric_rows),
+        ("含memoQ tag行数", summary.memoq_rows),
         ("问题行数", summary.problem_rows),
         ("问题条数", summary.problem_count),
     ]
@@ -322,13 +330,12 @@ def parse_args() -> argparse.Namespace:
         action="append",
         choices=SUPPORTED_TOKEN_TYPES,
         default=None,
-        help="检查类型，可重复传入，例如 --token-type angle --token-type numeric",
+        help="检查类型，可重复传入，例如 --token-type angle --token-type memoq",
     )
     parser.add_argument(
         "--angle-config",
         help=(
-            "尖括号tag配置文件路径；默认读取工具目录下的 "
-            f"{DEFAULT_ANGLE_CONFIG_NAME}"
+            "可选的尖括号tag过滤配置文件路径；不传时检查所有 <...>。"
         ),
     )
     parser.add_argument(
@@ -403,7 +410,7 @@ def process_excel(
     square_color_rows = 0
     brace_rows = 0
     newline_rows = 0
-    numeric_rows = 0
+    memoq_rows = 0
     problem_rows_set: set[int] = set()
     problem_entries: list[tuple[int, str, str, str, str]] = []
 
@@ -438,8 +445,8 @@ def process_excel(
             brace_rows += 1
         if any(token.token_type == "newline" for token in combined_tokens):
             newline_rows += 1
-        if any(token.token_type == "numeric" for token in combined_tokens):
-            numeric_rows += 1
+        if any(token.token_type == "memoq" for token in combined_tokens):
+            memoq_rows += 1
 
         for token_type in normalized_token_types:
             source_counter = Counter(
@@ -475,7 +482,7 @@ def process_excel(
         square_color_rows=square_color_rows,
         brace_rows=brace_rows,
         newline_rows=newline_rows,
-        numeric_rows=numeric_rows,
+        memoq_rows=memoq_rows,
         problem_rows=len(problem_rows_set),
         problem_count=len(problem_entries),
         selected_token_types=normalized_token_types,
@@ -516,7 +523,7 @@ def main() -> None:
     print(f"含方括号color tag行数: {summary.square_color_rows}")
     print(f"含花括号placeholder行数: {summary.brace_rows}")
     print(rf"含\n mark行数: {summary.newline_rows}")
-    print(f"含数字tag行数: {summary.numeric_rows}")
+    print(f"含memoQ tag行数: {summary.memoq_rows}")
     print(f"问题行数: {summary.problem_rows}")
     print(f"问题条数: {summary.problem_count}")
     print(f"输出文件: {summary.output_path}")

@@ -36,16 +36,11 @@ from tools.false_positive_review import (
 )
 from tools.excel_output import insert_row_problem_column
 from tools.term_pair_checker.term_marks import (
-    DEFAULT_EXCLUSION_CONFIG_NAME,
     DEFAULT_MARK_STYLES,
     SUPPORTED_MARKS,
     ExtractedTerm,
-    build_default_exclusion_config_path,
-    compile_exclusion_patterns,
     extract_term_details,
     extract_terms,
-    load_exclusion_patterns_from_file,
-    normalize_exclusion_patterns,
     normalize_mark_styles,
     resolve_exclusion_patterns,
     should_exclude_term,
@@ -120,14 +115,11 @@ def parse_args() -> argparse.Namespace:
         action="append",
         choices=SUPPORTED_MARKS,
         default=None,
-        help="术语包裹符号，可重复传入，例如 --mark-style [] --mark-style <>",
+        help="术语包裹符号，可重复传入，例如 --mark-style [] --mark-style '【】'",
     )
     parser.add_argument(
         "--exclusion-config",
-        help=(
-            "误判排除 JSON 配置文件路径；默认读取工具目录下的 "
-            f"{DEFAULT_EXCLUSION_CONFIG_NAME}"
-        ),
+        help="可选的自定义术语候选排除 JSON 配置文件路径。",
     )
     parser.add_argument(
         "--history-tb",
@@ -206,7 +198,7 @@ def prompt_if_missing(args: argparse.Namespace) -> argparse.Namespace:
     if args.mark_style is None:
         if interactive_mode and len(sys.argv) == 1:
             mark_style_text = input(
-                "请输入 mark 类型（可多选，逗号分隔，如 【】,[],<>；默认 【】）: "
+                "请输入 mark 类型（可多选，逗号分隔，如 【】,[]；默认 【】,[]）: "
             ).strip()
             if mark_style_text:
                 mark_styles = [style.strip() for style in mark_style_text.split(",") if style.strip()]
@@ -359,6 +351,17 @@ def append_problem(
             target_snapshot=target_snapshot,
         )
     )
+
+
+def dedupe_problem_entries(problem_entries: Iterable[ProblemEntry]) -> list[ProblemEntry]:
+    unique_entries: list[ProblemEntry] = []
+    seen_entries: set[ProblemEntry] = set()
+    for problem_entry in problem_entries:
+        if problem_entry in seen_entries:
+            continue
+        seen_entries.add(problem_entry)
+        unique_entries.append(problem_entry)
+    return unique_entries
 
 
 def build_text_snapshot(value: object) -> str:
@@ -731,6 +734,8 @@ def process_excel(
                 build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                 build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
             )
+
+    problem_entries = dedupe_problem_entries(problem_entries)
 
     insert_row_problem_column(
         worksheet,

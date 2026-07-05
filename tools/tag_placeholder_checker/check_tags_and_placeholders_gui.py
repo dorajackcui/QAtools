@@ -26,7 +26,7 @@ class TagPlaceholderCheckerApp(ttk.Frame):
         self.square_color_var = tk.BooleanVar(value=True)
         self.brace_var = tk.BooleanVar(value=True)
         self.newline_var = tk.BooleanVar(value=True)
-        self.numeric_var = tk.BooleanVar(value=True)
+        self.memoq_var = tk.BooleanVar(value=False)
 
         self._build_ui()
 
@@ -67,19 +67,44 @@ class TagPlaceholderCheckerApp(ttk.Frame):
         ttk.Label(self, text="检查类型").grid(row=6, column=0, sticky="w", pady=(0, 8))
         token_type_frame = ttk.Frame(self)
         token_type_frame.grid(row=6, column=1, columnspan=2, sticky="w", pady=(0, 8))
-        ttk.Checkbutton(token_type_frame, text="<...> tag", variable=self.angle_var).grid(
+        ttk.Checkbutton(
+            token_type_frame,
+            text="<...> tag",
+            variable=self.angle_var,
+            command=self.handle_standard_token_type_selected,
+        ).grid(
             row=0, column=0, sticky="w"
         )
-        ttk.Checkbutton(token_type_frame, text="[color=...] tag", variable=self.square_color_var).grid(
+        ttk.Checkbutton(
+            token_type_frame,
+            text="[color=...] tag",
+            variable=self.square_color_var,
+            command=self.handle_standard_token_type_selected,
+        ).grid(
             row=0, column=1, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(token_type_frame, text="{...} placeholder", variable=self.brace_var).grid(
+        ttk.Checkbutton(
+            token_type_frame,
+            text="{...} placeholder",
+            variable=self.brace_var,
+            command=self.handle_standard_token_type_selected,
+        ).grid(
             row=0, column=2, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(token_type_frame, text="\\n mark", variable=self.newline_var).grid(
+        ttk.Checkbutton(
+            token_type_frame,
+            text="\\n mark",
+            variable=self.newline_var,
+            command=self.handle_standard_token_type_selected,
+        ).grid(
             row=0, column=3, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(token_type_frame, text="数字tag", variable=self.numeric_var).grid(
+        ttk.Checkbutton(
+            token_type_frame,
+            text="memoQ tag",
+            variable=self.memoq_var,
+            command=self.handle_memoq_token_type_selected,
+        ).grid(
             row=0, column=4, sticky="w", padx=(12, 0)
         )
 
@@ -87,14 +112,31 @@ class TagPlaceholderCheckerApp(ttk.Frame):
             row=7, column=0, columnspan=3, sticky="ew"
         )
 
-        note = r"规则：逐行比对 source / target 中的 <...>、[color=...]、[/color]、{...}、\n 和数字tag，检查缺失、多出和数量不一致。"
+        note = r"规则：逐行比对 source / target 中的 <...>、[color=...]、[/color]、{...}、\n 和 memoQ tag，检查缺失、多出和数量不一致。"
         ttk.Label(self, text=note).grid(row=8, column=0, columnspan=3, sticky="w", pady=(12, 0))
         ttk.Label(
             self,
-            text="说明：<...> 默认只检查配置文件里定义的 tag 模式，避免把普通尖括号内容误判成 tag。",
+            text="<...> 和 {...} 按普通 tag / placeholder 检查；memoQ tag 与其他检查类型互斥。",
         ).grid(row=9, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
         self.columnconfigure(1, weight=1)
+
+    def standard_token_vars(self) -> tuple[tk.BooleanVar, ...]:
+        return (
+            self.angle_var,
+            self.square_color_var,
+            self.brace_var,
+            self.newline_var,
+        )
+
+    def handle_standard_token_type_selected(self) -> None:
+        if any(variable.get() for variable in self.standard_token_vars()):
+            self.memoq_var.set(False)
+
+    def handle_memoq_token_type_selected(self) -> None:
+        if self.memoq_var.get():
+            for variable in self.standard_token_vars():
+                variable.set(False)
 
     def choose_input_file(self) -> None:
         file_path = filedialog.askopenfilename(
@@ -163,8 +205,8 @@ class TagPlaceholderCheckerApp(ttk.Frame):
             token_types.append("brace")
         if self.newline_var.get():
             token_types.append("newline")
-        if self.numeric_var.get():
-            token_types.append("numeric")
+        if self.memoq_var.get():
+            token_types.append("memoq")
         return tuple(token_types)
 
     def run_check(self) -> None:
@@ -212,8 +254,8 @@ class TagPlaceholderCheckerApp(ttk.Frame):
             selected_labels.append("{...} placeholder")
         if "newline" in summary.selected_token_types:
             selected_labels.append(r"\n mark")
-        if "numeric" in summary.selected_token_types:
-            selected_labels.append("数字tag")
+        if "memoq" in summary.selected_token_types:
+            selected_labels.append("memoQ tag")
 
         messagebox.showinfo(
             "处理完成",
@@ -228,7 +270,7 @@ class TagPlaceholderCheckerApp(ttk.Frame):
                     f"含方括号color tag行数: {summary.square_color_rows}",
                     f"含花括号placeholder行数: {summary.brace_rows}",
                     rf"含\n mark行数: {summary.newline_rows}",
-                    f"含数字tag行数: {summary.numeric_rows}",
+                    f"含memoQ tag行数: {summary.memoq_rows}",
                     f"问题行数: {summary.problem_rows}",
                     f"问题条数: {summary.problem_count}",
                     f"输出文件: {summary.output_path}",

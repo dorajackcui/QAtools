@@ -34,15 +34,14 @@ class WorkflowRunnerApp(ttk.Frame):
         self.run_tag_check_var = tk.BooleanVar(value=True)
         self.codex_fp_review_var = tk.BooleanVar(value=False)
         self.term_mark_style_vars = {
-            "【】": tk.BooleanVar(value=False),
+            "【】": tk.BooleanVar(value=True),
             "[]": tk.BooleanVar(value=True),
-            "<>": tk.BooleanVar(value=True),
         }
         self.angle_var = tk.BooleanVar(value=True)
         self.square_color_var = tk.BooleanVar(value=True)
         self.brace_var = tk.BooleanVar(value=True)
         self.newline_var = tk.BooleanVar(value=True)
-        self.numeric_var = tk.BooleanVar(value=True)
+        self.memoq_var = tk.BooleanVar(value=False)
 
         self._build_ui()
 
@@ -127,28 +126,49 @@ class WorkflowRunnerApp(ttk.Frame):
         ttk.Checkbutton(term_mark_frame, text="[]", variable=self.term_mark_style_vars["[]"]).grid(
             row=0, column=1, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(term_mark_frame, text="<>", variable=self.term_mark_style_vars["<>"]).grid(
-            row=0, column=2, sticky="w", padx=(12, 0)
-        )
-
         ttk.Checkbutton(task_frame, text="Tag检查", variable=self.run_tag_check_var).grid(
             row=2, column=0, sticky="w"
         )
         tag_type_frame = ttk.Frame(task_frame)
         tag_type_frame.grid(row=3, column=0, sticky="w", pady=(4, 0))
-        ttk.Checkbutton(tag_type_frame, text="<...> tag", variable=self.angle_var).grid(
+        ttk.Checkbutton(
+            tag_type_frame,
+            text="<...> tag",
+            variable=self.angle_var,
+            command=self.handle_standard_token_type_selected,
+        ).grid(
             row=0, column=0, sticky="w"
         )
-        ttk.Checkbutton(tag_type_frame, text="[color=...] tag", variable=self.square_color_var).grid(
+        ttk.Checkbutton(
+            tag_type_frame,
+            text="[color=...] tag",
+            variable=self.square_color_var,
+            command=self.handle_standard_token_type_selected,
+        ).grid(
             row=0, column=1, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(tag_type_frame, text="{...} placeholder", variable=self.brace_var).grid(
+        ttk.Checkbutton(
+            tag_type_frame,
+            text="{...} placeholder",
+            variable=self.brace_var,
+            command=self.handle_standard_token_type_selected,
+        ).grid(
             row=0, column=2, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(tag_type_frame, text="\\n mark", variable=self.newline_var).grid(
+        ttk.Checkbutton(
+            tag_type_frame,
+            text="\\n mark",
+            variable=self.newline_var,
+            command=self.handle_standard_token_type_selected,
+        ).grid(
             row=0, column=3, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(tag_type_frame, text="数字tag", variable=self.numeric_var).grid(
+        ttk.Checkbutton(
+            tag_type_frame,
+            text="memoQ tag",
+            variable=self.memoq_var,
+            command=self.handle_memoq_token_type_selected,
+        ).grid(
             row=0, column=4, sticky="w", padx=(12, 0)
         )
 
@@ -164,10 +184,27 @@ class WorkflowRunnerApp(ttk.Frame):
 
         ttk.Label(
             self,
-            text="说明：按顺序复用现有 checker，把术语对检查和 Tag检查结果写进同一份结果文件。",
+            text="说明：按顺序复用现有 checker；Tag检查中 memoQ tag 与其他检查类型互斥。",
         ).grid(row=14, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.columnconfigure(1, weight=1)
+
+    def standard_token_vars(self) -> tuple[tk.BooleanVar, ...]:
+        return (
+            self.angle_var,
+            self.square_color_var,
+            self.brace_var,
+            self.newline_var,
+        )
+
+    def handle_standard_token_type_selected(self) -> None:
+        if any(variable.get() for variable in self.standard_token_vars()):
+            self.memoq_var.set(False)
+
+    def handle_memoq_token_type_selected(self) -> None:
+        if self.memoq_var.get():
+            for variable in self.standard_token_vars():
+                variable.set(False)
 
     def choose_input_file(self) -> None:
         file_path = filedialog.askopenfilename(
@@ -304,8 +341,8 @@ class WorkflowRunnerApp(ttk.Frame):
             token_types.append("brace")
         if self.newline_var.get():
             token_types.append("newline")
-        if self.numeric_var.get():
-            token_types.append("numeric")
+        if self.memoq_var.get():
+            token_types.append("memoq")
         return tuple(token_types)
 
     def run_selected_tasks(self) -> None:
@@ -329,7 +366,7 @@ class WorkflowRunnerApp(ttk.Frame):
             messagebox.showerror("缺少列信息", "请填写 source 列和 target 列。")
             return
         if run_term_pair_check and not term_mark_styles:
-            messagebox.showerror("缺少 tag 类型", "术语对检查至少需要一种 tag 类型。")
+            messagebox.showerror("缺少术语 mark", "术语对检查至少需要一种术语 mark。")
             return
         if run_tag_check and not tag_token_types:
             messagebox.showerror("缺少检查类型", "Tag检查至少需要一种检查类型。")

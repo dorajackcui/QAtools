@@ -10,11 +10,11 @@
 
 - 目录：`tools/term_pair_checker`
 - 用途：从 Excel 的 `source` / `target` 列提取术语并检查是否对齐
-- tag 支持：`【】`、`[]`、`<>`，且可在 GUI 中多选组合检查
+- mark 支持：`【】`、普通 `[]`，且可在 GUI 中多选组合检查；`<...>`、`{...}` 统一按 tag / placeholder 处理
 - 检查规则：`术语表` 保留 tag，实际术语检查会忽略 tag，并回溯整表未标注出现
 - 复数处理：回扫时双边整条 `术语+s` / `译法+s` 直接放行；其他复数形态疑似变体不进入问题报告
 - 历史 TB：可选选择历史 TB；选择后会用“历史 TB 全量 + 本批次新增 TB”一起检查
-- 误判排除：默认通过 `tools/term_pair_checker/false_positive_exclusions.json` 排除 `</>`、`<color=...>` 这类伪标签
+- 方括号处理：`[color=...]` / `[/color]` 这类格式 tag 不进入术语表
 - Codex 假阳性筛查：可选开启；检查完成后按术语、期望译法、问题类型和原文/译文文本组成的问题 cluster 调用本机 `codex exec`，在 `问题列` 追加 `fp_*` 辅助列
 - 输出增强：结果会给出合并后的 `术语表`（只包含本次检查文本中涉及的术语，并包含保留 mark、无 mark 和术语来源列），以及带原文上下文的 `问题列`
 - GUI 增强：自动读取工作表列表，并尝试自动识别本批次和历史 TB 的 `source` / `target` 列
@@ -29,7 +29,7 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py input.xlsx \
   --start-row 2 \
   --mark-style '【】' \
   --history-tb history_tb.xlsx \
-  -o output_term_pairs.xlsx
+  -o term_pair_check_output.xlsx
 ```
 
 - 兼容旧入口：
@@ -100,9 +100,9 @@ python3 tools/excel_line_splitter/split_excel_lines_gui.py
 ### 4. Tag / Placeholder 检查
 
 - 目录：`tools/tag_placeholder_checker`
-- 用途：逐行检查双语 Excel 中 `source` / `target` 的 `<...>`、`[color=...]` / `[/color]`、`{...}`、`\n` 和数字 tag 是否一致
-- 检查类型：支持 `<...>` tag、`[color=...]` / `[/color]` tag、`{...}` placeholder、`\n` mark 与 `{n}` / `{n>` / `<n}` 数字 tag，可单独或组合检查
-- `<...>` 识别：默认直接复用 `tools/term_pair_checker/false_positive_exclusions.json` 识别真正需要校验的 tag，避免维护两份规则
+- 用途：逐行检查双语 Excel 中 `source` / `target` 的 `<...>`、`[color=...]` / `[/color]`、`{...}`、`\n` 和 memoQ tag 是否一致
+- 检查类型：支持 `<...>` tag、`[color=...]` / `[/color]` tag、`{...}` placeholder、`\n` mark 与 `{n}` / `{n>` / `<n}` memoQ tag；GUI 中 memoQ 与其他类型互斥，CLI 可按需显式组合
+- `<...>` 识别：默认所有 `<...>` 都按普通 tag 检查；memoQ 数字 protected marker 独立为 `memoq` 类型
 - GUI 增强：自动读取工作表列表，并尝试自动识别 `source` / `target` 列
 - 输出方式：生成新的结果 Excel，不覆盖原文件
 - CLI：
@@ -116,7 +116,7 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py input.xlsx 
   --token-type angle \
   --token-type brace \
   --token-type newline \
-  --token-type numeric
+  --token-type memoq
 ```
 
 - GUI：

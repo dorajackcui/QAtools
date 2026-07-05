@@ -53,10 +53,10 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
   -t B \
   --start-row 2 \
   --mark-style '【】' \
-  -o ./artifacts/input_term_pairs.xlsx
+  -o ./artifacts/term_pair_check_input.xlsx
 ```
 
-如果需要同时检查多种 tag：
+如果需要同时检查多种术语 mark：
 
 ```bash
 python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
@@ -66,8 +66,7 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
   --start-row 2 \
   --mark-style '【】' \
   --mark-style '[]' \
-  --mark-style '<>' \
-  -o ./artifacts/input_term_pairs.xlsx
+  -o ./artifacts/term_pair_check_input.xlsx
 ```
 
 如果要切换误判排除规则：
@@ -79,8 +78,8 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
   -t B \
   --start-row 2 \
   --mark-style '【】' \
-  --exclusion-config ./tools/term_pair_checker/false_positive_exclusions.json \
-  -o ./artifacts/input_term_pairs.xlsx
+  --exclusion-config ./custom_term_exclusions.json \
+  -o ./artifacts/term_pair_check_input.xlsx
 ```
 
 如果要优先复用历史 TB：
@@ -94,7 +93,7 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
   --mark-style '【】' \
   --history-tb ./history_tb.xlsx \
   --history-sheet Glossary \
-  -o ./artifacts/input_term_pairs.xlsx
+  -o ./artifacts/term_pair_check_input.xlsx
 ```
 
 历史 TB 会自动识别第 1 行的 `source` / `target` 列；也兼容本工具输出里的 `source术语` / `target术语` 表头。读取历史值时会去掉支持的 mark。传入历史 TB 后，会先把历史 TB 全量加入检查词库，再合并本批次新增术语；命中历史 source 时使用历史 target，未命中的 source 才按本批次第一次出现建立新增术语对。输出的 `术语表` 只写本次检查文本中实际涉及的历史术语和本批次新增术语。
@@ -120,10 +119,10 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
   -s Sheet1 \
   -c A \
   -t B \
+  --mark-style '【】' \
   --mark-style [] \
-  --mark-style <> \
   --codex-fp-review \
-  -o ./artifacts/input_term_pairs.xlsx
+  -o ./artifacts/term_pair_check_input.xlsx
 ```
 
 该模式会调用本机 `codex exec`，按 `问题source术语 + 预期target术语 + 问题简述 + source原文 + target原文` 聚类，并写入 `fp_decision`、`fp_category`、`fp_confidence`、`fp_note`、`fp_by`。
@@ -233,16 +232,15 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
   --token-type square_color \
   --token-type brace \
   --token-type newline \
-  --token-type numeric \
-  -o ./artifacts/input_tag_placeholder_checked.xlsx
+  --token-type memoq \
+  -o ./artifacts/tag_check_input.xlsx
 ```
 
 说明：
 
-- `<...>` 默认不是全量检查，而是按 `tools/term_pair_checker/false_positive_exclusions.json` 中的模式识别真正需要校验的 tag
-- 这份默认模式和术语配对工具共用同一个文件，因为那批被 `<>` mark 排除的内容正是 tag 检查应该关注的对象
+- `<...>` 默认全量作为普通 tag 检查
 - 方括号 color tag 会检查 `[color=...]` 和 `[/color]`
-- 数字 tag 会按 `{n}`、`{n>`、`<n}` 单独检查，例如 `{1}{2>Glace du Néant<3}` 会提取为 `{1}`、`{2>`、`<3}`，不会作为普通 `{...}` placeholder 检查
+- memoQ tag 会按 `{n}`、`{n>`、`<n}` 单独检查，例如 `{1}{2>Glace du Néant<3}` 会提取为 `{1}`、`{2>`、`<3}`，不会作为普通 `{...}` placeholder 检查
 
 如果只检查 `<...>` tag：
 
@@ -253,7 +251,6 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
   -t B \
   --start-row 2 \
   --token-type angle \
-  --angle-config ./tools/term_pair_checker/false_positive_exclusions.json \
   -o ./artifacts/input_tag_checked.xlsx
 ```
 
@@ -272,7 +269,7 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
 - 含方括号 color tag 行数
 - 含花括号 placeholder 行数
 - 含 `\n` mark 行数
-- 含数字 tag 行数
+- 含 memoQ tag 行数
 - 问题行数 / 问题条数
 - 输出文件路径
 
@@ -457,9 +454,9 @@ python3 tools/xbench_report_transformer/transform_xbench_report.py ./Xbench_QA_R
 - 不要省略位置参数，否则脚本可能进入交互提问模式。
 - 如果要批量处理多个文件，建议为每次运行都显式传入独立输出文件名，避免后续步骤误读旧结果。
 - 如果只需要默认输出命名，也可以省略 `-o`；默认命名分别是：
-  - `<原文件名>_term_pairs.xlsx`
+  - `term_pair_check_<原文件名>`
   - `<原文件名>_glossary_checked.xlsx`
-  - `<原文件名>_tag_placeholder_checked.xlsx`
+  - `tag_check_<原文件名>`
 - Target 中文检查默认直接修改原文件；显式传 `-o` 时由调用方指定输出名
   - `<原文件名>_split_lines.xlsx`
   - `<原文件名>_french_nbsp_restored.xlsx`

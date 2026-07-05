@@ -714,9 +714,8 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.sheet_var = FakeVar("Data")
         app.start_row_var = FakeVar("2")
         app.mark_style_vars = {
-            "【】": FakeBoolVar(False),
+            "【】": FakeBoolVar(True),
             "[]": FakeBoolVar(True),
-            "<>": FakeBoolVar(True),
         }
         app.codex_fp_review_var = FakeBoolVar(False)
 
@@ -755,15 +754,14 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.run_tag_check_var = FakeBoolVar(True)
         app.codex_fp_review_var = FakeBoolVar(False)
         app.term_mark_style_vars = {
-            "【】": FakeBoolVar(False),
+            "【】": FakeBoolVar(True),
             "[]": FakeBoolVar(True),
-            "<>": FakeBoolVar(True),
         }
         app.angle_var = FakeBoolVar(True)
         app.square_color_var = FakeBoolVar(True)
         app.brace_var = FakeBoolVar(True)
         app.newline_var = FakeBoolVar(True)
-        app.numeric_var = FakeBoolVar(True)
+        app.memoq_var = FakeBoolVar(True)
         summary = SimpleNamespace(
             output_path=Path("/tmp/output.xlsx"),
             worksheet_title="Data",
@@ -792,7 +790,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertIsNone(run_workflow_mock.call_args.kwargs["term_history_target_column"])
         self.assertEqual(run_workflow_mock.call_args.kwargs["term_history_start_row"], 2)
 
-    def test_term_pair_gui_defaults_to_square_and_angle_marks(self) -> None:
+    def test_term_pair_gui_defaults_to_square_and_book_title_marks(self) -> None:
         app = ExtractTermsApp.__new__(ExtractTermsApp)
         with (
             patch.object(ExtractTermsApp, "_build_ui", lambda self: None),
@@ -802,11 +800,49 @@ class GuiSheetSelectionTests(unittest.TestCase):
         ):
             ExtractTermsApp.__init__(app, object())
 
-        self.assertFalse(app.mark_style_vars["【】"].get())
+        self.assertTrue(app.mark_style_vars["【】"].get())
         self.assertTrue(app.mark_style_vars["[]"].get())
-        self.assertTrue(app.mark_style_vars["<>"].get())
+        self.assertNotIn("<>", app.mark_style_vars)
 
-    def test_workflow_gui_defaults_to_square_and_angle_term_marks(self) -> None:
+    def test_tag_placeholder_gui_defaults_to_standard_tags_not_memoq(self) -> None:
+        app = TagPlaceholderCheckerApp.__new__(TagPlaceholderCheckerApp)
+        with (
+            patch.object(TagPlaceholderCheckerApp, "_build_ui", lambda self: None),
+            patch("tools.tag_placeholder_checker.check_tags_and_placeholders_gui.ttk.Frame.__init__", lambda self, master=None, padding=None: None),
+            patch("tools.tag_placeholder_checker.check_tags_and_placeholders_gui.tk.StringVar", FakeVar),
+            patch("tools.tag_placeholder_checker.check_tags_and_placeholders_gui.tk.BooleanVar", FakeBoolVar),
+        ):
+            TagPlaceholderCheckerApp.__init__(app, object())
+
+        self.assertTrue(app.angle_var.get())
+        self.assertTrue(app.square_color_var.get())
+        self.assertTrue(app.brace_var.get())
+        self.assertTrue(app.newline_var.get())
+        self.assertFalse(app.memoq_var.get())
+
+    def test_tag_placeholder_gui_makes_memoq_mutually_exclusive_with_standard_tags(self) -> None:
+        app = TagPlaceholderCheckerApp.__new__(TagPlaceholderCheckerApp)
+        app.angle_var = FakeBoolVar(True)
+        app.square_color_var = FakeBoolVar(True)
+        app.brace_var = FakeBoolVar(True)
+        app.newline_var = FakeBoolVar(True)
+        app.memoq_var = FakeBoolVar(True)
+
+        app.handle_memoq_token_type_selected()
+
+        self.assertFalse(app.angle_var.get())
+        self.assertFalse(app.square_color_var.get())
+        self.assertFalse(app.brace_var.get())
+        self.assertFalse(app.newline_var.get())
+        self.assertTrue(app.memoq_var.get())
+
+        app.angle_var.set(True)
+        app.handle_standard_token_type_selected()
+
+        self.assertTrue(app.angle_var.get())
+        self.assertFalse(app.memoq_var.get())
+
+    def test_workflow_gui_defaults_to_square_and_book_title_term_marks(self) -> None:
         app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
         with (
             patch.object(WorkflowRunnerApp, "_build_ui", lambda self: None),
@@ -816,9 +852,47 @@ class GuiSheetSelectionTests(unittest.TestCase):
         ):
             WorkflowRunnerApp.__init__(app, object())
 
-        self.assertFalse(app.term_mark_style_vars["【】"].get())
+        self.assertTrue(app.term_mark_style_vars["【】"].get())
         self.assertTrue(app.term_mark_style_vars["[]"].get())
-        self.assertTrue(app.term_mark_style_vars["<>"].get())
+        self.assertNotIn("<>", app.term_mark_style_vars)
+
+    def test_workflow_gui_defaults_to_standard_tags_not_memoq(self) -> None:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        with (
+            patch.object(WorkflowRunnerApp, "_build_ui", lambda self: None),
+            patch("tools.workflow.workflow_gui.ttk.Frame.__init__", lambda self, master=None, padding=None: None),
+            patch("tools.workflow.workflow_gui.tk.StringVar", FakeVar),
+            patch("tools.workflow.workflow_gui.tk.BooleanVar", FakeBoolVar),
+        ):
+            WorkflowRunnerApp.__init__(app, object())
+
+        self.assertTrue(app.angle_var.get())
+        self.assertTrue(app.square_color_var.get())
+        self.assertTrue(app.brace_var.get())
+        self.assertTrue(app.newline_var.get())
+        self.assertFalse(app.memoq_var.get())
+
+    def test_workflow_gui_makes_memoq_mutually_exclusive_with_standard_tags(self) -> None:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        app.angle_var = FakeBoolVar(True)
+        app.square_color_var = FakeBoolVar(True)
+        app.brace_var = FakeBoolVar(True)
+        app.newline_var = FakeBoolVar(True)
+        app.memoq_var = FakeBoolVar(True)
+
+        app.handle_memoq_token_type_selected()
+
+        self.assertFalse(app.angle_var.get())
+        self.assertFalse(app.square_color_var.get())
+        self.assertFalse(app.brace_var.get())
+        self.assertFalse(app.newline_var.get())
+        self.assertTrue(app.memoq_var.get())
+
+        app.brace_var.set(True)
+        app.handle_standard_token_type_selected()
+
+        self.assertTrue(app.brace_var.get())
+        self.assertFalse(app.memoq_var.get())
 
 
 if __name__ == "__main__":

@@ -12,15 +12,16 @@
 | --- | --- |
 | `【】` | `【术语】` |
 | `[]` | `[术语]`、`［术语］` |
-| `<>` | `<术语>`、`＜术语＞` |
+
+`<...>` 和 `{...}` 不作为术语 mark；它们分别交给普通 tag / placeholder 检查和 memoQ tag 检查。
 
 ### 默认选择
 
 | 入口 | 默认 mark |
 | --- | --- |
-| CLI / `process_excel()` 未显式传参 | `【】` |
-| 术语对检查 GUI | `[]`、`<>` |
-| Workflow GUI | `[]`、`<>` |
+| CLI / `process_excel()` 未显式传参 | `【】`、`[]` |
+| 术语对检查 GUI | `【】`、`[]` |
+| Workflow GUI | `【】`、`[]` |
 
 ### 术语候选过滤
 
@@ -28,17 +29,15 @@
 
 内置过滤规则：
 
-- 单个 ASCII 字母会被过滤，例如 `<a>`、`[b]`、`【Z】`。
-- 不包含任何文字或字母的候选会被过滤，例如 `[123]`、`【+10%】`、`<2}, {3>`。
-- 数字 protected marker 跨界碎片会被过滤，例如 `<2}, {3>`、`<4}, {5>`。
-- `<>` 中的常见伪标签会按 `tools/term_pair_checker/false_positive_exclusions.json` 过滤，例如 `</text>`、`<br/>`、`<i>`、`<img ...>`、`<a href=...>`、`<color=...>`、`<outline color=...>`、`<size=...>`。
+- 单个 ASCII 字母会被过滤，例如 `[b]`、`【Z】`。
+- 不包含任何文字或字母的候选会被过滤，例如 `[123]`、`【+10%】`。
+- 方括号格式 tag 会被过滤，例如 `[color=red]`、`[/color]`。
 
 会保留的例子：
 
 - `[火]`
-- `<A1>`
 - `[HP]`
-- `<苹果>`
+- `【苹果】`
 
 ### 术语配对和回扫
 
@@ -61,23 +60,24 @@ Tag 检查用于逐行比较 source / target 中 tag、placeholder 和 mark toke
 | `square_color` | `[color=...] tag` | `[color=...]`、`[/color]` |
 | `brace` | `{...} placeholder` | `{name}`、`{count}` 等普通花括号 placeholder |
 | `newline` | `\n mark` | 字面量 `\n` |
-| `numeric` | 数字 tag | `{1}`、`{2>`、`<3}` |
+| `memoq` | memoQ tag | `{1}`、`{2>`、`<3}` |
 
 ### 默认选择
 
 | 入口 | 默认检查类型 |
 | --- | --- |
-| CLI / `process_excel()` 未显式传参 | `angle`、`square_color`、`brace`、`newline`、`numeric` |
-| Tag 检查 GUI | `angle`、`square_color`、`brace`、`newline`、`numeric` |
-| Workflow GUI | `angle`、`square_color`、`brace`、`newline`、`numeric` |
+| CLI / `process_excel()` 未显式传参 | `angle`、`square_color`、`brace`、`newline`、`memoq` |
+| Tag 检查 GUI | `angle`、`square_color`、`brace`、`newline` |
+| Workflow GUI | `angle`、`square_color`、`brace`、`newline` |
+
+GUI 中 memoQ tag 与其他检查类型互斥：勾选 memoQ 会取消普通 tag 组，勾选普通 tag 组会取消 memoQ。CLI / `process_excel()` 保持可显式组合，方便脚本按需调用。
 
 ### Tag token 过滤
 
-- `angle` 默认不会检查所有 `<...>`，而是读取 `tools/term_pair_checker/false_positive_exclusions.json`，只保留配置中定义的真实 tag 模式。
-- 这份 JSON 在术语对检查里用于排除 `<>` 伪术语；在 Tag 检查里反向用于保留真正需要校验的 `<...>` tag。
+- `angle` 默认检查所有 `<...>`。
 - `square_color` 只检查 `[color=...]` 和 `[/color]`，不会把普通 `[stage1]` 或术语 mark `[]` 都当成 tag。
-- `{1}`、`{2>...<3}` 这类数字 protected marker 不会作为普通 `{...}` placeholder 检查，会交给 `numeric` 类型处理。
-- 普通文本里的 `<apple>` 默认不会作为 tag 检查。
+- `{1}`、`{2>...<3}` 这类 memoQ protected marker 不会作为普通 `{...}` placeholder 检查，会交给 `memoq` 类型处理。
+- 普通文本里的 `<apple>` 也会作为 `<...>` tag 检查。
 
 ### 比对方式
 
@@ -93,7 +93,4 @@ Workflow 同时运行术语对检查和 Tag 检查时，顺序是：
 1. 先运行术语对检查，写入 `术语表` 和 `问题列`。
 2. 再运行 Tag 检查，写入 `标签占位问题` 和 `检查汇总`。
 
-两类检查不会共享术语结果，也不会互相修改 source / target 原文。共享的主要配置是 `false_positive_exclusions.json`，但它在两边的含义相反：
-
-- 术语对检查：排除这些 `<>` 候选，避免把真实 tag 当术语。
-- Tag 检查：保留这些 `<...>` 模式，作为真正需要比对的 tag。
+两类检查不会共享术语结果，也不会互相修改 source / target 原文。术语检查不再使用 `<...>` 作为术语 mark；普通 tag / placeholder 与 memoQ tag 在 Tag 检查中作为独立检查类型选择。

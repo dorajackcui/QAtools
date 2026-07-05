@@ -24,14 +24,15 @@ class ExtractTokensTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "请至少选择一种检查类型"):
             extract_tokens("任意文本", token_types=())
 
-    def test_extract_tokens_only_keeps_configured_angle_tag_patterns_by_default(self) -> None:
+    def test_extract_tokens_treats_all_angle_brackets_as_tags_by_default(self) -> None:
         text = (
-            "忽略 <apple>，保留 </text>、<br/>、<i>、"
+            "保留 <apple>、</text>、<br/>、<i>、"
             "<img src='itemsmall_%s'/>、<size={c}>、<a href='https://example.com'> 和 <color=red>"
         )
         self.assertEqual(
             extract_tokens(text, token_types=("angle",)),
             [
+                "<apple>",
                 "</text>",
                 "<br/>",
                 "<i>",
@@ -42,11 +43,11 @@ class ExtractTokensTests(unittest.TestCase):
             ],
         )
 
-    def test_extract_tokens_treats_numbered_tags_as_dedicated_tokens(self) -> None:
+    def test_extract_tokens_treats_memoq_tags_as_dedicated_tokens(self) -> None:
         text = "{1}{2>Glace du Néant<3} 和 {name}"
 
         self.assertEqual(
-            extract_tokens(text, token_types=("numeric", "brace")),
+            extract_tokens(text, token_types=("memoq", "brace")),
             ["{1}", "{2>", "<3}", "{name}"],
         )
         self.assertEqual(extract_tokens(text, token_types=("brace",)), ["{name}"])
@@ -92,21 +93,21 @@ class ProcessExcelTests(unittest.TestCase):
                 source_column="A",
                 target_column="B",
                 start_row=2,
-                token_types=("angle", "brace", "newline", "numeric"),
+                token_types=("angle", "brace", "newline", "memoq"),
             )
 
             self.assertEqual(summary.worksheet_title, "Data")
             self.assertEqual(summary.output_path, expected_output_path.resolve())
             self.assertEqual(summary.total_rows_checked, 6)
-            self.assertEqual(summary.rows_with_selected_tokens, 5)
-            self.assertEqual(summary.angle_rows, 2)
+            self.assertEqual(summary.rows_with_selected_tokens, 6)
+            self.assertEqual(summary.angle_rows, 3)
             self.assertEqual(summary.square_color_rows, 0)
             self.assertEqual(summary.brace_rows, 3)
             self.assertEqual(summary.newline_rows, 1)
-            self.assertEqual(summary.numeric_rows, 0)
-            self.assertEqual(summary.problem_rows, 4)
-            self.assertEqual(summary.problem_count, 4)
-            self.assertEqual(summary.selected_token_types, ("angle", "brace", "newline", "numeric"))
+            self.assertEqual(summary.memoq_rows, 0)
+            self.assertEqual(summary.problem_rows, 5)
+            self.assertEqual(summary.problem_count, 5)
+            self.assertEqual(summary.selected_token_types, ("angle", "brace", "newline", "memoq"))
 
             original_workbook = load_workbook(input_path)
             self.assertEqual(original_workbook.sheetnames, ["Data"])
@@ -135,6 +136,10 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["B5"].value, r"\n mark不一致")
             self.assertIn(r"target缺少=\n", str(problem_sheet["C5"].value))
 
+            self.assertEqual(problem_sheet["A6"].value, 7)
+            self.assertEqual(problem_sheet["B6"].value, "尖括号tag不一致")
+            self.assertIn("target缺少=<apple>", str(problem_sheet["C6"].value))
+
             summary_sheet = workbook["检查汇总"]
             summary_values = {
                 summary_sheet.cell(row_index, 1).value: summary_sheet.cell(row_index, 2).value
@@ -144,16 +149,16 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(summary_values["source列"], "A")
             self.assertEqual(summary_values["target列"], "B")
             self.assertEqual(summary_values["开始行"], 2)
-            self.assertEqual(summary_values["检查类型"], r"尖括号tag、花括号placeholder、\n mark、数字tag")
+            self.assertEqual(summary_values["检查类型"], r"尖括号tag、花括号placeholder、\n mark、memoQ tag")
             self.assertEqual(summary_values["总行数"], 6)
-            self.assertEqual(summary_values["命中检查类型行数"], 5)
-            self.assertEqual(summary_values["含尖括号tag行数"], 2)
+            self.assertEqual(summary_values["命中检查类型行数"], 6)
+            self.assertEqual(summary_values["含尖括号tag行数"], 3)
             self.assertEqual(summary_values["含方括号color tag行数"], 0)
             self.assertEqual(summary_values["含花括号placeholder行数"], 3)
             self.assertEqual(summary_values[r"含\n mark行数"], 1)
-            self.assertEqual(summary_values["含数字tag行数"], 0)
-            self.assertEqual(summary_values["问题行数"], 4)
-            self.assertEqual(summary_values["问题条数"], 4)
+            self.assertEqual(summary_values["含memoQ tag行数"], 0)
+            self.assertEqual(summary_values["问题行数"], 5)
+            self.assertEqual(summary_values["问题条数"], 5)
 
     def test_process_excel_supports_single_selected_type(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -168,18 +173,18 @@ class ProcessExcelTests(unittest.TestCase):
                 token_types=("angle",),
             )
 
-            self.assertEqual(summary.rows_with_selected_tokens, 2)
-            self.assertEqual(summary.angle_rows, 2)
+            self.assertEqual(summary.rows_with_selected_tokens, 3)
+            self.assertEqual(summary.angle_rows, 3)
             self.assertEqual(summary.square_color_rows, 0)
             self.assertEqual(summary.brace_rows, 0)
             self.assertEqual(summary.newline_rows, 0)
-            self.assertEqual(summary.numeric_rows, 0)
-            self.assertEqual(summary.problem_rows, 1)
-            self.assertEqual(summary.problem_count, 1)
+            self.assertEqual(summary.memoq_rows, 0)
+            self.assertEqual(summary.problem_rows, 2)
+            self.assertEqual(summary.problem_count, 2)
 
             workbook = load_workbook(summary.output_path)
             problem_sheet = workbook["标签占位问题"]
-            self.assertEqual(problem_sheet.max_row, 2)
+            self.assertEqual(problem_sheet.max_row, 3)
             self.assertEqual(problem_sheet["B2"].value, "尖括号tag不一致")
 
     def test_process_excel_supports_newline_selected_type(self) -> None:
@@ -200,7 +205,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(summary.square_color_rows, 0)
             self.assertEqual(summary.brace_rows, 0)
             self.assertEqual(summary.newline_rows, 1)
-            self.assertEqual(summary.numeric_rows, 0)
+            self.assertEqual(summary.memoq_rows, 0)
             self.assertEqual(summary.problem_rows, 1)
             self.assertEqual(summary.problem_count, 1)
 
@@ -209,7 +214,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet.max_row, 2)
             self.assertEqual(problem_sheet["B2"].value, r"\n mark不一致")
 
-    def test_process_excel_reports_numbered_tag_mismatches_separately(self) -> None:
+    def test_process_excel_reports_memoq_tag_mismatches_separately(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
             workbook = Workbook()
@@ -226,19 +231,19 @@ class ProcessExcelTests(unittest.TestCase):
                 source_column="A",
                 target_column="B",
                 start_row=2,
-                token_types=("numeric", "brace"),
+                token_types=("memoq", "brace"),
             )
 
             self.assertEqual(summary.rows_with_selected_tokens, 1)
             self.assertEqual(summary.brace_rows, 0)
             self.assertEqual(summary.square_color_rows, 0)
-            self.assertEqual(summary.numeric_rows, 1)
+            self.assertEqual(summary.memoq_rows, 1)
             self.assertEqual(summary.problem_rows, 1)
             self.assertEqual(summary.problem_count, 1)
 
             workbook = load_workbook(summary.output_path)
             problem_sheet = workbook["标签占位问题"]
-            self.assertEqual(problem_sheet["B2"].value, "数字tag不一致")
+            self.assertEqual(problem_sheet["B2"].value, "memoQ tag不一致")
             self.assertIn("target缺少=<3}", str(problem_sheet["C2"].value))
             self.assertIn("target多出=<4}", str(problem_sheet["C2"].value))
 

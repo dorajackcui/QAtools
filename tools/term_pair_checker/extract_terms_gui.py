@@ -12,14 +12,12 @@ from tools.gui_common import parse_positive_int
 
 try:
     from .extract_terms_from_excel import (
-        DEFAULT_EXCLUSION_CONFIG_NAME,
         TERM_SHEET_NAME,
         detect_history_tb_columns,
         process_excel,
     )
 except ImportError:
     from extract_terms_from_excel import (
-        DEFAULT_EXCLUSION_CONFIG_NAME,
         TERM_SHEET_NAME,
         detect_history_tb_columns,
         process_excel,
@@ -40,9 +38,8 @@ class ExtractTermsApp(ttk.Frame):
         self.sheet_var = tk.StringVar()
         self.start_row_var = tk.StringVar(value="2")
         self.mark_style_vars = {
-            "【】": tk.BooleanVar(value=False),
+            "【】": tk.BooleanVar(value=True),
             "[]": tk.BooleanVar(value=True),
-            "<>": tk.BooleanVar(value=True),
         }
         self.codex_fp_review_var = tk.BooleanVar(value=False)
 
@@ -115,7 +112,7 @@ class ExtractTermsApp(ttk.Frame):
             row=10, column=1, sticky="w", pady=(0, 8)
         )
 
-        ttk.Label(self, text="Tag 类型").grid(row=11, column=0, sticky="nw", pady=(0, 12))
+        ttk.Label(self, text="术语 mark").grid(row=11, column=0, sticky="nw", pady=(0, 12))
         mark_frame = ttk.Frame(self)
         mark_frame.grid(row=11, column=1, columnspan=2, sticky="w", pady=(0, 12))
         ttk.Checkbutton(mark_frame, text="【】", variable=self.mark_style_vars["【】"]).grid(
@@ -124,10 +121,6 @@ class ExtractTermsApp(ttk.Frame):
         ttk.Checkbutton(mark_frame, text="[]", variable=self.mark_style_vars["[]"]).grid(
             row=0, column=1, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(mark_frame, text="<>", variable=self.mark_style_vars["<>"]).grid(
-            row=0, column=2, sticky="w", padx=(12, 0)
-        )
-
         ttk.Checkbutton(
             self,
             text="使用 Codex 筛查术语误报",
@@ -141,7 +134,7 @@ class ExtractTermsApp(ttk.Frame):
         note = (
             "规则：术语表保留 tag，术语检查忽略 tag；"
             "历史 TB 命中时优先使用历史 target；"
-            f"伪标签排除规则请维护在 {DEFAULT_EXCLUSION_CONFIG_NAME}。"
+            "<...> 和 {...} 不作为术语 mark。"
         )
         ttk.Label(self, text=note).grid(row=14, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
@@ -287,7 +280,7 @@ class ExtractTermsApp(ttk.Frame):
             messagebox.showerror("缺少列信息", "请填写 source 列和 target 列。")
             return
         if not selected_mark_styles:
-            messagebox.showerror("缺少 tag 类型", "请至少选择一种 tag 类型。")
+            messagebox.showerror("缺少术语 mark", "请至少选择一种术语 mark。")
             return
 
         try:
@@ -342,7 +335,7 @@ class ExtractTermsApp(ttk.Frame):
             f"工作表: {worksheet_title}",
             f"source 列: {source_col}",
             f"target 列: {target_col}",
-            f"tag 类型: {'、'.join(selected_mark_styles)}",
+            f"术语 mark: {'、'.join(selected_mark_styles)}",
         ]
         if history_tb_file:
             message_lines.append(f"历史 TB: {history_tb_file}")

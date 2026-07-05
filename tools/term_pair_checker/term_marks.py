@@ -9,20 +9,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-SUPPORTED_MARKS = ("【】", "[]", "<>")
-DEFAULT_MARK_STYLES = ("【】",)
-DEFAULT_EXCLUSION_CONFIG_NAME = "false_positive_exclusions.json"
+SUPPORTED_MARKS = ("【】", "[]")
+DEFAULT_MARK_STYLES = ("【】", "[]")
 SINGLE_ASCII_LETTER_PATTERN = re.compile(r"^[A-Za-z]$")
 NUMERIC_TAG_BOUNDARY_SPAN_PATTERN = re.compile(r"^\d+\}.*\{\d+$", re.DOTALL)
+SQUARE_COLOR_TAG_PATTERN = re.compile(r"^(?:color\s*=.+|/color)$", re.IGNORECASE)
 MARK_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
     "【】": (re.compile(r"【([^【】]+)】"),),
     "[]": (
         re.compile(r"\[([^\[\]]+)\]"),
         re.compile(r"［([^［］]+)］"),
-    ),
-    "<>": (
-        re.compile(r"<([^<>]+)>"),
-        re.compile(r"＜([^＜＞]+)＞"),
     ),
 }
 
@@ -75,10 +71,6 @@ def extract_terms(
     ]
 
 
-def build_default_exclusion_config_path() -> Path:
-    return Path(__file__).with_name(DEFAULT_EXCLUSION_CONFIG_NAME)
-
-
 def normalize_exclusion_patterns(exclusion_patterns: Iterable[str] | None) -> tuple[str, ...]:
     if exclusion_patterns is None:
         raw_patterns: list[str] = []
@@ -90,11 +82,9 @@ def normalize_exclusion_patterns(exclusion_patterns: Iterable[str] | None) -> tu
 
 
 def load_exclusion_patterns_from_file(config_file: str | Path | None = None) -> tuple[str, ...]:
-    config_path = (
-        Path(config_file).expanduser().resolve()
-        if config_file
-        else build_default_exclusion_config_path().resolve()
-    )
+    if config_file is None:
+        raise ValueError("请提供术语候选排除配置文件路径。")
+    config_path = Path(config_file).expanduser().resolve()
     if not config_path.exists():
         raise FileNotFoundError(f"误判排除配置文件不存在: {config_path}")
 
@@ -115,7 +105,9 @@ def resolve_exclusion_patterns(
 ) -> tuple[str, ...]:
     if exclusion_patterns is not None:
         return normalize_exclusion_patterns(exclusion_patterns)
-    return load_exclusion_patterns_from_file(exclusion_config_file)
+    if exclusion_config_file is not None:
+        return load_exclusion_patterns_from_file(exclusion_config_file)
+    return ()
 
 
 def compile_exclusion_patterns(
@@ -137,6 +129,8 @@ def should_exclude_term(
     plain_text: str,
     exclusion_regexes: Iterable[re.Pattern[str]],
 ) -> bool:
+    if display_text.startswith(("[", "［")) and SQUARE_COLOR_TAG_PATTERN.fullmatch(plain_text):
+        return True
     if SINGLE_ASCII_LETTER_PATTERN.fullmatch(plain_text):
         return True
     if not any(character.isalpha() for character in plain_text):

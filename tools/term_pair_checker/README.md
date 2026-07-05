@@ -9,12 +9,13 @@
 
 ## 规则
 
-- 新术语只会由带所选 tag 的显式术语对触发发现
-- 术语特征：被所选 tag 包裹的完整片段，输出到 `术语表` 时会同时保留带 mark 和去 mark 两套结果
-- 当前支持三种 tag：`【】`、`[]`、`<>`
-- 可同时选择多种 tag 类型，系统会按文本出现顺序提取并配对
+- 新术语只会由带所选 mark 的显式术语对触发发现
+- 术语特征：被所选 mark 包裹的完整片段，输出到 `术语表` 时会同时保留带 mark 和去 mark 两套结果
+- 当前支持两种术语 mark：`【】`、普通 `[]`
+- `<...>` 和 `{...}` 不作为术语 mark，统一交给 tag / placeholder 检查
+- 可同时选择多种 mark 类型，系统会按文本出现顺序提取并配对
 - 选择 `[]` 时，也会兼容全角方括号 `［］`
-- 选择 `<>` 时，也会兼容全角尖括号 `＜＞`
+- `[color=...]`、`[/color]` 这类方括号格式 tag 不进入术语表
 - 同一行如果两侧都提取出多个术语，按顺序一一配对
 - 术语检查时会忽略支持的 tag 外壳，按去 mark 后的纯术语进行匹配
 - 可选传入历史 TB；历史 TB 会自动识别第 1 行的 `source` / `target` 列（也兼容 `source术语` / `target术语`），读取值时会去掉支持的 mark
@@ -24,8 +25,6 @@
 - 一旦后面某行通过 tag 学到术语对，会回溯检查整张表中更早和更晚的未标注出现
 - 复数处理：回扫时如果 `source` 命中整条 `术语+s`，且 `target` 也命中整条 `译法+s`，视为通过；其他复数形态疑似变体不进入问题报告
 - 回扫检查默认使用混合边界：中文按包含匹配，英文/数字按边界匹配，避免 `ACC` 命中 `account`
-- 默认会通过 `false_positive_exclusions.json` 排除 `</>`、`<color=...>`、`<outline color=...>` 这类伪标签误判
-- 如需新增或调整排除规则，直接编辑 `tools/term_pair_checker/false_positive_exclusions.json`
 - 术语表以去 mark 后的 `source` 为唯一键，首次出现的映射作为基准；不同 mark 但相同纯术语不会重复建条目
 - 如果某一行 `source` 提取到了术语、但 `target` 没有对应术语，该 `source` 术语仍会写入术语表，`target` 留空
 - 这类仅 `source` 有术语的空 target 条目不会参与后续“预期 target 命中”回扫校验
@@ -73,8 +72,8 @@ python3 extract_terms_gui.py
 - `-t, --target-column`：target 列，例如 `B`
 - `-s, --sheet`：工作表名称，可选
 - `--start-row`：从第几行开始处理，默认 `2`
-- `--mark-style`：提取 tag 类型，可重复传入，例如 `--mark-style [] --mark-style <>`
-- `--exclusion-config`：误判排除 JSON 配置文件路径；默认读取工具目录下的 `false_positive_exclusions.json`
+- `--mark-style`：提取术语 mark 类型，可重复传入，例如 `--mark-style [] --mark-style '【】'`
+- `--exclusion-config`：可选的自定义术语候选排除 JSON 配置文件路径
 - `--history-tb`：历史 TB Excel 文件路径，可选
 - `--history-sheet`：历史 TB 工作表名称，可选；默认优先使用 `术语表`
 - `--history-source-column` / `--history-target-column`：历史 TB source / target 列，可选；不填则自动识别表头
@@ -83,4 +82,4 @@ python3 extract_terms_gui.py
 - `--codex-fp-sample-size`：每个同术语、期望译法、问题类型和原文/译文文本 cluster 发送给 Codex 的样本数，默认 `5`
 - `--codex-model`：Codex 假阳性筛查使用的模型；不填则使用 Codex 默认模型
 - `--codex-reasoning-effort`：Codex 假阳性筛查使用的 reasoning effort，默认 `high`
-- `-o, --output`：输出文件路径，可选，默认生成 `<原文件名>_term_pairs.xlsx`
+- `-o, --output`：输出文件路径，可选，默认生成 `term_pair_check_<原文件名>`
