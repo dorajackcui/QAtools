@@ -16,7 +16,7 @@
 - 历史 TB：可选选择历史 TB；选择后会用“历史 TB 全量 + 本批次新增 TB”一起检查；不选 mark 时仅使用历史 TB，等价于原“术语表命中检查”
 - 方括号处理：`[color=...]` / `[/color]` 这类格式 tag 不进入术语表
 - 输出增强：结果会给出合并后的 `术语表`（只包含本次检查文本中涉及的术语，并包含保留 mark、无 mark 和术语来源列），以及带原文上下文的 `问题列`
-- GUI 增强：自动读取工作表列表，并尝试自动识别本批次和历史 TB 的 `source` / `target` 列
+- GUI 增强：自动读取并识别工作表及双语列；历史 TB 详情默认折叠，页面可滚动且主按钮固定在底部
 - 输出方式：生成新的结果 Excel，不覆盖原文件
 - CLI：
 
@@ -110,7 +110,49 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders_gui.py
 
 详情见 `tools/tag_placeholder_checker/README.md`。
 
-### 4. Target 中文检查
+### 4. 换行数量检查
+
+- 目录：`tools/line_break_checker`
+- 用途：逐行比较 `source` / `target` 单元格中的真实换行数量
+- 兼容换行：`LF`、`CRLF`、`CR`；`CRLF` 按一个换行计算
+- 输出方式：生成新的结果 Excel，并新增 `换行数量问题` 工作表
+- CLI：
+
+```bash
+python3 tools/line_break_checker/check_line_breaks.py input.xlsx \
+  -s Sheet1 -c A -t B --start-row 2
+```
+
+- GUI：
+
+```bash
+python3 tools/line_break_checker/check_line_breaks_gui.py
+```
+
+详情见 `tools/line_break_checker/README.md`。
+
+### 5. 同源译文一致性
+
+- 目录：`tools/source_consistency_checker`
+- 用途：检查完全相同的 `source` 是否对应多个不同 `target`
+- 匹配规则：source 和 target 都按单元格文本精确比较；空 source 跳过，空 target 参与比较
+- 输出方式：生成新的结果 Excel，并新增 `同源译文不一致` 工作表
+- CLI：
+
+```bash
+python3 tools/source_consistency_checker/check_source_consistency.py input.xlsx \
+  -s Sheet1 -c A -t B --start-row 2
+```
+
+- GUI：
+
+```bash
+python3 tools/source_consistency_checker/check_source_consistency_gui.py
+```
+
+详情见 `tools/source_consistency_checker/README.md`。
+
+### 6. Target 中文检查
 
 - 目录：`tools/chinese_target_checker`
 - 用途：检查 Excel `target` 列是否包含中文字符或中文/全角标点
@@ -133,7 +175,7 @@ python3 tools/chinese_target_checker/check_chinese_target_gui.py
 
 详情见 `tools/chinese_target_checker/README.md`。
 
-### 5. 法语 NBSP 恢复
+### 7. 法语 NBSP 恢复
 
 - 目录：`tools/french_nbsp_restorer`
 - 用途：恢复 Excel target 列中的法语 non-breaking space（NBSP）
@@ -160,7 +202,7 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp_gui.py
 
 详情见 `tools/french_nbsp_restorer/README.md`。
 
-### 6. Xbench QA Report 转换
+### 8. Xbench QA Report 转换
 
 - 目录：`tools/xbench_report_transformer`
 - 用途：把 Xbench 导出的 QA Report 转换成 `文件名, key, source, target, QA问题` 五列表格
@@ -193,6 +235,8 @@ pip install -r requirements.txt
 - Agent / 脚本调用请看：[CLI 使用指南](docs/cli-usage.md)
 - 术语检查详细说明：`tools/term_pair_checker/README.md`
 - Tag / Placeholder 检查详细说明：`tools/tag_placeholder_checker/README.md`
+- 换行数量检查详细说明：`tools/line_break_checker/README.md`
+- 同源译文一致性检查详细说明：`tools/source_consistency_checker/README.md`
 - Excel 分行拆列详细说明：`tools/excel_line_splitter/README.md`
 - Target 中文检查详细说明：`tools/chinese_target_checker/README.md`
 - 法语 NBSP 恢复详细说明：`tools/french_nbsp_restorer/README.md`
@@ -204,4 +248,4 @@ pip install -r requirements.txt
 python3 toolshub_gui.py
 ```
 
-会打开一个统一窗口管理这些工具；Workflow 编排页也支持给术语检查选择历史 TB。术语检查未选择 mark 时，会仅使用历史 TB 做全表命中检查。
+会打开一个统一窗口管理这些工具。“一键质量检查”页默认执行“质量检查”板块的全部项目：术语检查、Tag 检查、换行数量检查、同源译文一致性和 Target 中文检查，并统一写入一个结果 Excel；每项检查仍可单独取消。workflow 输出中的术语问题表命名为 `术语问题`，不保留 Tag 检查原有的详细 `检查汇总`，而是新增仅含“检查项”和“问题行数”的 `质量检查汇总`。术语和 Tag 的详细设置默认折叠，Tag 可明确切换“常规 Tag / memoQ Tag”模式。该页面也支持给术语检查选择历史 TB，术语检查未选择 mark 时会仅使用历史 TB 做全表命中检查。

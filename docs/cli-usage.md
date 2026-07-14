@@ -21,6 +21,12 @@
 - `tools/tag_placeholder_checker/check_tags_and_placeholders.py`
   - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
   - 常用可选：`-s/--sheet`、`--start-row`、`--token-type`、`--angle-config`、`-o/--output`
+- `tools/line_break_checker/check_line_breaks.py`
+  - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
+  - 常用可选：`-s/--sheet`、`--start-row`、`-o/--output`
+- `tools/source_consistency_checker/check_source_consistency.py`
+  - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
+  - 常用可选：`-s/--sheet`、`--start-row`、`-o/--output`
 - `tools/chinese_target_checker/check_chinese_target.py`
   - 必填：`input_file`、`-t/--target-column`
   - 常用可选：`-s/--sheet`、`-r/--result-column`、`--start-row`、`-o/--output`
@@ -198,7 +204,33 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
 - 问题行数 / 问题条数
 - 输出文件路径
 
-### 4. Target 中文检查
+### 4. 换行数量检查
+
+```bash
+python3 tools/line_break_checker/check_line_breaks.py ./input.xlsx \
+  -s Sheet1 \
+  -c A \
+  -t B \
+  --start-row 2 \
+  -o ./artifacts/line_break_check_input.xlsx
+```
+
+输出结果会新增 `换行数量问题` 工作表，列出问题行号、双边换行数、数量差和原文。该工具检查 Excel 单元格中的真实换行；文本形式的 `\n` 不算真实换行。
+
+### 5. 同源译文一致性
+
+```bash
+python3 tools/source_consistency_checker/check_source_consistency.py ./input.xlsx \
+  -s Sheet1 \
+  -c A \
+  -t B \
+  --start-row 2 \
+  -o ./artifacts/source_consistency_check_input.xlsx
+```
+
+输出结果会新增 `同源译文不一致` 工作表，列出每个不一致 source 组中的全部原始行。source 和 target 均按单元格文本精确比较；空 source 跳过，空 target 参与比较。
+
+### 6. Target 中文检查
 
 默认直接修改原文件，在 target 右侧新增一列：
 
@@ -239,7 +271,7 @@ python3 tools/chinese_target_checker/check_chinese_target.py ./input.xlsx \
 - 含中文行数
 - 输出文件路径
 
-### 5. 法语 NBSP 恢复
+### 7. 法语 NBSP 恢复
 
 直接修复 target 列：
 
@@ -278,7 +310,7 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp.py ./input.xlsx \
 - 修复行数
 - 输出文件路径
 
-### 6. Xbench QA Report 转换
+### 8. Xbench QA Report 转换
 
 推荐完整调用：
 

@@ -12,12 +12,14 @@ from tools.gui_common import parse_positive_int
 try:
     from .extract_terms_from_excel import (
         TERM_SHEET_NAME,
+        build_default_output_path,
         detect_history_tb_columns,
         process_excel,
     )
 except ImportError:
     from extract_terms_from_excel import (
         TERM_SHEET_NAME,
+        build_default_output_path,
         detect_history_tb_columns,
         process_excel,
     )
@@ -36,6 +38,9 @@ class ExtractTermsApp(ttk.Frame):
         self.target_column_var = tk.StringVar(value="B")
         self.sheet_var = tk.StringVar()
         self.start_row_var = tk.StringVar(value="2")
+        self.output_preview_var = tk.StringVar(value="输出文件：选择输入 Excel 后自动生成")
+        self.history_details_button_text_var = tk.StringVar(value="展开详情")
+        self.history_details_expanded = False
         self.mark_style_vars = {
             "【】": tk.BooleanVar(value=True),
             "[]": tk.BooleanVar(value=True),
@@ -43,93 +48,276 @@ class ExtractTermsApp(ttk.Frame):
         self._build_ui()
 
     def _build_ui(self) -> None:
-        ttk.Label(self, text="输入 Excel").grid(row=0, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.input_file_var, width=42).grid(
-            row=0, column=1, sticky="ew", pady=(0, 8)
-        )
-        ttk.Button(self, text="选择", command=self.choose_input_file).grid(
-            row=0, column=2, padx=(8, 0), pady=(0, 8)
-        )
-
-        ttk.Label(self, text="历史 TB Excel").grid(row=2, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.history_tb_file_var, width=42).grid(
-            row=2, column=1, sticky="ew", pady=(0, 8)
-        )
-        history_buttons = ttk.Frame(self)
-        history_buttons.grid(row=2, column=2, padx=(8, 0), pady=(0, 8), sticky="ew")
-        ttk.Button(history_buttons, text="选择", command=self.choose_history_tb_file).grid(
-            row=0, column=0, sticky="ew"
-        )
-        ttk.Button(history_buttons, text="清空", command=self.clear_history_tb_file).grid(
-            row=0, column=1, sticky="ew", padx=(6, 0)
+        style = ttk.Style(self)
+        style.configure(
+            "TermCheck.Primary.TButton",
+            font=("TkDefaultFont", 10, "bold"),
+            padding=(12, 8),
         )
 
-        ttk.Label(self, text="历史 TB 工作表").grid(row=3, column=0, sticky="w", pady=(0, 8))
-        self.history_sheet_combobox = ttk.Combobox(
+        canvas_background = style.lookup("TFrame", "background") or "#f0f0f0"
+        self.scroll_canvas = tk.Canvas(
             self,
-            textvariable=self.history_sheet_var,
-            width=20,
+            width=900,
+            height=430,
+            background=canvas_background,
+            borderwidth=0,
+            highlightthickness=0,
+            yscrollincrement=16,
+        )
+        self.scroll_canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar = ttk.Scrollbar(
+            self,
+            orient="vertical",
+            command=self.scroll_canvas.yview,
+        )
+        scrollbar.grid(row=0, column=1, sticky="ns", padx=(8, 0))
+        self.scroll_canvas.configure(yscrollcommand=scrollbar.set)
+
+        self.scroll_content = ttk.Frame(self.scroll_canvas)
+        self.scroll_content.columnconfigure(0, weight=1)
+        self.scroll_content_window = self.scroll_canvas.create_window(
+            (0, 0),
+            window=self.scroll_content,
+            anchor="nw",
+        )
+        self.scroll_content.bind("<Configure>", self.handle_scroll_content_configure)
+        self.scroll_canvas.bind("<Configure>", self.handle_scroll_canvas_configure)
+        self.scroll_canvas.bind("<Enter>", self.bind_term_mousewheel)
+        self.scroll_canvas.bind("<Leave>", self.unbind_term_mousewheel)
+
+        input_frame = ttk.LabelFrame(self.scroll_content, text="输入与范围", padding=12)
+        input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        input_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(input_frame, text="输入 Excel").grid(row=0, column=0, sticky="w")
+        input_entry = ttk.Entry(input_frame, textvariable=self.input_file_var, width=56)
+        input_entry.grid(row=0, column=1, sticky="ew", padx=(12, 8))
+        input_entry.bind("<FocusOut>", self.handle_input_file_focus_out)
+        ttk.Button(input_frame, text="选择", command=self.choose_input_file).grid(
+            row=0, column=2, sticky="ew"
+        )
+
+        scope_frame = ttk.Frame(input_frame)
+        scope_frame.grid(row=1, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Label(scope_frame, text="检查工作表").grid(row=0, column=0, sticky="w")
+        self.sheet_combobox = ttk.Combobox(
+            scope_frame,
+            textvariable=self.sheet_var,
+            width=18,
             state="readonly",
         )
-        self.history_sheet_combobox.grid(row=3, column=1, sticky="w", pady=(0, 8))
-        self.history_sheet_combobox.bind("<<ComboboxSelected>>", self.handle_history_sheet_selected)
-
-        ttk.Label(self, text="历史 TB Source 列").grid(row=4, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.history_source_column_var, width=10).grid(
-            row=4, column=1, sticky="w", pady=(0, 8)
-        )
-
-        ttk.Label(self, text="历史 TB Target 列").grid(row=5, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.history_target_column_var, width=10).grid(
-            row=5, column=1, sticky="w", pady=(0, 8)
-        )
-
-        ttk.Label(self, text="历史 TB 开始行").grid(row=6, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.history_start_row_var, width=10).grid(
-            row=6, column=1, sticky="w", pady=(0, 8)
-        )
-
-        ttk.Label(self, text="Source 列").grid(row=7, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.source_column_var, width=10).grid(
-            row=7, column=1, sticky="w", pady=(0, 8)
-        )
-
-        ttk.Label(self, text="Target 列").grid(row=8, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.target_column_var, width=10).grid(
-            row=8, column=1, sticky="w", pady=(0, 8)
-        )
-
-        ttk.Label(self, text="工作表名").grid(row=9, column=0, sticky="w", pady=(0, 8))
-        self.sheet_combobox = ttk.Combobox(self, textvariable=self.sheet_var, width=20, state="readonly")
-        self.sheet_combobox.grid(row=9, column=1, sticky="w", pady=(0, 8))
+        self.sheet_combobox.grid(row=0, column=1, sticky="w", padx=(8, 18))
         self.sheet_combobox.bind("<<ComboboxSelected>>", self.handle_sheet_selected)
-
-        ttk.Label(self, text="开始行").grid(row=10, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.start_row_var, width=10).grid(
-            row=10, column=1, sticky="w", pady=(0, 8)
+        ttk.Label(scope_frame, text="Source 列").grid(row=0, column=2, sticky="w")
+        ttk.Entry(scope_frame, textvariable=self.source_column_var, width=7).grid(
+            row=0, column=3, sticky="w", padx=(8, 18)
         )
+        ttk.Label(scope_frame, text="Target 列").grid(row=0, column=4, sticky="w")
+        ttk.Entry(scope_frame, textvariable=self.target_column_var, width=7).grid(
+            row=0, column=5, sticky="w", padx=(8, 18)
+        )
+        ttk.Label(scope_frame, text="开始行").grid(row=0, column=6, sticky="w")
+        ttk.Spinbox(
+            scope_frame,
+            textvariable=self.start_row_var,
+            width=7,
+            from_=1,
+            to=1_000_000,
+        ).grid(row=0, column=7, sticky="w", padx=(8, 0))
 
-        ttk.Label(self, text="术语 mark").grid(row=11, column=0, sticky="nw", pady=(0, 12))
-        mark_frame = ttk.Frame(self)
-        mark_frame.grid(row=11, column=1, columnspan=2, sticky="w", pady=(0, 12))
-        ttk.Checkbutton(mark_frame, text="【】", variable=self.mark_style_vars["【】"]).grid(
+        source_frame = ttk.LabelFrame(self.scroll_content, text="术语来源", padding=12)
+        source_frame.grid(row=1, column=0, sticky="ew")
+        source_frame.columnconfigure(1, weight=1)
+        ttk.Label(source_frame, text="术语标记").grid(row=0, column=0, sticky="w")
+        mark_frame = ttk.Frame(source_frame)
+        mark_frame.grid(row=0, column=1, columnspan=2, sticky="w", padx=(12, 0))
+        ttk.Checkbutton(
+            mark_frame,
+            text="中文方括号【】",
+            variable=self.mark_style_vars["【】"],
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Checkbutton(
+            mark_frame,
+            text="半角方括号 []",
+            variable=self.mark_style_vars["[]"],
+        ).grid(row=0, column=1, sticky="w", padx=(16, 0))
+
+        ttk.Label(source_frame, text="历史 TB（可选）").grid(
+            row=1, column=0, sticky="w", pady=(12, 0)
+        )
+        history_entry = ttk.Entry(
+            source_frame,
+            textvariable=self.history_tb_file_var,
+            width=48,
+        )
+        history_entry.grid(row=1, column=1, sticky="ew", padx=(12, 8), pady=(12, 0))
+        history_entry.bind("<FocusOut>", self.handle_history_file_focus_out)
+        history_buttons = ttk.Frame(source_frame)
+        history_buttons.grid(row=1, column=2, sticky="e", pady=(12, 0))
+        ttk.Button(
+            history_buttons,
+            text="选择",
+            command=self.choose_history_tb_file,
+        ).grid(row=0, column=0)
+        ttk.Button(
+            history_buttons,
+            text="清空",
+            command=self.clear_history_tb_file,
+        ).grid(row=0, column=1, padx=(6, 0))
+        self.history_details_button = ttk.Button(
+            history_buttons,
+            textvariable=self.history_details_button_text_var,
+            command=self.toggle_history_details,
+            state="disabled",
+            width=8,
+        )
+        self.history_details_button.grid(row=0, column=2, padx=(6, 0))
+
+        self.history_details_frame = ttk.LabelFrame(
+            source_frame,
+            text="历史 TB 详情",
+            padding=10,
+        )
+        self.history_details_frame.grid(
+            row=2,
+            column=0,
+            columnspan=3,
+            sticky="ew",
+            pady=(12, 0),
+        )
+        ttk.Label(self.history_details_frame, text="工作表").grid(
             row=0, column=0, sticky="w"
         )
-        ttk.Checkbutton(mark_frame, text="[]", variable=self.mark_style_vars["[]"]).grid(
-            row=0, column=1, sticky="w", padx=(12, 0)
+        self.history_sheet_combobox = ttk.Combobox(
+            self.history_details_frame,
+            textvariable=self.history_sheet_var,
+            width=16,
+            state="readonly",
         )
-        ttk.Button(self, text="开始检查", command=self.run_extraction).grid(
-            row=12, column=0, columnspan=3, sticky="ew"
+        self.history_sheet_combobox.grid(row=0, column=1, sticky="w", padx=(8, 18))
+        self.history_sheet_combobox.bind(
+            "<<ComboboxSelected>>",
+            self.handle_history_sheet_selected,
         )
+        ttk.Label(self.history_details_frame, text="Source 列").grid(
+            row=0, column=2, sticky="w"
+        )
+        ttk.Entry(
+            self.history_details_frame,
+            textvariable=self.history_source_column_var,
+            width=7,
+        ).grid(row=0, column=3, sticky="w", padx=(8, 18))
+        ttk.Label(self.history_details_frame, text="Target 列").grid(
+            row=0, column=4, sticky="w"
+        )
+        ttk.Entry(
+            self.history_details_frame,
+            textvariable=self.history_target_column_var,
+            width=7,
+        ).grid(row=0, column=5, sticky="w", padx=(8, 18))
+        ttk.Label(self.history_details_frame, text="开始行").grid(
+            row=0, column=6, sticky="w"
+        )
+        ttk.Spinbox(
+            self.history_details_frame,
+            textvariable=self.history_start_row_var,
+            width=7,
+            from_=1,
+            to=1_000_000,
+        ).grid(row=0, column=7, sticky="w", padx=(8, 0))
+        self.history_details_frame.grid_remove()
 
-        note = (
-            "规则：有 mark 时提取并检查新术语对；不选 mark 时必须提供历史 TB；"
-            "历史 TB 命中时优先使用历史 target；"
-            "<...> 和 {...} 不作为术语 mark。"
-        )
-        ttk.Label(self, text=note).grid(row=13, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Label(
+            source_frame,
+            text=(
+                "有标记时提取并检查新术语；不选标记时必须提供历史 TB；"
+                "历史 TB 命中时优先使用历史 target。"
+            ),
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
-        self.columnconfigure(1, weight=1)
+        ttk.Button(
+            self,
+            text="开始检查",
+            command=self.run_extraction,
+            style="TermCheck.Primary.TButton",
+        ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        ttk.Label(
+            self,
+            textvariable=self.output_preview_var,
+            foreground="#555555",
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+
+    def handle_scroll_content_configure(self, _event: object | None = None) -> None:
+        self.refresh_scroll_region()
+
+    def handle_scroll_canvas_configure(self, event: object) -> None:
+        width = getattr(event, "width", self.scroll_canvas.winfo_width())
+        self.scroll_canvas.itemconfigure(self.scroll_content_window, width=width)
+        self.refresh_scroll_region()
+
+    def refresh_scroll_region(self) -> None:
+        content_bounds = self.scroll_canvas.bbox("all")
+        if content_bounds:
+            self.scroll_canvas.configure(scrollregion=content_bounds)
+
+    def bind_term_mousewheel(self, _event: object | None = None) -> None:
+        self.bind_all("<MouseWheel>", self.handle_term_mousewheel)
+
+    def unbind_term_mousewheel(self, _event: object | None = None) -> None:
+        self.unbind_all("<MouseWheel>")
+
+    def handle_term_mousewheel(self, event: object) -> None:
+        delta = getattr(event, "delta", 0)
+        if delta:
+            self.scroll_canvas.yview_scroll(-1 if delta > 0 else 1, "units")
+
+    def reveal_history_details(self) -> None:
+        self.update_idletasks()
+        self.refresh_scroll_region()
+        content_height = max(self.scroll_content.winfo_reqheight(), 1)
+        target_fraction = max(
+            0.0,
+            min(self.history_details_frame.winfo_y() / content_height, 1.0),
+        )
+        self.scroll_canvas.yview_moveto(target_fraction)
+
+    def set_history_details_expanded(self, expanded: bool) -> None:
+        self.history_details_expanded = expanded
+        self.history_details_button_text_var.set("收起详情" if expanded else "展开详情")
+        if expanded:
+            self.history_details_frame.grid()
+            if hasattr(self, "scroll_canvas"):
+                self.after_idle(self.reveal_history_details)
+        else:
+            self.history_details_frame.grid_remove()
+
+    def toggle_history_details(self) -> None:
+        if self.history_tb_file_var.get().strip():
+            self.set_history_details_expanded(not self.history_details_expanded)
+
+    def update_output_preview(self) -> None:
+        input_file = self.input_file_var.get().strip()
+        if not input_file:
+            self.output_preview_var.set("输出文件：选择输入 Excel 后自动生成")
+            return
+        output_name = build_default_output_path(input_file).name
+        self.output_preview_var.set(f"输出文件：{output_name}")
+
+    def handle_input_file_focus_out(self, _event: object | None = None) -> None:
+        self.update_output_preview()
+        self.refresh_sheet_choices(show_error=False)
+
+    def handle_history_file_focus_out(self, _event: object | None = None) -> None:
+        if not self.history_tb_file_var.get().strip():
+            self.clear_history_tb_file()
+            return
+        self.history_details_button.configure(state="normal")
+        self.refresh_history_sheet_choices(show_error=False)
+        self.set_history_details_expanded(True)
 
     def choose_input_file(self) -> None:
         file_path = filedialog.askopenfilename(
@@ -139,6 +327,7 @@ class ExtractTermsApp(ttk.Frame):
         if not file_path:
             return
         self.input_file_var.set(file_path)
+        self.update_output_preview()
         self.refresh_sheet_choices()
 
     def choose_history_tb_file(self) -> None:
@@ -149,7 +338,9 @@ class ExtractTermsApp(ttk.Frame):
         if not file_path:
             return
         self.history_tb_file_var.set(file_path)
+        self.history_details_button.configure(state="normal")
         self.refresh_history_sheet_choices()
+        self.set_history_details_expanded(True)
 
     def clear_history_tb_file(self) -> None:
         self.history_tb_file_var.set("")
@@ -157,6 +348,10 @@ class ExtractTermsApp(ttk.Frame):
         self.history_target_column_var.set("")
         self.history_start_row_var.set("2")
         self.clear_history_sheet_choices()
+        if hasattr(self, "history_details_button"):
+            self.history_details_button.configure(state="disabled")
+        if hasattr(self, "history_details_frame"):
+            self.set_history_details_expanded(False)
 
     def clear_sheet_choices(self) -> None:
         self.sheet_combobox["values"] = ()

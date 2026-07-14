@@ -11,6 +11,8 @@ from openpyxl import Workbook
 from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
 from tools.excel_line_splitter.split_excel_lines_gui import SplitExcelLinesApp
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
+from tools.line_break_checker.check_line_breaks_gui import LineBreakCheckerApp
+from tools.source_consistency_checker.check_source_consistency_gui import SourceConsistencyCheckerApp
 from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
 from tools.workflow.workflow_gui import WorkflowRunnerApp
@@ -43,6 +45,22 @@ class FakeCombobox(dict):
     def __init__(self) -> None:
         super().__init__()
         self["values"] = ()
+
+
+class FakeWidget:
+    def __init__(self) -> None:
+        self.state = "normal"
+        self.visible = True
+
+    def configure(self, **kwargs) -> None:
+        if "state" in kwargs:
+            self.state = kwargs["state"]
+
+    def grid(self) -> None:
+        self.visible = True
+
+    def grid_remove(self) -> None:
+        self.visible = False
 
 
 class GuiSheetSelectionTests(unittest.TestCase):
@@ -150,6 +168,26 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.sheet_combobox = FakeCombobox()
         return app
 
+    def build_line_break_checker_app(self, input_path: Path) -> LineBreakCheckerApp:
+        app = LineBreakCheckerApp.__new__(LineBreakCheckerApp)
+        app.input_file_var = FakeVar(str(input_path))
+        app.sheet_var = FakeVar("")
+        app.source_column_var = FakeVar("A")
+        app.target_column_var = FakeVar("B")
+        app.sheet_combobox = FakeCombobox()
+        return app
+
+    def build_source_consistency_checker_app(
+        self, input_path: Path
+    ) -> SourceConsistencyCheckerApp:
+        app = SourceConsistencyCheckerApp.__new__(SourceConsistencyCheckerApp)
+        app.input_file_var = FakeVar(str(input_path))
+        app.sheet_var = FakeVar("")
+        app.source_column_var = FakeVar("A")
+        app.target_column_var = FakeVar("B")
+        app.sheet_combobox = FakeCombobox()
+        return app
+
     def build_french_nbsp_restorer_app(self, input_path: Path) -> FrenchNbspRestorerApp:
         app = FrenchNbspRestorerApp.__new__(FrenchNbspRestorerApp)
         app.input_file_var = FakeVar(str(input_path))
@@ -178,6 +216,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.source_column_var = FakeVar("A")
         app.target_column_var = FakeVar("B")
         app.sheet_combobox = FakeCombobox()
+        app.output_preview_var = FakeVar("")
         return app
 
     def build_workflow_app_with_history(self, history_path: Path) -> WorkflowRunnerApp:
@@ -249,6 +288,45 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.history_source_column_var.get(), "A")
             self.assertEqual(app.history_target_column_var.get(), "B")
 
+    def test_term_pair_history_details_expand_after_selecting_tb(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            history_path = Path(tmp_dir) / "history.xlsx"
+            self.create_history_tb_workbook(history_path)
+            app = ExtractTermsApp.__new__(ExtractTermsApp)
+            app.history_tb_file_var = FakeVar("")
+            app.history_sheet_var = FakeVar("")
+            app.history_source_column_var = FakeVar("")
+            app.history_target_column_var = FakeVar("")
+            app.history_start_row_var = FakeVar("2")
+            app.history_sheet_combobox = FakeCombobox()
+            app.history_details_expanded = False
+            app.history_details_button_text_var = FakeVar("展开详情")
+            app.history_details_button = FakeWidget()
+            app.history_details_frame = FakeWidget()
+
+            with patch(
+                "tools.term_pair_checker.extract_terms_gui.filedialog.askopenfilename",
+                return_value=str(history_path),
+            ):
+                app.choose_history_tb_file()
+
+            self.assertEqual(app.history_tb_file_var.get(), str(history_path))
+            self.assertTrue(app.history_details_expanded)
+            self.assertTrue(app.history_details_frame.visible)
+            self.assertEqual(app.history_details_button_text_var.get(), "收起详情")
+            self.assertEqual(app.history_sheet_var.get(), "术语表")
+
+    def test_term_pair_output_preview_uses_automatic_output_name(self) -> None:
+        app = ExtractTermsApp.__new__(ExtractTermsApp)
+        app.input_file_var = FakeVar("D:/project/input.xlsx")
+        app.output_preview_var = FakeVar("")
+
+        app.update_output_preview()
+
+        self.assertTrue(
+            app.output_preview_var.get().endswith("term_pair_check_input.xlsx")
+        )
+
     def test_splitter_refresh_populates_sheet_choices(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workbook_path = Path(tmp_dir) / "split.xlsx"
@@ -285,6 +363,32 @@ class GuiSheetSelectionTests(unittest.TestCase):
 
             self.assertEqual(app.source_column_var.get(), "A")
             self.assertEqual(app.target_column_var.get(), "B")
+
+    def test_line_break_checker_detects_source_and_target_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "line_breaks.xlsx"
+            self.create_tag_checker_workbook(workbook_path)
+            app = self.build_line_break_checker_app(workbook_path)
+
+            app.refresh_sheet_choices(show_error=False)
+
+            self.assertEqual(app.sheet_combobox["values"], ("Tags", "Archive"))
+            self.assertEqual(app.sheet_var.get(), "Tags")
+            self.assertEqual(app.source_column_var.get(), "D")
+            self.assertEqual(app.target_column_var.get(), "F")
+
+    def test_source_consistency_checker_detects_source_and_target_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "source_consistency.xlsx"
+            self.create_tag_checker_workbook(workbook_path)
+            app = self.build_source_consistency_checker_app(workbook_path)
+
+            app.refresh_sheet_choices(show_error=False)
+
+            self.assertEqual(app.sheet_combobox["values"], ("Tags", "Archive"))
+            self.assertEqual(app.sheet_var.get(), "Tags")
+            self.assertEqual(app.source_column_var.get(), "D")
+            self.assertEqual(app.target_column_var.get(), "F")
 
     def test_french_nbsp_restorer_refresh_populates_sheet_choices_and_detects_target_column(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -499,6 +603,9 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.start_row_var = FakeVar("2")
         app.run_term_pair_var = FakeBoolVar(True)
         app.run_tag_check_var = FakeBoolVar(True)
+        app.run_line_break_check_var = FakeBoolVar(True)
+        app.run_source_consistency_check_var = FakeBoolVar(True)
+        app.run_chinese_target_check_var = FakeBoolVar(True)
         app.term_mark_style_vars = {
             "【】": FakeBoolVar(True),
             "[]": FakeBoolVar(True),
@@ -507,7 +614,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.square_color_var = FakeBoolVar(True)
         app.brace_var = FakeBoolVar(True)
         app.newline_var = FakeBoolVar(True)
-        app.memoq_var = FakeBoolVar(True)
+        app.tag_mode_var = FakeVar("standard")
         summary = SimpleNamespace(
             output_path=Path("/tmp/output.xlsx"),
             worksheet_title="Data",
@@ -516,9 +623,18 @@ class GuiSheetSelectionTests(unittest.TestCase):
             start_row=2,
             ran_term_pair_check=True,
             ran_tag_check=True,
+            ran_line_break_check=True,
+            ran_source_consistency_check=True,
+            ran_chinese_target_check=True,
             term_count=3,
             term_problem_count=0,
+            term_problem_rows=0,
             tag_problem_count=0,
+            tag_problem_rows=0,
+            line_break_problem_count=0,
+            source_consistency_problem_count=0,
+            source_consistency_problem_rows=0,
+            chinese_target_problem_count=0,
         )
 
         with (
@@ -535,6 +651,93 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertIsNone(run_workflow_mock.call_args.kwargs["term_history_source_column"])
         self.assertIsNone(run_workflow_mock.call_args.kwargs["term_history_target_column"])
         self.assertEqual(run_workflow_mock.call_args.kwargs["term_history_start_row"], 2)
+        self.assertTrue(run_workflow_mock.call_args.kwargs["run_line_break_check"])
+        self.assertTrue(run_workflow_mock.call_args.kwargs["run_source_consistency_check"])
+        self.assertTrue(run_workflow_mock.call_args.kwargs["run_chinese_target_check"])
+
+    def test_workflow_defaults_to_all_quality_checks(self) -> None:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        with (
+            patch.object(WorkflowRunnerApp, "_build_ui", lambda self: None),
+            patch(
+                "tools.workflow.workflow_gui.ttk.Frame.__init__",
+                lambda self, master=None, padding=None: None,
+            ),
+            patch("tools.workflow.workflow_gui.tk.StringVar", FakeVar),
+            patch("tools.workflow.workflow_gui.tk.BooleanVar", FakeBoolVar),
+        ):
+            WorkflowRunnerApp.__init__(app, object())
+
+        self.assertTrue(app.run_term_pair_var.get())
+        self.assertTrue(app.run_tag_check_var.get())
+        self.assertTrue(app.run_line_break_check_var.get())
+        self.assertTrue(app.run_source_consistency_check_var.get())
+        self.assertTrue(app.run_chinese_target_check_var.get())
+        self.assertFalse(app.term_settings_expanded)
+        self.assertFalse(app.tag_settings_expanded)
+
+    def test_workflow_select_all_and_clear_all_keep_settings_collapsed(self) -> None:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        app.run_term_pair_var = FakeBoolVar(True)
+        app.run_tag_check_var = FakeBoolVar(True)
+        app.run_line_break_check_var = FakeBoolVar(True)
+        app.run_source_consistency_check_var = FakeBoolVar(True)
+        app.run_chinese_target_check_var = FakeBoolVar(True)
+        app.term_settings_expanded = True
+        app.tag_settings_expanded = True
+        app.term_settings_button_text_var = FakeVar("收起设置")
+        app.tag_settings_button_text_var = FakeVar("收起设置")
+        app.term_settings_button = FakeWidget()
+        app.tag_settings_button = FakeWidget()
+        app.term_settings_frame = FakeWidget()
+        app.tag_settings_frame = FakeWidget()
+        app.tag_mode_var = FakeVar("standard")
+        app.standard_tag_checkbuttons = []
+
+        app.clear_all_tasks()
+
+        self.assertFalse(any(variable.get() for variable in app.task_vars()))
+        self.assertFalse(app.term_settings_expanded)
+        self.assertFalse(app.tag_settings_expanded)
+        self.assertEqual(app.term_settings_button.state, "disabled")
+        self.assertEqual(app.tag_settings_button.state, "disabled")
+
+        app.select_all_tasks()
+
+        self.assertTrue(all(variable.get() for variable in app.task_vars()))
+        self.assertFalse(app.term_settings_expanded)
+        self.assertFalse(app.tag_settings_expanded)
+        self.assertEqual(app.term_settings_button.state, "normal")
+        self.assertEqual(app.tag_settings_button.state, "normal")
+
+    def test_workflow_output_preview_uses_automatic_output_name(self) -> None:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        app.input_file_var = FakeVar("D:/project/input.xlsx")
+        app.output_preview_var = FakeVar("")
+
+        app.update_output_preview()
+
+        self.assertTrue(
+            app.output_preview_var.get().endswith("workflow_check_input.xlsx")
+        )
+
+    def test_workflow_only_expands_one_settings_panel_at_a_time(self) -> None:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        app.run_term_pair_var = FakeBoolVar(True)
+        app.run_tag_check_var = FakeBoolVar(True)
+        app.term_settings_expanded = True
+        app.tag_settings_expanded = False
+        app.term_settings_button_text_var = FakeVar("收起设置")
+        app.tag_settings_button_text_var = FakeVar("展开设置")
+        app.term_settings_frame = FakeWidget()
+        app.tag_settings_frame = FakeWidget()
+
+        app.toggle_tag_settings()
+
+        self.assertFalse(app.term_settings_expanded)
+        self.assertTrue(app.tag_settings_expanded)
+        self.assertFalse(app.term_settings_frame.visible)
+        self.assertTrue(app.tag_settings_frame.visible)
 
     def test_term_pair_gui_defaults_to_square_and_book_title_marks(self) -> None:
         app = ExtractTermsApp.__new__(ExtractTermsApp)
@@ -549,6 +752,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertTrue(app.mark_style_vars["【】"].get())
         self.assertTrue(app.mark_style_vars["[]"].get())
         self.assertNotIn("<>", app.mark_style_vars)
+        self.assertFalse(app.history_details_expanded)
 
     def test_tag_placeholder_gui_defaults_to_standard_tags_not_memoq(self) -> None:
         app = TagPlaceholderCheckerApp.__new__(TagPlaceholderCheckerApp)
@@ -616,29 +820,27 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertTrue(app.square_color_var.get())
         self.assertTrue(app.brace_var.get())
         self.assertTrue(app.newline_var.get())
-        self.assertFalse(app.memoq_var.get())
+        self.assertEqual(app.tag_mode_var.get(), "standard")
+        self.assertEqual(
+            app.get_selected_tag_token_types(),
+            ("angle", "square_color", "brace", "newline"),
+        )
 
-    def test_workflow_gui_makes_memoq_mutually_exclusive_with_standard_tags(self) -> None:
+    def test_workflow_gui_tag_mode_selects_memoq_or_standard_tags(self) -> None:
         app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
         app.angle_var = FakeBoolVar(True)
         app.square_color_var = FakeBoolVar(True)
         app.brace_var = FakeBoolVar(True)
         app.newline_var = FakeBoolVar(True)
-        app.memoq_var = FakeBoolVar(True)
+        app.tag_mode_var = FakeVar("memoq")
 
-        app.handle_memoq_token_type_selected()
+        self.assertEqual(app.get_selected_tag_token_types(), ("memoq",))
 
-        self.assertFalse(app.angle_var.get())
-        self.assertFalse(app.square_color_var.get())
-        self.assertFalse(app.brace_var.get())
-        self.assertFalse(app.newline_var.get())
-        self.assertTrue(app.memoq_var.get())
-
-        app.brace_var.set(True)
-        app.handle_standard_token_type_selected()
-
-        self.assertTrue(app.brace_var.get())
-        self.assertFalse(app.memoq_var.get())
+        app.tag_mode_var.set("standard")
+        self.assertEqual(
+            app.get_selected_tag_token_types(),
+            ("angle", "square_color", "brace", "newline"),
+        )
 
 
 if __name__ == "__main__":

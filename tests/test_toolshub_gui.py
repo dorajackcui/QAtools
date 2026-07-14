@@ -27,19 +27,26 @@ class ToolshubLayoutTests(unittest.TestCase):
         finally:
             root.destroy()
 
-    def test_tools_are_grouped_by_workflow_terms_quality_and_text_repair(self) -> None:
+    def test_tools_are_grouped_by_workflow_quality_text_repair_and_other(self) -> None:
         grouped_tools = {
             group.title: [tool.title for tool in group.tools]
             for group in TOOL_GROUPS
         }
 
-        self.assertEqual(grouped_tools["常用流程"], ["Workflow 编排"])
+        self.assertEqual(grouped_tools["常用流程"], ["一键质量检查"])
+        self.assertNotIn("术语处理", grouped_tools)
         self.assertEqual(
-            grouped_tools["术语处理"],
-            ["术语检查"],
+            grouped_tools["质量检查"],
+            [
+                "术语检查",
+                "Tag 检查",
+                "换行数量检查",
+                "同源译文一致性",
+                "Target 中文检查",
+            ],
         )
-        self.assertEqual(grouped_tools["质量检查"], ["Tag 检查", "Target 中文检查", "Xbench QA 转换"])
         self.assertEqual(grouped_tools["文本修复"], ["分行拆列", "法语 NBSP 恢复"])
+        self.assertEqual(grouped_tools["其他"], ["Xbench QA 转换"])
 
     def test_selecting_a_tool_updates_heading_and_visible_page(self) -> None:
         root, app = self.make_app()

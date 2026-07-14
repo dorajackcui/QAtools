@@ -11,6 +11,8 @@ from tkinter import ttk
 from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
 from tools.excel_line_splitter.split_excel_lines_gui import SplitExcelLinesApp
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
+from tools.line_break_checker.check_line_breaks_gui import LineBreakCheckerApp
+from tools.source_consistency_checker.check_source_consistency_gui import SourceConsistencyCheckerApp
 from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
 from tools.workflow.workflow_gui import WorkflowRunnerApp
@@ -40,20 +42,9 @@ TOOL_GROUPS = (
         tools=(
             ToolItem(
                 key="workflow",
-                title="Workflow 编排",
-                description="按顺序执行术语检查和 Tag 检查，统一写入输出 Excel。",
+                title="一键质量检查",
+                description="按顺序执行质量检查板块的全部项目，统一写入输出 Excel。",
                 factory=WorkflowRunnerApp,
-            ),
-        ),
-    ),
-    ToolGroup(
-        title="术语处理",
-        tools=(
-            ToolItem(
-                key="term_pair",
-                title="术语检查",
-                description="从可选 mark 提取新术语对，或仅用历史 TB 检查 source / target 命中。",
-                factory=ExtractTermsApp,
             ),
         ),
     ),
@@ -61,22 +52,34 @@ TOOL_GROUPS = (
         title="质量检查",
         tools=(
             ToolItem(
+                key="term_pair",
+                title="术语检查",
+                description="从可选 mark 提取新术语对，或仅用历史 TB 检查 source / target 命中。",
+                factory=ExtractTermsApp,
+            ),
+            ToolItem(
                 key="tag_checker",
                 title="Tag 检查",
                 description="检查 tag、placeholder、换行标记和数字 tag 在 source / target 中是否一致。",
                 factory=TagPlaceholderCheckerApp,
             ),
             ToolItem(
+                key="line_break_checker",
+                title="换行数量检查",
+                description="逐行比较 source / target 单元格中的真实换行数量是否一致。",
+                factory=LineBreakCheckerApp,
+            ),
+            ToolItem(
+                key="source_consistency_checker",
+                title="同源译文一致性",
+                description="检查完全相同的 source 是否对应多个不同 target。",
+                factory=SourceConsistencyCheckerApp,
+            ),
+            ToolItem(
                 key="chinese_target",
                 title="Target 中文检查",
                 description="扫描 target 文本中的中文字符，定位未翻译或混入中文的问题。",
                 factory=ChineseTargetCheckerApp,
-            ),
-            ToolItem(
-                key="xbench_report",
-                title="Xbench QA 转换",
-                description="把 Xbench QA Report 整理为按 key/source 聚合的行级 Excel。",
-                factory=XbenchReportTransformerApp,
             ),
         ),
     ),
@@ -94,6 +97,17 @@ TOOL_GROUPS = (
                 title="法语 NBSP 恢复",
                 description="恢复法语标点前的 NBSP，修正常见空格丢失问题。",
                 factory=FrenchNbspRestorerApp,
+            ),
+        ),
+    ),
+    ToolGroup(
+        title="其他",
+        tools=(
+            ToolItem(
+                key="xbench_report",
+                title="Xbench QA 转换",
+                description="把 Xbench QA Report 整理为按 key/source 聚合的行级 Excel。",
+                factory=XbenchReportTransformerApp,
             ),
         ),
     ),
@@ -173,7 +187,7 @@ class ToolshubApp:
     def _build_sidebar(self, parent: ttk.Frame) -> None:
         ttk.Label(
             parent,
-            text="Excel 工具箱",
+            text="QA 工具箱",
             style="Toolshub.AppTitle.TLabel",
         ).grid(row=0, column=0, sticky="w", pady=(0, 4))
         ttk.Label(

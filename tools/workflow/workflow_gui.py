@@ -13,7 +13,7 @@ from tools.term_pair_checker.extract_terms_from_excel import (
     detect_history_tb_columns,
 )
 
-from .workflow_runner import run_workflow
+from .workflow_runner import build_default_output_path, run_workflow
 
 
 class WorkflowRunnerApp(ttk.Frame):
@@ -31,6 +31,15 @@ class WorkflowRunnerApp(ttk.Frame):
         self.start_row_var = tk.StringVar(value="2")
         self.run_term_pair_var = tk.BooleanVar(value=True)
         self.run_tag_check_var = tk.BooleanVar(value=True)
+        self.run_line_break_check_var = tk.BooleanVar(value=True)
+        self.run_source_consistency_check_var = tk.BooleanVar(value=True)
+        self.run_chinese_target_check_var = tk.BooleanVar(value=True)
+        self.output_preview_var = tk.StringVar(value="输出文件：选择输入 Excel 后自动生成")
+        self.term_settings_button_text_var = tk.StringVar(value="展开设置")
+        self.tag_settings_button_text_var = tk.StringVar(value="展开设置")
+        self.tag_mode_var = tk.StringVar(value="standard")
+        self.term_settings_expanded = False
+        self.tag_settings_expanded = False
         self.term_mark_style_vars = {
             "【】": tk.BooleanVar(value=True),
             "[]": tk.BooleanVar(value=True),
@@ -39,164 +48,419 @@ class WorkflowRunnerApp(ttk.Frame):
         self.square_color_var = tk.BooleanVar(value=True)
         self.brace_var = tk.BooleanVar(value=True)
         self.newline_var = tk.BooleanVar(value=True)
-        self.memoq_var = tk.BooleanVar(value=False)
 
         self._build_ui()
 
     def _build_ui(self) -> None:
-        ttk.Label(self, text="输入 Excel").grid(row=0, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.input_file_var, width=42).grid(
-            row=0, column=1, sticky="ew", pady=(0, 8)
-        )
-        ttk.Button(self, text="选择", command=self.choose_input_file).grid(
-            row=0, column=2, padx=(8, 0), pady=(0, 8)
-        )
-
-        ttk.Label(self, text="术语历史 TB Excel").grid(row=2, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.term_history_tb_file_var, width=42).grid(
-            row=2, column=1, sticky="ew", pady=(0, 8)
-        )
-        history_buttons = ttk.Frame(self)
-        history_buttons.grid(row=2, column=2, padx=(8, 0), pady=(0, 8), sticky="ew")
-        ttk.Button(history_buttons, text="选择", command=self.choose_term_history_tb_file).grid(
-            row=0, column=0, sticky="ew"
-        )
-        ttk.Button(history_buttons, text="清空", command=self.clear_term_history_tb_file).grid(
-            row=0, column=1, sticky="ew", padx=(6, 0)
+        style = ttk.Style(self)
+        style.configure(
+            "Workflow.Primary.TButton",
+            font=("TkDefaultFont", 10, "bold"),
+            padding=(12, 8),
         )
 
-        ttk.Label(self, text="术语历史 TB 工作表").grid(row=3, column=0, sticky="w", pady=(0, 8))
-        self.term_history_sheet_combobox = ttk.Combobox(
+        canvas_background = style.lookup("TFrame", "background") or "#f0f0f0"
+        self.scroll_canvas = tk.Canvas(
             self,
-            textvariable=self.term_history_sheet_var,
-            width=20,
+            width=900,
+            height=480,
+            background=canvas_background,
+            borderwidth=0,
+            highlightthickness=0,
+            yscrollincrement=16,
+        )
+        self.scroll_canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar = ttk.Scrollbar(
+            self,
+            orient="vertical",
+            command=self.scroll_canvas.yview,
+        )
+        scrollbar.grid(row=0, column=1, sticky="ns", padx=(8, 0))
+        self.scroll_canvas.configure(yscrollcommand=scrollbar.set)
+
+        self.scroll_content = ttk.Frame(self.scroll_canvas)
+        self.scroll_content.columnconfigure(0, weight=1)
+        self.scroll_content_window = self.scroll_canvas.create_window(
+            (0, 0),
+            window=self.scroll_content,
+            anchor="nw",
+        )
+        self.scroll_content.bind("<Configure>", self.handle_scroll_content_configure)
+        self.scroll_canvas.bind("<Configure>", self.handle_scroll_canvas_configure)
+        self.scroll_canvas.bind("<Enter>", self.bind_workflow_mousewheel)
+        self.scroll_canvas.bind("<Leave>", self.unbind_workflow_mousewheel)
+
+        input_frame = ttk.LabelFrame(self.scroll_content, text="输入与范围", padding=12)
+        input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        input_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(input_frame, text="输入 Excel").grid(row=0, column=0, sticky="w")
+        input_entry = ttk.Entry(input_frame, textvariable=self.input_file_var, width=56)
+        input_entry.grid(row=0, column=1, sticky="ew", padx=(12, 8))
+        input_entry.bind("<FocusOut>", self.handle_input_file_focus_out)
+        ttk.Button(input_frame, text="选择", command=self.choose_input_file).grid(
+            row=0, column=2, sticky="ew"
+        )
+
+        scope_frame = ttk.Frame(input_frame)
+        scope_frame.grid(row=1, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Label(scope_frame, text="检查工作表").grid(row=0, column=0, sticky="w")
+        self.sheet_combobox = ttk.Combobox(
+            scope_frame,
+            textvariable=self.sheet_var,
+            width=18,
             state="readonly",
         )
-        self.term_history_sheet_combobox.grid(row=3, column=1, sticky="w", pady=(0, 8))
-        self.term_history_sheet_combobox.bind("<<ComboboxSelected>>", self.handle_term_history_sheet_selected)
-
-        ttk.Label(self, text="术语历史 Source 列").grid(row=4, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.term_history_source_column_var, width=10).grid(
-            row=4, column=1, sticky="w", pady=(0, 8)
-        )
-
-        ttk.Label(self, text="术语历史 Target 列").grid(row=5, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.term_history_target_column_var, width=10).grid(
-            row=5, column=1, sticky="w", pady=(0, 8)
-        )
-
-        ttk.Label(self, text="术语历史开始行").grid(row=6, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.term_history_start_row_var, width=10).grid(
-            row=6, column=1, sticky="w", pady=(0, 8)
-        )
-
-        ttk.Label(self, text="检查工作表").grid(row=7, column=0, sticky="w", pady=(0, 8))
-        self.sheet_combobox = ttk.Combobox(self, textvariable=self.sheet_var, width=20, state="readonly")
-        self.sheet_combobox.grid(row=7, column=1, sticky="w", pady=(0, 8))
+        self.sheet_combobox.grid(row=0, column=1, sticky="w", padx=(8, 18))
         self.sheet_combobox.bind("<<ComboboxSelected>>", self.handle_sheet_selected)
-
-        ttk.Label(self, text="Source 列").grid(row=8, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.source_column_var, width=10).grid(
-            row=8, column=1, sticky="w", pady=(0, 8)
+        ttk.Label(scope_frame, text="Source 列").grid(row=0, column=2, sticky="w")
+        ttk.Entry(scope_frame, textvariable=self.source_column_var, width=7).grid(
+            row=0, column=3, sticky="w", padx=(8, 18)
         )
-
-        ttk.Label(self, text="Target 列").grid(row=9, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.target_column_var, width=10).grid(
-            row=9, column=1, sticky="w", pady=(0, 8)
+        ttk.Label(scope_frame, text="Target 列").grid(row=0, column=4, sticky="w")
+        ttk.Entry(scope_frame, textvariable=self.target_column_var, width=7).grid(
+            row=0, column=5, sticky="w", padx=(8, 18)
         )
+        ttk.Label(scope_frame, text="开始行").grid(row=0, column=6, sticky="w")
+        ttk.Spinbox(
+            scope_frame,
+            textvariable=self.start_row_var,
+            width=7,
+            from_=1,
+            to=1_000_000,
+        ).grid(row=0, column=7, sticky="w", padx=(8, 0))
 
-        ttk.Label(self, text="开始行").grid(row=10, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.start_row_var, width=10).grid(
-            row=10, column=1, sticky="w", pady=(0, 8)
-        )
+        task_frame = ttk.LabelFrame(self.scroll_content, text="质量检查项目", padding=12)
+        task_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        for column in range(3):
+            task_frame.columnconfigure(column, weight=1, uniform="quality-checks")
 
-        task_frame = ttk.LabelFrame(self, text="Workflow 任务", padding=10)
-        task_frame.grid(row=11, column=0, columnspan=3, sticky="ew", pady=(4, 8))
-
-        ttk.Checkbutton(task_frame, text="术语检查", variable=self.run_term_pair_var).grid(
+        ttk.Label(task_frame, text="默认全部选中，可按需取消").grid(
             row=0, column=0, sticky="w"
         )
-        term_mark_frame = ttk.Frame(task_frame)
-        term_mark_frame.grid(row=1, column=0, sticky="w", pady=(4, 8))
-        ttk.Checkbutton(term_mark_frame, text="【】", variable=self.term_mark_style_vars["【】"]).grid(
-            row=0, column=0, sticky="w"
+        selection_buttons = ttk.Frame(task_frame)
+        selection_buttons.grid(row=0, column=2, sticky="e")
+        ttk.Button(selection_buttons, text="全选", command=self.select_all_tasks).grid(
+            row=0, column=0
         )
-        ttk.Checkbutton(term_mark_frame, text="[]", variable=self.term_mark_style_vars["[]"]).grid(
-            row=0, column=1, sticky="w", padx=(12, 0)
-        )
-        ttk.Checkbutton(task_frame, text="Tag检查", variable=self.run_tag_check_var).grid(
-            row=2, column=0, sticky="w"
-        )
-        tag_type_frame = ttk.Frame(task_frame)
-        tag_type_frame.grid(row=3, column=0, sticky="w", pady=(4, 0))
-        ttk.Checkbutton(
-            tag_type_frame,
-            text="<...> tag",
-            variable=self.angle_var,
-            command=self.handle_standard_token_type_selected,
-        ).grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Checkbutton(
-            tag_type_frame,
-            text="[color=...] tag",
-            variable=self.square_color_var,
-            command=self.handle_standard_token_type_selected,
-        ).grid(
-            row=0, column=1, sticky="w", padx=(12, 0)
-        )
-        ttk.Checkbutton(
-            tag_type_frame,
-            text="{...} placeholder",
-            variable=self.brace_var,
-            command=self.handle_standard_token_type_selected,
-        ).grid(
-            row=0, column=2, sticky="w", padx=(12, 0)
-        )
-        ttk.Checkbutton(
-            tag_type_frame,
-            text="\\n mark",
-            variable=self.newline_var,
-            command=self.handle_standard_token_type_selected,
-        ).grid(
-            row=0, column=3, sticky="w", padx=(12, 0)
-        )
-        ttk.Checkbutton(
-            tag_type_frame,
-            text="memoQ tag",
-            variable=self.memoq_var,
-            command=self.handle_memoq_token_type_selected,
-        ).grid(
-            row=0, column=4, sticky="w", padx=(12, 0)
+        ttk.Button(selection_buttons, text="取消全选", command=self.clear_all_tasks).grid(
+            row=0, column=1, padx=(6, 0)
         )
 
-        ttk.Button(self, text="开始执行 Workflow", command=self.run_selected_tasks).grid(
-            row=12, column=0, columnspan=3, sticky="ew"
+        term_item = ttk.Frame(task_frame)
+        term_item.grid(row=1, column=0, sticky="w", pady=(12, 4))
+        ttk.Checkbutton(
+            term_item,
+            text="术语检查",
+            variable=self.run_term_pair_var,
+            command=self.handle_term_check_toggled,
+        ).grid(row=0, column=0, sticky="w")
+        self.term_settings_button = ttk.Button(
+            term_item,
+            textvariable=self.term_settings_button_text_var,
+            command=self.toggle_term_settings,
+            width=8,
         )
+        self.term_settings_button.grid(row=0, column=1, padx=(8, 0))
 
+        tag_item = ttk.Frame(task_frame)
+        tag_item.grid(row=1, column=1, sticky="w", pady=(12, 4))
+        ttk.Checkbutton(
+            tag_item,
+            text="Tag 检查",
+            variable=self.run_tag_check_var,
+            command=self.handle_tag_check_toggled,
+        ).grid(row=0, column=0, sticky="w")
+        self.tag_settings_button = ttk.Button(
+            tag_item,
+            textvariable=self.tag_settings_button_text_var,
+            command=self.toggle_tag_settings,
+            width=8,
+        )
+        self.tag_settings_button.grid(row=0, column=1, padx=(8, 0))
+
+        ttk.Checkbutton(
+            task_frame,
+            text="换行数量检查",
+            variable=self.run_line_break_check_var,
+        ).grid(row=1, column=2, sticky="w", pady=(12, 4))
+        ttk.Checkbutton(
+            task_frame,
+            text="同源译文一致性",
+            variable=self.run_source_consistency_check_var,
+        ).grid(row=2, column=0, sticky="w", pady=(8, 0))
+        ttk.Checkbutton(
+            task_frame,
+            text="Target 中文检查",
+            variable=self.run_chinese_target_check_var,
+        ).grid(row=2, column=1, sticky="w", pady=(8, 0))
+
+        self.term_settings_frame = ttk.LabelFrame(
+            self.scroll_content,
+            text="术语检查设置",
+            padding=12,
+        )
+        self.term_settings_frame.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        self.term_settings_frame.columnconfigure(1, weight=1)
+        ttk.Label(self.term_settings_frame, text="术语标记").grid(
+            row=0, column=0, sticky="w"
+        )
+        term_mark_frame = ttk.Frame(self.term_settings_frame)
+        term_mark_frame.grid(row=0, column=1, columnspan=2, sticky="w", padx=(12, 0))
+        ttk.Checkbutton(
+            term_mark_frame,
+            text="中文方括号【】",
+            variable=self.term_mark_style_vars["【】"],
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Checkbutton(
+            term_mark_frame,
+            text="半角方括号 []",
+            variable=self.term_mark_style_vars["[]"],
+        ).grid(row=0, column=1, sticky="w", padx=(16, 0))
+
+        ttk.Label(self.term_settings_frame, text="历史 TB（可选）").grid(
+            row=1, column=0, sticky="w", pady=(12, 0)
+        )
+        ttk.Entry(
+            self.term_settings_frame,
+            textvariable=self.term_history_tb_file_var,
+            width=48,
+        ).grid(row=1, column=1, sticky="ew", padx=(12, 8), pady=(12, 0))
+        history_buttons = ttk.Frame(self.term_settings_frame)
+        history_buttons.grid(row=1, column=2, sticky="e", pady=(12, 0))
+        ttk.Button(
+            history_buttons,
+            text="选择",
+            command=self.choose_term_history_tb_file,
+        ).grid(row=0, column=0)
+        ttk.Button(
+            history_buttons,
+            text="清空",
+            command=self.clear_term_history_tb_file,
+        ).grid(row=0, column=1, padx=(6, 0))
+
+        history_scope = ttk.Frame(self.term_settings_frame)
+        history_scope.grid(row=2, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Label(history_scope, text="工作表").grid(row=0, column=0, sticky="w")
+        self.term_history_sheet_combobox = ttk.Combobox(
+            history_scope,
+            textvariable=self.term_history_sheet_var,
+            width=16,
+            state="readonly",
+        )
+        self.term_history_sheet_combobox.grid(row=0, column=1, sticky="w", padx=(8, 18))
+        self.term_history_sheet_combobox.bind(
+            "<<ComboboxSelected>>",
+            self.handle_term_history_sheet_selected,
+        )
+        ttk.Label(history_scope, text="Source 列").grid(row=0, column=2, sticky="w")
+        ttk.Entry(
+            history_scope,
+            textvariable=self.term_history_source_column_var,
+            width=7,
+        ).grid(row=0, column=3, sticky="w", padx=(8, 18))
+        ttk.Label(history_scope, text="Target 列").grid(row=0, column=4, sticky="w")
+        ttk.Entry(
+            history_scope,
+            textvariable=self.term_history_target_column_var,
+            width=7,
+        ).grid(row=0, column=5, sticky="w", padx=(8, 18))
+        ttk.Label(history_scope, text="开始行").grid(row=0, column=6, sticky="w")
+        ttk.Spinbox(
+            history_scope,
+            textvariable=self.term_history_start_row_var,
+            width=7,
+            from_=1,
+            to=1_000_000,
+        ).grid(row=0, column=7, sticky="w", padx=(8, 0))
+        ttk.Label(
+            self.term_settings_frame,
+            text="未选择术语标记时，必须提供历史 TB。",
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(10, 0))
+        self.term_settings_frame.grid_remove()
+
+        self.tag_settings_frame = ttk.LabelFrame(
+            self.scroll_content,
+            text="Tag 检查设置",
+            padding=12,
+        )
+        self.tag_settings_frame.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        ttk.Label(self.tag_settings_frame, text="检查模式").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Radiobutton(
+            self.tag_settings_frame,
+            text="常规 Tag",
+            variable=self.tag_mode_var,
+            value="standard",
+            command=self.handle_tag_mode_changed,
+        ).grid(row=0, column=1, sticky="w", padx=(12, 0))
+        ttk.Radiobutton(
+            self.tag_settings_frame,
+            text="memoQ Tag",
+            variable=self.tag_mode_var,
+            value="memoq",
+            command=self.handle_tag_mode_changed,
+        ).grid(row=0, column=2, sticky="w", padx=(16, 0))
+
+        ttk.Label(self.tag_settings_frame, text="常规类型").grid(
+            row=1, column=0, sticky="w", pady=(12, 0)
+        )
+        standard_tag_frame = ttk.Frame(self.tag_settings_frame)
+        standard_tag_frame.grid(row=1, column=1, columnspan=3, sticky="w", padx=(12, 0), pady=(12, 0))
+        self.standard_tag_checkbuttons = []
+        for column, (label, variable) in enumerate(
+            (
+                ("<...> tag", self.angle_var),
+                ("[color=...] tag", self.square_color_var),
+                ("{...} placeholder", self.brace_var),
+                (r"\n mark", self.newline_var),
+            )
+        ):
+            checkbutton = ttk.Checkbutton(
+                standard_tag_frame,
+                text=label,
+                variable=variable,
+            )
+            checkbutton.grid(row=0, column=column, sticky="w", padx=(0 if column == 0 else 16, 0))
+            self.standard_tag_checkbuttons.append(checkbutton)
+        self.tag_settings_frame.grid_remove()
+
+        ttk.Button(
+            self,
+            text="开始检查",
+            command=self.run_selected_tasks,
+            style="Workflow.Primary.TButton",
+        ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         ttk.Label(
             self,
-            text="说明：按顺序复用现有 checker；Tag检查中 memoQ tag 与其他检查类型互斥。",
-        ).grid(row=13, column=0, columnspan=3, sticky="w", pady=(12, 0))
+            textvariable=self.output_preview_var,
+            foreground="#555555",
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
-        self.columnconfigure(1, weight=1)
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
 
-    def standard_token_vars(self) -> tuple[tk.BooleanVar, ...]:
+    def handle_scroll_content_configure(self, _event: object | None = None) -> None:
+        self.refresh_scroll_region()
+
+    def handle_scroll_canvas_configure(self, event: object) -> None:
+        width = getattr(event, "width", self.scroll_canvas.winfo_width())
+        self.scroll_canvas.itemconfigure(self.scroll_content_window, width=width)
+        self.refresh_scroll_region()
+
+    def refresh_scroll_region(self) -> None:
+        content_bounds = self.scroll_canvas.bbox("all")
+        if content_bounds:
+            self.scroll_canvas.configure(scrollregion=content_bounds)
+
+    def bind_workflow_mousewheel(self, _event: object | None = None) -> None:
+        self.bind_all("<MouseWheel>", self.handle_workflow_mousewheel)
+
+    def unbind_workflow_mousewheel(self, _event: object | None = None) -> None:
+        self.unbind_all("<MouseWheel>")
+
+    def handle_workflow_mousewheel(self, event: object) -> None:
+        delta = getattr(event, "delta", 0)
+        if delta:
+            self.scroll_canvas.yview_scroll(-1 if delta > 0 else 1, "units")
+
+    def reveal_settings_frame(self, frame: ttk.LabelFrame) -> None:
+        self.update_idletasks()
+        self.refresh_scroll_region()
+        content_height = max(self.scroll_content.winfo_reqheight(), 1)
+        target_fraction = max(0.0, min(frame.winfo_y() / content_height, 1.0))
+        self.scroll_canvas.yview_moveto(target_fraction)
+
+    def task_vars(self) -> tuple[tk.BooleanVar, ...]:
         return (
-            self.angle_var,
-            self.square_color_var,
-            self.brace_var,
-            self.newline_var,
+            self.run_term_pair_var,
+            self.run_tag_check_var,
+            self.run_line_break_check_var,
+            self.run_source_consistency_check_var,
+            self.run_chinese_target_check_var,
         )
 
-    def handle_standard_token_type_selected(self) -> None:
-        if any(variable.get() for variable in self.standard_token_vars()):
-            self.memoq_var.set(False)
+    def select_all_tasks(self) -> None:
+        for variable in self.task_vars():
+            variable.set(True)
+        self.handle_term_check_toggled()
+        self.handle_tag_check_toggled()
 
-    def handle_memoq_token_type_selected(self) -> None:
-        if self.memoq_var.get():
-            for variable in self.standard_token_vars():
-                variable.set(False)
+    def clear_all_tasks(self) -> None:
+        for variable in self.task_vars():
+            variable.set(False)
+        self.handle_term_check_toggled()
+        self.handle_tag_check_toggled()
+
+    def set_term_settings_expanded(self, expanded: bool) -> None:
+        self.term_settings_expanded = expanded
+        self.term_settings_button_text_var.set("收起设置" if expanded else "展开设置")
+        if expanded:
+            self.term_settings_frame.grid()
+            if hasattr(self, "scroll_canvas"):
+                self.after_idle(
+                    lambda: self.reveal_settings_frame(self.term_settings_frame)
+                )
+        else:
+            self.term_settings_frame.grid_remove()
+
+    def toggle_term_settings(self) -> None:
+        if self.run_term_pair_var.get():
+            expanded = not self.term_settings_expanded
+            if expanded and self.tag_settings_expanded:
+                self.set_tag_settings_expanded(False)
+            self.set_term_settings_expanded(expanded)
+
+    def set_tag_settings_expanded(self, expanded: bool) -> None:
+        self.tag_settings_expanded = expanded
+        self.tag_settings_button_text_var.set("收起设置" if expanded else "展开设置")
+        if expanded:
+            self.tag_settings_frame.grid()
+            if hasattr(self, "scroll_canvas"):
+                self.after_idle(
+                    lambda: self.reveal_settings_frame(self.tag_settings_frame)
+                )
+        else:
+            self.tag_settings_frame.grid_remove()
+
+    def toggle_tag_settings(self) -> None:
+        if self.run_tag_check_var.get():
+            expanded = not self.tag_settings_expanded
+            if expanded and self.term_settings_expanded:
+                self.set_term_settings_expanded(False)
+            self.set_tag_settings_expanded(expanded)
+
+    def handle_term_check_toggled(self) -> None:
+        enabled = self.run_term_pair_var.get()
+        self.term_settings_button.configure(state="normal" if enabled else "disabled")
+        if not enabled:
+            self.set_term_settings_expanded(False)
+
+    def handle_tag_check_toggled(self) -> None:
+        enabled = self.run_tag_check_var.get()
+        self.tag_settings_button.configure(state="normal" if enabled else "disabled")
+        if not enabled:
+            self.set_tag_settings_expanded(False)
+        self.handle_tag_mode_changed()
+
+    def handle_tag_mode_changed(self) -> None:
+        standard_enabled = (
+            self.run_tag_check_var.get() and self.tag_mode_var.get() == "standard"
+        )
+        for checkbutton in getattr(self, "standard_tag_checkbuttons", ()):
+            checkbutton.configure(state="normal" if standard_enabled else "disabled")
+
+    def update_output_preview(self) -> None:
+        input_file = self.input_file_var.get().strip()
+        if not input_file:
+            self.output_preview_var.set("输出文件：选择输入 Excel 后自动生成")
+            return
+        output_name = build_default_output_path(input_file).name
+        self.output_preview_var.set(f"输出文件：{output_name}")
+
+    def handle_input_file_focus_out(self, _event: object | None = None) -> None:
+        self.refresh_sheet_choices(show_error=False)
 
     def choose_input_file(self) -> None:
         file_path = filedialog.askopenfilename(
@@ -232,6 +496,7 @@ class WorkflowRunnerApp(ttk.Frame):
 
     def refresh_sheet_choices(self, show_error: bool = True) -> None:
         file_path = self.input_file_var.get().strip()
+        self.update_output_preview()
         if not file_path:
             self.sheet_combobox["values"] = ()
             self.sheet_var.set("")
@@ -324,6 +589,9 @@ class WorkflowRunnerApp(ttk.Frame):
         )
 
     def get_selected_tag_token_types(self) -> tuple[str, ...]:
+        if self.tag_mode_var.get() == "memoq":
+            return ("memoq",)
+
         token_types: list[str] = []
         if self.angle_var.get():
             token_types.append("angle")
@@ -333,8 +601,6 @@ class WorkflowRunnerApp(ttk.Frame):
             token_types.append("brace")
         if self.newline_var.get():
             token_types.append("newline")
-        if self.memoq_var.get():
-            token_types.append("memoq")
         return tuple(token_types)
 
     def run_selected_tasks(self) -> None:
@@ -347,6 +613,9 @@ class WorkflowRunnerApp(ttk.Frame):
         target_column = self.target_column_var.get().strip()
         run_term_pair_check = self.run_term_pair_var.get()
         run_tag_check = self.run_tag_check_var.get()
+        run_line_break_check = self.run_line_break_check_var.get()
+        run_source_consistency_check = self.run_source_consistency_check_var.get()
+        run_chinese_target_check = self.run_chinese_target_check_var.get()
         term_mark_styles = self.get_selected_term_mark_styles()
         tag_token_types = self.get_selected_tag_token_types()
         term_history_start_row = 2
@@ -356,6 +625,17 @@ class WorkflowRunnerApp(ttk.Frame):
             return
         if not source_column or not target_column:
             messagebox.showerror("缺少列信息", "请填写 source 列和 target 列。")
+            return
+        if not any(
+            (
+                run_term_pair_check,
+                run_tag_check,
+                run_line_break_check,
+                run_source_consistency_check,
+                run_chinese_target_check,
+            )
+        ):
+            messagebox.showerror("缺少任务", "请至少选择一个质量检查项目。")
             return
         if run_term_pair_check and not term_mark_styles and not term_history_tb_file:
             messagebox.showerror(
@@ -404,31 +684,45 @@ class WorkflowRunnerApp(ttk.Frame):
                 term_history_start_row=term_history_start_row,
                 run_tag_check=run_tag_check,
                 tag_token_types=tag_token_types,
+                run_line_break_check=run_line_break_check,
+                run_source_consistency_check=run_source_consistency_check,
+                run_chinese_target_check=run_chinese_target_check,
             )
         except Exception as exc:
             messagebox.showerror("处理失败", str(exc))
             return
 
         lines = [
-            "Workflow 执行完成。",
+            "一键质量检查完成。",
             f"检查工作表: {summary.worksheet_title}",
             f"source 列: {summary.source_column}",
             f"target 列: {summary.target_column}",
         ]
         if summary.ran_term_pair_check:
             lines.append(f"术语表条目数: {summary.term_count}")
-            lines.append(f"术语问题条数: {summary.term_problem_count}")
+            lines.append(f"术语问题行数: {summary.term_problem_rows}")
             if term_history_tb_file:
                 lines.append(f"术语历史 TB: {term_history_tb_file}")
         if summary.ran_tag_check:
-            lines.append(f"Tag问题条数: {summary.tag_problem_count}")
+            lines.append(f"Tag问题行数: {summary.tag_problem_rows}")
+        if summary.ran_line_break_check:
+            lines.append(f"换行数量问题行数: {summary.line_break_problem_count}")
+        if summary.ran_source_consistency_check:
+            lines.append(
+                f"同源译文不一致 source 数: {summary.source_consistency_problem_count}"
+            )
+            lines.append(
+                f"同源译文不一致涉及行数: {summary.source_consistency_problem_rows}"
+            )
+        if summary.ran_chinese_target_check:
+            lines.append(f"Target 中文问题行数: {summary.chinese_target_problem_count}")
         lines.append(f"输出文件: {summary.output_path}")
         messagebox.showinfo("处理完成", "\n".join(lines))
 
 
 def main() -> None:
     root = tk.Tk()
-    root.title("Excel Workflow 编排")
+    root.title("一键质量检查")
     root.resizable(False, False)
     app = WorkflowRunnerApp(root)
     app.grid(row=0, column=0, sticky="nsew")
