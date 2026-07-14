@@ -20,7 +20,8 @@ class ChineseTargetTextTests(unittest.TestCase):
         self.assertTrue(contains_chinese("Keep 中文 text"))
         self.assertTrue(contains_chinese("Only punctuation ，。！？"))
         self.assertTrue(contains_chinese("Fullwidth marks 【】（）《》“”"))
-        self.assertTrue(contains_chinese("Typography marks “”‘’—…·"))
+        self.assertTrue(contains_chinese("Typography marks “”‘’·"))
+        self.assertFalse(contains_chinese("Allowed punctuation —…"))
         self.assertFalse(contains_chinese(""))
         self.assertFalse(contains_chinese(None))
         self.assertFalse(contains_chinese(42))
@@ -28,7 +29,8 @@ class ChineseTargetTextTests(unittest.TestCase):
         self.assertFalse(contains_chinese("Fullwidth alnum ＡＢ１２"))
 
     def test_extract_chinese_characters_preserves_match_order(self) -> None:
-        self.assertEqual(extract_chinese_characters("A中B，C（D）“E”…"), "中，（）“”…")
+        self.assertEqual(extract_chinese_characters("A中B，C（D）“E”…"), "中，（）“”")
+        self.assertEqual(extract_chinese_characters("—…"), "")
         self.assertEqual(extract_chinese_characters("No Chinese"), "")
 
 

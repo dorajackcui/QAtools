@@ -27,7 +27,7 @@ LEGACY_PROBLEM_SHEET_NAMES = ("中文检查问题",)
 CHINESE_PATTERN = re.compile(
     r"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF"
     r"\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65"
-    r"\u00B7\u2014\u2018\u2019\u201C\u201D\u2026]"
+    r"\u00B7\u2018\u2019\u201C\u201D]"
 )
 
 
