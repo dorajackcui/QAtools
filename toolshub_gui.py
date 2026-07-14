@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import tkinter as tk
 from tkinter import ttk
 
+from tools.gui_common import configure_tool_page_style
 from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
 from tools.excel_line_splitter.split_excel_lines_gui import SplitExcelLinesApp
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
@@ -177,12 +178,13 @@ class ToolshubApp:
         self.select_tool(first_tool.key)
 
     def _configure_style(self) -> None:
+        configure_tool_page_style(self.root)
         style = ttk.Style(self.root)
         style.configure("Toolshub.AppTitle.TLabel", font=("TkDefaultFont", 15, "bold"))
         style.configure("Toolshub.Category.TLabel", font=("TkDefaultFont", 10, "bold"))
         style.configure("Toolshub.Title.TLabel", font=("TkDefaultFont", 16, "bold"))
         style.configure("Toolshub.Description.TLabel", foreground="#555555")
-        style.configure("Toolshub.Nav.TRadiobutton", padding=(10, 5))
+        style.configure("Toolshub.Nav.TRadiobutton", padding=(10, 6))
 
     def _build_sidebar(self, parent: ttk.Frame) -> None:
         ttk.Label(
@@ -237,12 +239,14 @@ class ToolshubApp:
 
     def _fit_window_to_content(self) -> None:
         self.root.update_idletasks()
-        width = self.root.winfo_reqwidth()
-        height = self.root.winfo_reqheight()
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        width = min(max(self.root.winfo_reqwidth(), 1080), max(screen_width - 80, 900))
+        height = min(max(self.root.winfo_reqheight(), 720), max(screen_height - 80, 640))
         x = max((self.root.winfo_screenwidth() - width) // 2, 0)
         y = max((self.root.winfo_screenheight() - height) // 2, 30)
         self.root.geometry(f"{width}x{height}+{x}+{y}")
-        self.root.minsize(min(width, 980), min(height, 720))
+        self.root.minsize(min(width, 980), min(height, 680))
         self.root.deiconify()
 
 

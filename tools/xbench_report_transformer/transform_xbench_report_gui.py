@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal desktop UI for transforming Xbench QA reports."""
+"""Desktop UI for transforming Xbench QA reports."""
 
 from __future__ import annotations
 
@@ -7,44 +7,73 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import list_workbook_sheets
+from tools.gui_common import (
+    MUTED_LABEL_STYLE,
+    PRIMARY_BUTTON_STYLE,
+    OutputPreviewMixin,
+    add_file_picker_row,
+    configure_tool_page_style,
+    create_section,
+)
 
 try:
-    from .transform_xbench_report import process_excel
+    from .transform_xbench_report import build_default_output_path, process_excel
 except ImportError:
-    from transform_xbench_report import process_excel
+    from transform_xbench_report import build_default_output_path, process_excel
 
 
-class XbenchReportTransformerApp(ttk.Frame):
+class XbenchReportTransformerApp(OutputPreviewMixin, ttk.Frame):
+    output_path_builder = staticmethod(build_default_output_path)
+
     def __init__(self, master: tk.Misc) -> None:
         super().__init__(master, padding=16)
         self.input_file_var = tk.StringVar()
         self.sheet_var = tk.StringVar()
-
+        self.output_preview_var = tk.StringVar(
+            value="输出文件：选择输入 Excel 后自动生成"
+        )
         self._build_ui()
 
     def _build_ui(self) -> None:
-        ttk.Label(self, text="Xbench QA Report").grid(row=0, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.input_file_var, width=42).grid(
-            row=0, column=1, sticky="ew", pady=(0, 8)
-        )
-        ttk.Button(self, text="选择", command=self.choose_input_file).grid(
-            row=0, column=2, padx=(8, 0), pady=(0, 8)
-        )
-
-        ttk.Label(self, text="工作表名").grid(row=2, column=0, sticky="w", pady=(0, 8))
-        self.sheet_combobox = ttk.Combobox(self, textvariable=self.sheet_var, width=20, state="readonly")
-        self.sheet_combobox.grid(row=2, column=1, sticky="w", pady=(0, 8))
-
-        ttk.Button(self, text="开始转换", command=self.run_transform).grid(
-            row=3, column=0, columnspan=3, sticky="ew"
+        configure_tool_page_style(self)
+        input_frame = create_section(self, title="输入与范围", row=0)
+        add_file_picker_row(
+            input_frame,
+            label="Xbench QA Report",
+            variable=self.input_file_var,
+            command=self.choose_input_file,
+            focus_out_command=self.handle_input_file_focus_out,
         )
 
-        note = "规则：把 Xbench QA 明细整理为 文件名 / key / source / target / QA问题；默认输出到原文件同目录。"
-        ttk.Label(self, text=note, wraplength=720).grid(
-            row=4, column=0, columnspan=3, sticky="w", pady=(12, 0)
+        scope_frame = ttk.Frame(input_frame)
+        scope_frame.grid(row=1, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Label(scope_frame, text="报告工作表").grid(row=0, column=0, sticky="w")
+        self.sheet_combobox = ttk.Combobox(
+            scope_frame,
+            textvariable=self.sheet_var,
+            width=22,
+            state="readonly",
         )
+        self.sheet_combobox.grid(row=0, column=1, sticky="w", padx=(8, 0))
+        ttk.Label(
+            input_frame,
+            text="将 QA 明细整理为文件名 / key / source / target / QA 问题，并按相同内容聚合。",
+            style=MUTED_LABEL_STYLE,
+            wraplength=760,
+        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
-        self.columnconfigure(1, weight=1)
+        ttk.Button(
+            self,
+            text="开始转换",
+            command=self.run_transform,
+            style=PRIMARY_BUTTON_STYLE,
+        ).grid(row=1, column=0, sticky="ew")
+        ttk.Label(
+            self,
+            textvariable=self.output_preview_var,
+            style=MUTED_LABEL_STYLE,
+        ).grid(row=2, column=0, sticky="w", pady=(8, 0))
+        self.columnconfigure(0, weight=1)
 
     def choose_input_file(self) -> None:
         file_path = filedialog.askopenfilename(
@@ -53,9 +82,9 @@ class XbenchReportTransformerApp(ttk.Frame):
         )
         if not file_path:
             return
-
         self.input_file_var.set(file_path)
         self.refresh_sheet_choices()
+        self.update_output_preview()
 
     def clear_sheet_choices(self) -> None:
         self.sheet_combobox["values"] = ()
@@ -66,7 +95,6 @@ class XbenchReportTransformerApp(ttk.Frame):
         if not input_file:
             self.clear_sheet_choices()
             return
-
         try:
             sheet_choices = list_workbook_sheets(input_file)
         except Exception as exc:
@@ -78,17 +106,19 @@ class XbenchReportTransformerApp(ttk.Frame):
         self.sheet_combobox["values"] = sheet_choices.sheet_names
         selected_sheet = self.sheet_var.get().strip()
         if selected_sheet not in sheet_choices.sheet_names:
-            selected_sheet = sheet_choices.default_sheet or (sheet_choices.sheet_names[0] if sheet_choices.sheet_names else "")
+            selected_sheet = sheet_choices.default_sheet or (
+                sheet_choices.sheet_names[0] if sheet_choices.sheet_names else ""
+            )
             self.sheet_var.set(selected_sheet)
 
     def run_transform(self) -> None:
         input_file = self.input_file_var.get().strip()
         sheet = self.sheet_var.get().strip() or None
-
         if not input_file:
-            messagebox.showerror("缺少文件", "请先选择 Xbench QA Report Excel 文件。")
+            messagebox.showerror(
+                "缺少文件", "请先选择 Xbench QA Report Excel 文件。"
+            )
             return
-
         try:
             summary = process_excel(
                 input_file=input_file,
@@ -116,9 +146,11 @@ class XbenchReportTransformerApp(ttk.Frame):
 def main() -> None:
     root = tk.Tk()
     root.title("Xbench QA Report 转换")
-    root.resizable(False, False)
+    root.resizable(True, True)
     app = XbenchReportTransformerApp(root)
     app.grid(row=0, column=0, sticky="nsew")
+    root.columnconfigure(0, weight=1)
+    root.rowconfigure(0, weight=1)
     root.mainloop()
 
 

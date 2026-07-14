@@ -156,6 +156,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.output_file_var = FakeVar("")
         app.sheet_var = FakeVar("")
         app.sheet_combobox = FakeCombobox()
+        app.output_preview_var = FakeVar("")
         return app
 
     def build_tag_checker_app(self, input_path: Path) -> TagPlaceholderCheckerApp:
@@ -175,6 +176,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.source_column_var = FakeVar("A")
         app.target_column_var = FakeVar("B")
         app.sheet_combobox = FakeCombobox()
+        app.output_preview_var = FakeVar("")
         return app
 
     def build_source_consistency_checker_app(
@@ -206,6 +208,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.target_column_var = FakeVar("B")
         app.result_column_var = FakeVar("")
         app.sheet_combobox = FakeCombobox()
+        app.output_preview_var = FakeVar("")
         return app
 
     def build_workflow_app(self, input_path: Path) -> WorkflowRunnerApp:
@@ -326,6 +329,30 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertTrue(
             app.output_preview_var.get().endswith("term_pair_check_input.xlsx")
         )
+
+    def test_simple_tool_pages_preview_their_automatic_output_names(self) -> None:
+        cases = (
+            (SplitExcelLinesApp, "split_lines_input.xlsx"),
+            (TagPlaceholderCheckerApp, "tag_check_input.xlsx"),
+            (LineBreakCheckerApp, "line_break_check_input.xlsx"),
+            (
+                SourceConsistencyCheckerApp,
+                "source_consistency_check_input.xlsx",
+            ),
+            (FrenchNbspRestorerApp, "french_nbsp_restore_input.xlsx"),
+            (ChineseTargetCheckerApp, "target_chinese_check_input.xlsx"),
+            (XbenchReportTransformerApp, "xbench_transform_input.xlsx"),
+        )
+
+        for app_type, expected_name in cases:
+            with self.subTest(app=app_type.__name__):
+                app = app_type.__new__(app_type)
+                app.input_file_var = FakeVar("D:/project/input.xlsx")
+                app.output_preview_var = FakeVar("")
+
+                app.update_output_preview()
+
+                self.assertTrue(app.output_preview_var.get().endswith(expected_name))
 
     def test_splitter_refresh_populates_sheet_choices(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -768,7 +795,11 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertTrue(app.square_color_var.get())
         self.assertTrue(app.brace_var.get())
         self.assertTrue(app.newline_var.get())
-        self.assertFalse(app.memoq_var.get())
+        self.assertEqual(app.tag_mode_var.get(), "standard")
+        self.assertEqual(
+            app.get_selected_token_types(),
+            ("angle", "square_color", "brace", "newline"),
+        )
 
     def test_tag_placeholder_gui_makes_memoq_mutually_exclusive_with_standard_tags(self) -> None:
         app = TagPlaceholderCheckerApp.__new__(TagPlaceholderCheckerApp)
@@ -776,21 +807,26 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.square_color_var = FakeBoolVar(True)
         app.brace_var = FakeBoolVar(True)
         app.newline_var = FakeBoolVar(True)
-        app.memoq_var = FakeBoolVar(True)
+        app.tag_mode_var = FakeVar("memoq")
+        app.standard_tag_checkbuttons = [FakeWidget(), FakeWidget()]
 
-        app.handle_memoq_token_type_selected()
+        app.handle_tag_mode_changed()
 
-        self.assertFalse(app.angle_var.get())
-        self.assertFalse(app.square_color_var.get())
-        self.assertFalse(app.brace_var.get())
-        self.assertFalse(app.newline_var.get())
-        self.assertTrue(app.memoq_var.get())
+        self.assertEqual(app.get_selected_token_types(), ("memoq",))
+        self.assertTrue(
+            all(widget.state == "disabled" for widget in app.standard_tag_checkbuttons)
+        )
 
-        app.angle_var.set(True)
-        app.handle_standard_token_type_selected()
+        app.tag_mode_var.set("standard")
+        app.handle_tag_mode_changed()
 
-        self.assertTrue(app.angle_var.get())
-        self.assertFalse(app.memoq_var.get())
+        self.assertEqual(
+            app.get_selected_token_types(),
+            ("angle", "square_color", "brace", "newline"),
+        )
+        self.assertTrue(
+            all(widget.state == "normal" for widget in app.standard_tag_checkbuttons)
+        )
 
     def test_workflow_gui_defaults_to_square_and_book_title_term_marks(self) -> None:
         app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)

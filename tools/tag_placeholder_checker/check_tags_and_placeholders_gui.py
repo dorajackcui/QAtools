@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal desktop UI for tag and placeholder checking in Excel."""
+"""Desktop UI for tag and placeholder checking in Excel."""
 
 from __future__ import annotations
 
@@ -7,14 +7,25 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
+from tools.gui_common import (
+    MUTED_LABEL_STYLE,
+    PRIMARY_BUTTON_STYLE,
+    OutputPreviewMixin,
+    add_file_picker_row,
+    configure_tool_page_style,
+    create_section,
+    parse_positive_int,
+)
 
 try:
-    from .check_tags_and_placeholders import process_excel
+    from .check_tags_and_placeholders import build_default_output_path, process_excel
 except ImportError:
-    from check_tags_and_placeholders import process_excel
+    from check_tags_and_placeholders import build_default_output_path, process_excel
 
 
-class TagPlaceholderCheckerApp(ttk.Frame):
+class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
+    output_path_builder = staticmethod(build_default_output_path)
+
     def __init__(self, master: tk.Misc) -> None:
         super().__init__(master, padding=16)
         self.input_file_var = tk.StringVar()
@@ -26,117 +37,126 @@ class TagPlaceholderCheckerApp(ttk.Frame):
         self.square_color_var = tk.BooleanVar(value=True)
         self.brace_var = tk.BooleanVar(value=True)
         self.newline_var = tk.BooleanVar(value=True)
-        self.memoq_var = tk.BooleanVar(value=False)
-
+        self.tag_mode_var = tk.StringVar(value="standard")
+        self.output_preview_var = tk.StringVar(
+            value="输出文件：选择输入 Excel 后自动生成"
+        )
+        self.standard_tag_checkbuttons: list[ttk.Checkbutton] = []
         self._build_ui()
 
     def _build_ui(self) -> None:
-        ttk.Label(self, text="输入 Excel").grid(row=0, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.input_file_var, width=42).grid(
-            row=0, column=1, sticky="ew", pady=(0, 8)
-        )
-        ttk.Button(self, text="选择", command=self.choose_input_file).grid(
-            row=0, column=2, padx=(8, 0), pady=(0, 8)
+        configure_tool_page_style(self)
+        input_frame = create_section(self, title="输入与范围", row=0)
+        add_file_picker_row(
+            input_frame,
+            label="输入 Excel",
+            variable=self.input_file_var,
+            command=self.choose_input_file,
+            focus_out_command=self.handle_input_file_focus_out,
         )
 
-        ttk.Label(self, text="检查工作表").grid(row=2, column=0, sticky="w", pady=(0, 8))
+        scope_frame = ttk.Frame(input_frame)
+        scope_frame.grid(row=1, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Label(scope_frame, text="检查工作表").grid(row=0, column=0, sticky="w")
         self.sheet_combobox = ttk.Combobox(
-            self,
+            scope_frame,
             textvariable=self.sheet_var,
-            width=20,
+            width=18,
             state="readonly",
         )
-        self.sheet_combobox.grid(row=2, column=1, sticky="w", pady=(0, 8))
+        self.sheet_combobox.grid(row=0, column=1, sticky="w", padx=(8, 18))
         self.sheet_combobox.bind("<<ComboboxSelected>>", self.handle_sheet_selected)
+        ttk.Label(scope_frame, text="Source 列").grid(row=0, column=2, sticky="w")
+        ttk.Entry(scope_frame, textvariable=self.source_column_var, width=7).grid(
+            row=0, column=3, sticky="w", padx=(8, 18)
+        )
+        ttk.Label(scope_frame, text="Target 列").grid(row=0, column=4, sticky="w")
+        ttk.Entry(scope_frame, textvariable=self.target_column_var, width=7).grid(
+            row=0, column=5, sticky="w", padx=(8, 18)
+        )
+        ttk.Label(scope_frame, text="开始行").grid(row=0, column=6, sticky="w")
+        ttk.Spinbox(
+            scope_frame,
+            textvariable=self.start_row_var,
+            width=7,
+            from_=1,
+            to=1_000_000,
+        ).grid(row=0, column=7, sticky="w", padx=(8, 0))
 
-        ttk.Label(self, text="Source 列").grid(row=3, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.source_column_var, width=10).grid(
-            row=3, column=1, sticky="w", pady=(0, 8)
-        )
+        settings_frame = create_section(self, title="检查设置", row=1)
+        ttk.Label(settings_frame, text="检查模式").grid(row=0, column=0, sticky="w")
+        ttk.Radiobutton(
+            settings_frame,
+            text="常规 Tag",
+            variable=self.tag_mode_var,
+            value="standard",
+            command=self.handle_tag_mode_changed,
+        ).grid(row=0, column=1, sticky="w", padx=(12, 0))
+        ttk.Radiobutton(
+            settings_frame,
+            text="memoQ Tag",
+            variable=self.tag_mode_var,
+            value="memoq",
+            command=self.handle_tag_mode_changed,
+        ).grid(row=0, column=2, sticky="w", padx=(16, 0))
 
-        ttk.Label(self, text="Target 列").grid(row=4, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.target_column_var, width=10).grid(
-            row=4, column=1, sticky="w", pady=(0, 8)
+        ttk.Label(settings_frame, text="常规类型").grid(
+            row=1, column=0, sticky="w", pady=(12, 0)
         )
+        token_type_frame = ttk.Frame(settings_frame)
+        token_type_frame.grid(
+            row=1,
+            column=1,
+            columnspan=4,
+            sticky="w",
+            padx=(12, 0),
+            pady=(12, 0),
+        )
+        for column, (label, variable) in enumerate(
+            (
+                ("<...> tag", self.angle_var),
+                ("[color=...] tag", self.square_color_var),
+                ("{...} placeholder", self.brace_var),
+                (r"\n mark", self.newline_var),
+            )
+        ):
+            checkbutton = ttk.Checkbutton(
+                token_type_frame,
+                text=label,
+                variable=variable,
+            )
+            checkbutton.grid(
+                row=0,
+                column=column,
+                sticky="w",
+                padx=(0 if column == 0 else 16, 0),
+            )
+            self.standard_tag_checkbuttons.append(checkbutton)
 
-        ttk.Label(self, text="开始行").grid(row=5, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.start_row_var, width=10).grid(
-            row=5, column=1, sticky="w", pady=(0, 8)
-        )
+        ttk.Label(
+            settings_frame,
+            text="逐行比较 source / target；memoQ Tag 与常规类型互斥。",
+            style=MUTED_LABEL_STYLE,
+            wraplength=760,
+        ).grid(row=2, column=0, columnspan=5, sticky="w", pady=(12, 0))
 
-        ttk.Label(self, text="检查类型").grid(row=6, column=0, sticky="w", pady=(0, 8))
-        token_type_frame = ttk.Frame(self)
-        token_type_frame.grid(row=6, column=1, columnspan=2, sticky="w", pady=(0, 8))
-        ttk.Checkbutton(
-            token_type_frame,
-            text="<...> tag",
-            variable=self.angle_var,
-            command=self.handle_standard_token_type_selected,
-        ).grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Checkbutton(
-            token_type_frame,
-            text="[color=...] tag",
-            variable=self.square_color_var,
-            command=self.handle_standard_token_type_selected,
-        ).grid(
-            row=0, column=1, sticky="w", padx=(12, 0)
-        )
-        ttk.Checkbutton(
-            token_type_frame,
-            text="{...} placeholder",
-            variable=self.brace_var,
-            command=self.handle_standard_token_type_selected,
-        ).grid(
-            row=0, column=2, sticky="w", padx=(12, 0)
-        )
-        ttk.Checkbutton(
-            token_type_frame,
-            text="\\n mark",
-            variable=self.newline_var,
-            command=self.handle_standard_token_type_selected,
-        ).grid(
-            row=0, column=3, sticky="w", padx=(12, 0)
-        )
-        ttk.Checkbutton(
-            token_type_frame,
-            text="memoQ tag",
-            variable=self.memoq_var,
-            command=self.handle_memoq_token_type_selected,
-        ).grid(
-            row=0, column=4, sticky="w", padx=(12, 0)
-        )
-
-        ttk.Button(self, text="开始检查", command=self.run_check).grid(
-            row=7, column=0, columnspan=3, sticky="ew"
-        )
-
-        note = r"规则：逐行比对 source / target 中的 <...>、[color=...]、[/color]、{...}、\n 和 memoQ tag，检查缺失、多出和数量不一致。"
-        ttk.Label(self, text=note).grid(row=8, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Button(
+            self,
+            text="开始检查",
+            command=self.run_check,
+            style=PRIMARY_BUTTON_STYLE,
+        ).grid(row=2, column=0, sticky="ew")
         ttk.Label(
             self,
-            text="<...> 和 {...} 按普通 tag / placeholder 检查；memoQ tag 与其他检查类型互斥。",
-        ).grid(row=9, column=0, columnspan=3, sticky="w", pady=(4, 0))
+            textvariable=self.output_preview_var,
+            style=MUTED_LABEL_STYLE,
+        ).grid(row=3, column=0, sticky="w", pady=(8, 0))
+        self.columnconfigure(0, weight=1)
 
-        self.columnconfigure(1, weight=1)
-
-    def standard_token_vars(self) -> tuple[tk.BooleanVar, ...]:
-        return (
-            self.angle_var,
-            self.square_color_var,
-            self.brace_var,
-            self.newline_var,
-        )
-
-    def handle_standard_token_type_selected(self) -> None:
-        if any(variable.get() for variable in self.standard_token_vars()):
-            self.memoq_var.set(False)
-
-    def handle_memoq_token_type_selected(self) -> None:
-        if self.memoq_var.get():
-            for variable in self.standard_token_vars():
-                variable.set(False)
+    def handle_tag_mode_changed(self) -> None:
+        state = "normal" if self.tag_mode_var.get() == "standard" else "disabled"
+        for checkbutton in self.standard_tag_checkbuttons:
+            checkbutton.configure(state=state)
 
     def choose_input_file(self) -> None:
         file_path = filedialog.askopenfilename(
@@ -145,9 +165,9 @@ class TagPlaceholderCheckerApp(ttk.Frame):
         )
         if not file_path:
             return
-
         self.input_file_var.set(file_path)
         self.refresh_sheet_choices()
+        self.update_output_preview()
 
     def refresh_sheet_choices(self, show_error: bool = True) -> None:
         file_path = self.input_file_var.get().strip()
@@ -155,7 +175,6 @@ class TagPlaceholderCheckerApp(ttk.Frame):
             self.sheet_combobox["values"] = ()
             self.sheet_var.set("")
             return
-
         try:
             sheet_choices = list_workbook_sheets(file_path)
         except Exception as exc:
@@ -168,9 +187,10 @@ class TagPlaceholderCheckerApp(ttk.Frame):
         self.sheet_combobox["values"] = sheet_choices.sheet_names
         selected_sheet = self.sheet_var.get().strip()
         if selected_sheet not in sheet_choices.sheet_names:
-            selected_sheet = sheet_choices.default_sheet or (sheet_choices.sheet_names[0] if sheet_choices.sheet_names else "")
+            selected_sheet = sheet_choices.default_sheet or (
+                sheet_choices.sheet_names[0] if sheet_choices.sheet_names else ""
+            )
             self.sheet_var.set(selected_sheet)
-
         self.handle_sheet_selected(show_error=show_error)
 
     def handle_sheet_selected(
@@ -182,20 +202,20 @@ class TagPlaceholderCheckerApp(ttk.Frame):
         sheet_name = self.sheet_var.get().strip() or None
         if not file_path or not sheet_name:
             return
-
         try:
             detected_columns = detect_source_target_columns(file_path, sheet=sheet_name)
         except Exception as exc:
             if show_error:
                 messagebox.showerror("读取失败", str(exc))
             return
-
         if detected_columns.detected_source_column:
             self.source_column_var.set(detected_columns.detected_source_column)
         if detected_columns.detected_target_column:
             self.target_column_var.set(detected_columns.detected_target_column)
 
     def get_selected_token_types(self) -> tuple[str, ...]:
+        if self.tag_mode_var.get() == "memoq":
+            return ("memoq",)
         token_types: list[str] = []
         if self.angle_var.get():
             token_types.append("angle")
@@ -205,8 +225,6 @@ class TagPlaceholderCheckerApp(ttk.Frame):
             token_types.append("brace")
         if self.newline_var.get():
             token_types.append("newline")
-        if self.memoq_var.get():
-            token_types.append("memoq")
         return tuple(token_types)
 
     def run_check(self) -> None:
@@ -226,12 +244,9 @@ class TagPlaceholderCheckerApp(ttk.Frame):
             return
 
         try:
-            start_row = int(self.start_row_var.get().strip() or "2")
-        except ValueError:
-            messagebox.showerror("开始行错误", "开始行必须是整数。")
-            return
-
-        try:
+            start_row = parse_positive_int(
+                self.start_row_var.get(), default=2, field_name="开始行"
+            )
             summary = process_excel(
                 input_file=input_file,
                 sheet=self.sheet_var.get().strip() or None,
@@ -245,32 +260,22 @@ class TagPlaceholderCheckerApp(ttk.Frame):
             messagebox.showerror("处理失败", str(exc))
             return
 
-        selected_labels = []
-        if "angle" in summary.selected_token_types:
-            selected_labels.append("<...> tag")
-        if "square_color" in summary.selected_token_types:
-            selected_labels.append("[color=...] tag")
-        if "brace" in summary.selected_token_types:
-            selected_labels.append("{...} placeholder")
-        if "newline" in summary.selected_token_types:
-            selected_labels.append(r"\n mark")
-        if "memoq" in summary.selected_token_types:
-            selected_labels.append("memoQ tag")
-
+        labels = {
+            "angle": "<...> tag",
+            "square_color": "[color=...] tag",
+            "brace": "{...} placeholder",
+            "newline": r"\n mark",
+            "memoq": "memoQ tag",
+        }
+        selected_labels = [labels[token] for token in summary.selected_token_types]
         messagebox.showinfo(
             "处理完成",
             "\n".join(
                 [
-                    "tag / placeholder 检查已完成。",
+                    "Tag 检查已完成。",
                     f"检查工作表: {summary.worksheet_title}",
                     f"检查类型: {'、'.join(selected_labels)}",
                     f"总行数: {summary.total_rows_checked}",
-                    f"命中检查类型行数: {summary.rows_with_selected_tokens}",
-                    f"含尖括号tag行数: {summary.angle_rows}",
-                    f"含方括号color tag行数: {summary.square_color_rows}",
-                    f"含花括号placeholder行数: {summary.brace_rows}",
-                    rf"含\n mark行数: {summary.newline_rows}",
-                    f"含memoQ tag行数: {summary.memoq_rows}",
                     f"问题行数: {summary.problem_rows}",
                     f"问题条数: {summary.problem_count}",
                     f"输出文件: {summary.output_path}",
@@ -282,9 +287,11 @@ class TagPlaceholderCheckerApp(ttk.Frame):
 def main() -> None:
     root = tk.Tk()
     root.title("Excel Tag / Placeholder 检查")
-    root.resizable(False, False)
+    root.resizable(True, True)
     app = TagPlaceholderCheckerApp(root)
     app.grid(row=0, column=0, sticky="nsew")
+    root.columnconfigure(0, weight=1)
+    root.rowconfigure(0, weight=1)
     root.mainloop()
 
 

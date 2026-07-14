@@ -7,7 +7,13 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
-from tools.gui_common import parse_positive_int
+from tools.gui_common import (
+    MUTED_LABEL_STYLE,
+    PRIMARY_BUTTON_STYLE,
+    SECTION_FRAME_STYLE,
+    configure_tool_page_style,
+    parse_positive_int,
+)
 
 try:
     from .extract_terms_from_excel import (
@@ -48,12 +54,8 @@ class ExtractTermsApp(ttk.Frame):
         self._build_ui()
 
     def _build_ui(self) -> None:
+        configure_tool_page_style(self)
         style = ttk.Style(self)
-        style.configure(
-            "TermCheck.Primary.TButton",
-            font=("TkDefaultFont", 10, "bold"),
-            padding=(12, 8),
-        )
 
         canvas_background = style.lookup("TFrame", "background") or "#f0f0f0"
         self.scroll_canvas = tk.Canvas(
@@ -86,7 +88,12 @@ class ExtractTermsApp(ttk.Frame):
         self.scroll_canvas.bind("<Enter>", self.bind_term_mousewheel)
         self.scroll_canvas.bind("<Leave>", self.unbind_term_mousewheel)
 
-        input_frame = ttk.LabelFrame(self.scroll_content, text="输入与范围", padding=12)
+        input_frame = ttk.LabelFrame(
+            self.scroll_content,
+            text="输入与范围",
+            padding=12,
+            style=SECTION_FRAME_STYLE,
+        )
         input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         input_frame.columnconfigure(1, weight=1)
 
@@ -126,7 +133,12 @@ class ExtractTermsApp(ttk.Frame):
             to=1_000_000,
         ).grid(row=0, column=7, sticky="w", padx=(8, 0))
 
-        source_frame = ttk.LabelFrame(self.scroll_content, text="术语来源", padding=12)
+        source_frame = ttk.LabelFrame(
+            self.scroll_content,
+            text="术语来源",
+            padding=12,
+            style=SECTION_FRAME_STYLE,
+        )
         source_frame.grid(row=1, column=0, sticky="ew")
         source_frame.columnconfigure(1, weight=1)
         ttk.Label(source_frame, text="术语标记").grid(row=0, column=0, sticky="w")
@@ -178,6 +190,7 @@ class ExtractTermsApp(ttk.Frame):
             source_frame,
             text="历史 TB 详情",
             padding=10,
+            style=SECTION_FRAME_STYLE,
         )
         self.history_details_frame.grid(
             row=2,
@@ -234,18 +247,19 @@ class ExtractTermsApp(ttk.Frame):
                 "有标记时提取并检查新术语；不选标记时必须提供历史 TB；"
                 "历史 TB 命中时优先使用历史 target。"
             ),
+            style=MUTED_LABEL_STYLE,
         ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         ttk.Button(
             self,
             text="开始检查",
             command=self.run_extraction,
-            style="TermCheck.Primary.TButton",
+            style=PRIMARY_BUTTON_STYLE,
         ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         ttk.Label(
             self,
             textvariable=self.output_preview_var,
-            foreground="#555555",
+            style=MUTED_LABEL_STYLE,
         ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         self.columnconfigure(0, weight=1)
@@ -543,9 +557,11 @@ class ExtractTermsApp(ttk.Frame):
 def main() -> None:
     root = tk.Tk()
     root.title("Excel 术语检查")
-    root.resizable(False, False)
+    root.resizable(True, True)
     app = ExtractTermsApp(root)
     app.grid(row=0, column=0, sticky="nsew")
+    root.columnconfigure(0, weight=1)
+    root.rowconfigure(0, weight=1)
     root.mainloop()
 
 

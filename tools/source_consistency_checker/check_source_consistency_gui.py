@@ -7,15 +7,25 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
-from tools.gui_common import parse_positive_int
+from tools.gui_common import (
+    MUTED_LABEL_STYLE,
+    PRIMARY_BUTTON_STYLE,
+    OutputPreviewMixin,
+    add_file_picker_row,
+    configure_tool_page_style,
+    create_section,
+    parse_positive_int,
+)
 
 try:
-    from .check_source_consistency import process_excel
+    from .check_source_consistency import build_default_output_path, process_excel
 except ImportError:
-    from check_source_consistency import process_excel
+    from check_source_consistency import build_default_output_path, process_excel
 
 
-class SourceConsistencyCheckerApp(ttk.Frame):
+class SourceConsistencyCheckerApp(OutputPreviewMixin, ttk.Frame):
+    output_path_builder = staticmethod(build_default_output_path)
+
     def __init__(self, master: tk.Misc) -> None:
         super().__init__(master, padding=16)
         self.input_file_var = tk.StringVar()
@@ -23,47 +33,67 @@ class SourceConsistencyCheckerApp(ttk.Frame):
         self.source_column_var = tk.StringVar(value="A")
         self.target_column_var = tk.StringVar(value="B")
         self.start_row_var = tk.StringVar(value="2")
+        self.output_preview_var = tk.StringVar(
+            value="输出文件：选择输入 Excel 后自动生成"
+        )
         self._build_ui()
 
     def _build_ui(self) -> None:
-        ttk.Label(self, text="输入 Excel").grid(row=0, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.input_file_var, width=42).grid(
-            row=0, column=1, sticky="ew", pady=(0, 8)
-        )
-        ttk.Button(self, text="选择", command=self.choose_input_file).grid(
-            row=0, column=2, padx=(8, 0), pady=(0, 8)
+        configure_tool_page_style(self)
+        input_frame = create_section(self, title="输入与范围", row=0)
+        add_file_picker_row(
+            input_frame,
+            label="输入 Excel",
+            variable=self.input_file_var,
+            command=self.choose_input_file,
+            focus_out_command=self.handle_input_file_focus_out,
         )
 
-        ttk.Label(self, text="检查工作表").grid(row=1, column=0, sticky="w", pady=(0, 8))
+        scope_frame = ttk.Frame(input_frame)
+        scope_frame.grid(row=1, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Label(scope_frame, text="检查工作表").grid(row=0, column=0, sticky="w")
         self.sheet_combobox = ttk.Combobox(
-            self, textvariable=self.sheet_var, width=20, state="readonly"
+            scope_frame, textvariable=self.sheet_var, width=18, state="readonly"
         )
-        self.sheet_combobox.grid(row=1, column=1, sticky="w", pady=(0, 8))
+        self.sheet_combobox.grid(row=0, column=1, sticky="w", padx=(8, 18))
         self.sheet_combobox.bind("<<ComboboxSelected>>", self.handle_sheet_selected)
 
-        ttk.Label(self, text="Source 列").grid(row=2, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.source_column_var, width=10).grid(
-            row=2, column=1, sticky="w", pady=(0, 8)
+        ttk.Label(scope_frame, text="Source 列").grid(row=0, column=2, sticky="w")
+        ttk.Entry(scope_frame, textvariable=self.source_column_var, width=7).grid(
+            row=0, column=3, sticky="w", padx=(8, 18)
         )
+        ttk.Label(scope_frame, text="Target 列").grid(row=0, column=4, sticky="w")
+        ttk.Entry(scope_frame, textvariable=self.target_column_var, width=7).grid(
+            row=0, column=5, sticky="w", padx=(8, 18)
+        )
+        ttk.Label(scope_frame, text="开始行").grid(row=0, column=6, sticky="w")
+        ttk.Spinbox(
+            scope_frame,
+            textvariable=self.start_row_var,
+            width=7,
+            from_=1,
+            to=1_000_000,
+        ).grid(row=0, column=7, sticky="w", padx=(8, 0))
 
-        ttk.Label(self, text="Target 列").grid(row=3, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.target_column_var, width=10).grid(
-            row=3, column=1, sticky="w", pady=(0, 8)
-        )
+        ttk.Label(
+            input_frame,
+            text="按 source 单元格文本精确分组，检查同一 source 是否对应多个不同 target。",
+            style=MUTED_LABEL_STYLE,
+            wraplength=760,
+        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
-        ttk.Label(self, text="开始行").grid(row=4, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.start_row_var, width=10).grid(
-            row=4, column=1, sticky="w", pady=(0, 8)
-        )
-
-        ttk.Button(self, text="开始检查一致性", command=self.run_check).grid(
-            row=5, column=0, columnspan=3, sticky="ew"
-        )
+        ttk.Button(
+            self,
+            text="开始检查",
+            command=self.run_check,
+            style=PRIMARY_BUTTON_STYLE,
+        ).grid(row=1, column=0, sticky="ew")
         ttk.Label(
             self,
-            text="规则：按 source 单元格文本精确分组，检查同一 source 是否对应多个不同 target。",
-        ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(12, 0))
-        self.columnconfigure(1, weight=1)
+            textvariable=self.output_preview_var,
+            style=MUTED_LABEL_STYLE,
+        ).grid(row=2, column=0, sticky="w", pady=(8, 0))
+        self.columnconfigure(0, weight=1)
 
     def choose_input_file(self) -> None:
         file_path = filedialog.askopenfilename(
@@ -74,6 +104,7 @@ class SourceConsistencyCheckerApp(ttk.Frame):
             return
         self.input_file_var.set(file_path)
         self.refresh_sheet_choices()
+        self.update_output_preview()
 
     def refresh_sheet_choices(self, show_error: bool = True) -> None:
         file_path = self.input_file_var.get().strip()
@@ -161,9 +192,11 @@ class SourceConsistencyCheckerApp(ttk.Frame):
 def main() -> None:
     root = tk.Tk()
     root.title("相同 Source 译文一致性检查")
-    root.resizable(False, False)
+    root.resizable(True, True)
     app = SourceConsistencyCheckerApp(root)
     app.grid(row=0, column=0, sticky="nsew")
+    root.columnconfigure(0, weight=1)
+    root.rowconfigure(0, weight=1)
     root.mainloop()
 
 

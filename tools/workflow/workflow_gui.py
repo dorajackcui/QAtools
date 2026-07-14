@@ -7,7 +7,13 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
-from tools.gui_common import parse_positive_int
+from tools.gui_common import (
+    MUTED_LABEL_STYLE,
+    PRIMARY_BUTTON_STYLE,
+    SECTION_FRAME_STYLE,
+    configure_tool_page_style,
+    parse_positive_int,
+)
 from tools.term_pair_checker.extract_terms_from_excel import (
     TERM_SHEET_NAME,
     detect_history_tb_columns,
@@ -52,12 +58,8 @@ class WorkflowRunnerApp(ttk.Frame):
         self._build_ui()
 
     def _build_ui(self) -> None:
+        configure_tool_page_style(self)
         style = ttk.Style(self)
-        style.configure(
-            "Workflow.Primary.TButton",
-            font=("TkDefaultFont", 10, "bold"),
-            padding=(12, 8),
-        )
 
         canvas_background = style.lookup("TFrame", "background") or "#f0f0f0"
         self.scroll_canvas = tk.Canvas(
@@ -90,7 +92,12 @@ class WorkflowRunnerApp(ttk.Frame):
         self.scroll_canvas.bind("<Enter>", self.bind_workflow_mousewheel)
         self.scroll_canvas.bind("<Leave>", self.unbind_workflow_mousewheel)
 
-        input_frame = ttk.LabelFrame(self.scroll_content, text="输入与范围", padding=12)
+        input_frame = ttk.LabelFrame(
+            self.scroll_content,
+            text="输入与范围",
+            padding=12,
+            style=SECTION_FRAME_STYLE,
+        )
         input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         input_frame.columnconfigure(1, weight=1)
 
@@ -130,7 +137,12 @@ class WorkflowRunnerApp(ttk.Frame):
             to=1_000_000,
         ).grid(row=0, column=7, sticky="w", padx=(8, 0))
 
-        task_frame = ttk.LabelFrame(self.scroll_content, text="质量检查项目", padding=12)
+        task_frame = ttk.LabelFrame(
+            self.scroll_content,
+            text="质量检查项目",
+            padding=12,
+            style=SECTION_FRAME_STYLE,
+        )
         task_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         for column in range(3):
             task_frame.columnconfigure(column, weight=1, uniform="quality-checks")
@@ -199,6 +211,7 @@ class WorkflowRunnerApp(ttk.Frame):
             self.scroll_content,
             text="术语检查设置",
             padding=12,
+            style=SECTION_FRAME_STYLE,
         )
         self.term_settings_frame.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         self.term_settings_frame.columnconfigure(1, weight=1)
@@ -283,6 +296,7 @@ class WorkflowRunnerApp(ttk.Frame):
             self.scroll_content,
             text="Tag 检查设置",
             padding=12,
+            style=SECTION_FRAME_STYLE,
         )
         self.tag_settings_frame.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         ttk.Label(self.tag_settings_frame, text="检查模式").grid(
@@ -330,12 +344,12 @@ class WorkflowRunnerApp(ttk.Frame):
             self,
             text="开始检查",
             command=self.run_selected_tasks,
-            style="Workflow.Primary.TButton",
+            style=PRIMARY_BUTTON_STYLE,
         ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         ttk.Label(
             self,
             textvariable=self.output_preview_var,
-            foreground="#555555",
+            style=MUTED_LABEL_STYLE,
         ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         self.columnconfigure(0, weight=1)
@@ -723,9 +737,11 @@ class WorkflowRunnerApp(ttk.Frame):
 def main() -> None:
     root = tk.Tk()
     root.title("一键质量检查")
-    root.resizable(False, False)
+    root.resizable(True, True)
     app = WorkflowRunnerApp(root)
     app.grid(row=0, column=0, sticky="nsew")
+    root.columnconfigure(0, weight=1)
+    root.rowconfigure(0, weight=1)
     root.mainloop()
 
 

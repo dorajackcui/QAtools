@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal desktop UI for splitting Excel cell lines into a result column."""
+"""Desktop UI for splitting Excel cell lines into a result column."""
 
 from __future__ import annotations
 
@@ -7,14 +7,25 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import list_workbook_sheets
+from tools.gui_common import (
+    MUTED_LABEL_STYLE,
+    PRIMARY_BUTTON_STYLE,
+    OutputPreviewMixin,
+    add_file_picker_row,
+    configure_tool_page_style,
+    create_section,
+    parse_positive_int,
+)
 
 try:
-    from .split_excel_lines import process_excel
+    from .split_excel_lines import build_default_output_path, process_excel
 except ImportError:
-    from split_excel_lines import process_excel
+    from split_excel_lines import build_default_output_path, process_excel
 
 
-class SplitExcelLinesApp(ttk.Frame):
+class SplitExcelLinesApp(OutputPreviewMixin, ttk.Frame):
+    output_path_builder = staticmethod(build_default_output_path)
+
     def __init__(self, master: tk.Misc) -> None:
         super().__init__(master, padding=16)
         self.input_file_var = tk.StringVar()
@@ -22,45 +33,68 @@ class SplitExcelLinesApp(ttk.Frame):
         self.result_column_var = tk.StringVar(value="B")
         self.sheet_var = tk.StringVar()
         self.start_row_var = tk.StringVar(value="2")
-
+        self.output_preview_var = tk.StringVar(
+            value="输出文件：选择输入 Excel 后自动生成"
+        )
         self._build_ui()
 
     def _build_ui(self) -> None:
-        ttk.Label(self, text="输入 Excel").grid(row=0, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.input_file_var, width=42).grid(
-            row=0, column=1, sticky="ew", pady=(0, 8)
-        )
-        ttk.Button(self, text="选择", command=self.choose_input_file).grid(
-            row=0, column=2, padx=(8, 0), pady=(0, 8)
-        )
-
-        ttk.Label(self, text="工作表名").grid(row=2, column=0, sticky="w", pady=(0, 8))
-        self.sheet_combobox = ttk.Combobox(self, textvariable=self.sheet_var, width=20, state="readonly")
-        self.sheet_combobox.grid(row=2, column=1, sticky="w", pady=(0, 8))
-
-        ttk.Label(self, text="源列").grid(row=3, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.source_column_var, width=10).grid(
-            row=3, column=1, sticky="w", pady=(0, 8)
+        configure_tool_page_style(self)
+        input_frame = create_section(self, title="输入与范围", row=0)
+        add_file_picker_row(
+            input_frame,
+            label="输入 Excel",
+            variable=self.input_file_var,
+            command=self.choose_input_file,
+            focus_out_command=self.handle_input_file_focus_out,
         )
 
-        ttk.Label(self, text="结果列").grid(row=4, column=0, sticky="w", pady=(0, 8))
-        ttk.Entry(self, textvariable=self.result_column_var, width=10).grid(
-            row=4, column=1, sticky="w", pady=(0, 8)
+        scope_frame = ttk.Frame(input_frame)
+        scope_frame.grid(row=1, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Label(scope_frame, text="处理工作表").grid(row=0, column=0, sticky="w")
+        self.sheet_combobox = ttk.Combobox(
+            scope_frame,
+            textvariable=self.sheet_var,
+            width=18,
+            state="readonly",
         )
-
-        ttk.Label(self, text="开始行").grid(row=5, column=0, sticky="w", pady=(0, 12))
-        ttk.Entry(self, textvariable=self.start_row_var, width=10).grid(
-            row=5, column=1, sticky="w", pady=(0, 12)
+        self.sheet_combobox.grid(row=0, column=1, sticky="w", padx=(8, 18))
+        ttk.Label(scope_frame, text="源列").grid(row=0, column=2, sticky="w")
+        ttk.Entry(scope_frame, textvariable=self.source_column_var, width=7).grid(
+            row=0, column=3, sticky="w", padx=(8, 18)
         )
-
-        ttk.Button(self, text="开始拆分", command=self.run_split).grid(
-            row=6, column=0, columnspan=3, sticky="ew"
+        ttk.Label(scope_frame, text="结果列").grid(row=0, column=4, sticky="w")
+        ttk.Entry(scope_frame, textvariable=self.result_column_var, width=7).grid(
+            row=0, column=5, sticky="w", padx=(8, 18)
         )
+        ttk.Label(scope_frame, text="开始行").grid(row=0, column=6, sticky="w")
+        ttk.Spinbox(
+            scope_frame,
+            textvariable=self.start_row_var,
+            width=7,
+            from_=1,
+            to=1_000_000,
+        ).grid(row=0, column=7, sticky="w", padx=(8, 0))
 
-        note = "规则：按回车拆分源列内容，连续写入结果列，并输出为新的 Excel 文件。"
-        ttk.Label(self, text=note).grid(row=7, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Label(
+            input_frame,
+            text="按单元格内的真实换行拆分源列，并从开始行起连续写入结果列。",
+            style=MUTED_LABEL_STYLE,
+            wraplength=760,
+        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
-        self.columnconfigure(1, weight=1)
+        ttk.Button(
+            self,
+            text="开始拆分",
+            command=self.run_split,
+            style=PRIMARY_BUTTON_STYLE,
+        ).grid(row=1, column=0, sticky="ew")
+        ttk.Label(
+            self,
+            textvariable=self.output_preview_var,
+            style=MUTED_LABEL_STYLE,
+        ).grid(row=2, column=0, sticky="w", pady=(8, 0))
+        self.columnconfigure(0, weight=1)
 
     def choose_input_file(self) -> None:
         file_path = filedialog.askopenfilename(
@@ -69,9 +103,9 @@ class SplitExcelLinesApp(ttk.Frame):
         )
         if not file_path:
             return
-
         self.input_file_var.set(file_path)
         self.refresh_sheet_choices()
+        self.update_output_preview()
 
     def clear_sheet_choices(self) -> None:
         self.sheet_combobox["values"] = ()
@@ -82,7 +116,6 @@ class SplitExcelLinesApp(ttk.Frame):
         if not input_file:
             self.clear_sheet_choices()
             return
-
         try:
             sheet_choices = list_workbook_sheets(input_file)
         except Exception as exc:
@@ -94,7 +127,9 @@ class SplitExcelLinesApp(ttk.Frame):
         self.sheet_combobox["values"] = sheet_choices.sheet_names
         selected_sheet = self.sheet_var.get().strip()
         if selected_sheet not in sheet_choices.sheet_names:
-            selected_sheet = sheet_choices.default_sheet or (sheet_choices.sheet_names[0] if sheet_choices.sheet_names else "")
+            selected_sheet = sheet_choices.default_sheet or (
+                sheet_choices.sheet_names[0] if sheet_choices.sheet_names else ""
+            )
             self.sheet_var.set(selected_sheet)
 
     def run_split(self) -> None:
@@ -102,7 +137,6 @@ class SplitExcelLinesApp(ttk.Frame):
         sheet = self.sheet_var.get().strip() or None
         source_column = self.source_column_var.get().strip()
         result_column = self.result_column_var.get().strip()
-
         if not input_file:
             messagebox.showerror("缺少文件", "请先选择输入 Excel 文件。")
             return
@@ -111,19 +145,18 @@ class SplitExcelLinesApp(ttk.Frame):
             return
 
         try:
-            start_row = int(self.start_row_var.get().strip() or "2")
-        except ValueError:
-            messagebox.showerror("开始行错误", "开始行必须是整数。")
-            return
-
-        try:
-            worksheet_title, source_col, result_col, saved_path, written_count = process_excel(
-                input_file=input_file,
-                source_column=source_column,
-                result_column=result_column,
-                sheet=sheet,
-                start_row=start_row,
-                output_file=None,
+            start_row = parse_positive_int(
+                self.start_row_var.get(), default=2, field_name="开始行"
+            )
+            worksheet_title, source_col, result_col, saved_path, written_count = (
+                process_excel(
+                    input_file=input_file,
+                    source_column=source_column,
+                    result_column=result_column,
+                    sheet=sheet,
+                    start_row=start_row,
+                    output_file=None,
+                )
             )
         except Exception as exc:
             messagebox.showerror("处理失败", str(exc))
@@ -137,7 +170,6 @@ class SplitExcelLinesApp(ttk.Frame):
                     f"工作表: {worksheet_title}",
                     f"源列: {source_col}",
                     f"结果列: {result_col}",
-                    f"开始行: {start_row}",
                     f"写入条目数: {written_count}",
                     f"输出文件: {saved_path}",
                 ]
@@ -148,9 +180,11 @@ class SplitExcelLinesApp(ttk.Frame):
 def main() -> None:
     root = tk.Tk()
     root.title("Excel 分行拆列")
-    root.resizable(False, False)
+    root.resizable(True, True)
     app = SplitExcelLinesApp(root)
     app.grid(row=0, column=0, sticky="nsew")
+    root.columnconfigure(0, weight=1)
+    root.rowconfigure(0, weight=1)
     root.mainloop()
 
 
