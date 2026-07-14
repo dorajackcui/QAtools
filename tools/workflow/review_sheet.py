@@ -8,7 +8,6 @@ from typing import Iterable
 
 from openpyxl.comments import Comment
 from openpyxl.styles import PatternFill
-from openpyxl.worksheet.datavalidation import DataValidation
 
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
@@ -20,27 +19,15 @@ from tools.excel_output import (
 WORKFLOW_REVIEW_SHEET_NAME = "问题处理"
 WORKFLOW_REVIEW_HEADERS = (
     "行号",
-    "source原文",
-    "target原文",
-    "检查项",
-    "问题描述",
+    "source",
+    "target",
     "修改后target",
-    "处理状态",
-    "备注",
+    "问题描述",
+    "检查项",
 )
-REVIEW_STATUS_PENDING = "待处理"
-REVIEW_STATUS_REVISED = "已修改"
-REVIEW_STATUS_CLEAR = "清空target"
-REVIEW_STATUS_IGNORE = "忽略"
-REVIEW_STATUS_OPTIONS = (
-    REVIEW_STATUS_PENDING,
-    REVIEW_STATUS_REVISED,
-    REVIEW_STATUS_CLEAR,
-    REVIEW_STATUS_IGNORE,
-)
-METADATA_KEY_COLUMN = 10
-METADATA_VALUE_COLUMN = 11
-WORKFLOW_SCHEMA_VERSION = "1"
+METADATA_KEY_COLUMN = 7
+METADATA_VALUE_COLUMN = 8
+WORKFLOW_SCHEMA_VERSION = "2"
 
 
 @dataclass
@@ -132,11 +119,9 @@ def collect_review_rows(
             row_number,
             entry.source_text,
             entry.target_text,
-            join_unique_text(entry.check_items),
+            None,
             join_unique_text(entry.descriptions),
-            None,
-            REVIEW_STATUS_PENDING,
-            None,
+            join_unique_text(entry.check_items),
         )
         for row_number, entry in sorted(entries_by_row.items())
     ]
@@ -166,8 +151,8 @@ def write_review_metadata(
     for row_index, (key, value) in enumerate(metadata, start=1):
         worksheet.cell(row_index, METADATA_KEY_COLUMN, key)
         worksheet.cell(row_index, METADATA_VALUE_COLUMN, value)
-    worksheet.column_dimensions["J"].hidden = True
-    worksheet.column_dimensions["K"].hidden = True
+    worksheet.column_dimensions["G"].hidden = True
+    worksheet.column_dimensions["H"].hidden = True
 
 
 def read_review_metadata(worksheet) -> dict[str, object]:
@@ -205,42 +190,21 @@ def write_review_sheet(
         "A": 10,
         "B": 52,
         "C": 52,
-        "D": 28,
+        "D": 52,
         "E": 64,
-        "F": 52,
-        "G": 14,
-        "H": 30,
+        "F": 28,
     }
     for column, width in custom_widths.items():
         worksheet.column_dimensions[column].width = width
 
-    worksheet["F1"].comment = Comment(
-        "在这里填写最终 target。留空表示不回填；如需清空 target，请在处理状态选择“清空target”。",
-        "QAtools",
-    )
-    worksheet["G1"].comment = Comment(
-        "可选择待处理、已修改、清空target或忽略。填写了修改后target时，即使保持“待处理”也会回填。",
+    worksheet["D1"].comment = Comment(
+        "在这里填写最终 target。填写后会回填；留空表示忽略该行。",
         "QAtools",
     )
 
     editable_fill = PatternFill(fill_type="solid", fgColor="FFF2CC")
     for worksheet_row in range(2, len(rows) + 2):
-        worksheet.cell(worksheet_row, 6).fill = editable_fill
-        worksheet.cell(worksheet_row, 7).fill = editable_fill
-        worksheet.cell(worksheet_row, 8).fill = editable_fill
-
-    if rows:
-        status_validation = DataValidation(
-            type="list",
-            formula1='"' + ",".join(REVIEW_STATUS_OPTIONS) + '"',
-            allow_blank=False,
-        )
-        status_validation.error = "请选择下拉列表中的处理状态。"
-        status_validation.errorTitle = "无效状态"
-        status_validation.prompt = "填写修改后target，或选择忽略/清空target。"
-        status_validation.promptTitle = "处理状态"
-        worksheet.add_data_validation(status_validation)
-        status_validation.add(f"G2:G{len(rows) + 1}")
+        worksheet.cell(worksheet_row, 4).fill = editable_fill
 
     write_review_metadata(
         worksheet,

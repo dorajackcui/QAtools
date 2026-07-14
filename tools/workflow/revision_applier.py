@@ -10,8 +10,6 @@ from openpyxl.utils import column_index_from_string
 
 from tools.excel_output import ROW_PROBLEM_COLUMN_HEADER
 from tools.workflow.review_sheet import (
-    REVIEW_STATUS_CLEAR,
-    REVIEW_STATUS_IGNORE,
     WORKFLOW_REVIEW_SHEET_NAME,
     WORKFLOW_SCHEMA_VERSION,
     cell_text,
@@ -24,9 +22,7 @@ class RevisionSummary:
     output_path: Path
     worksheet_title: str
     revised_count: int
-    cleared_count: int
     ignored_count: int
-    unfilled_count: int
     unchanged_count: int
     conflict_rows: tuple[int, ...]
 
@@ -102,9 +98,7 @@ def apply_workflow_revisions(
     data_sheet = workbook[data_sheet_name]
 
     revised_count = 0
-    cleared_count = 0
     ignored_count = 0
-    unfilled_count = 0
     unchanged_count = 0
     conflict_rows: list[int] = []
 
@@ -117,15 +111,10 @@ def apply_workflow_revisions(
         except (TypeError, ValueError):
             continue
         original_target = review_sheet.cell(review_row, 3).value
-        revised_target = review_sheet.cell(review_row, 6).value
-        status = cell_text(review_sheet.cell(review_row, 7).value).strip()
+        revised_target = review_sheet.cell(review_row, 4).value
 
-        if status == REVIEW_STATUS_IGNORE:
+        if revised_target is None:
             ignored_count += 1
-            continue
-        clear_target = status == REVIEW_STATUS_CLEAR
-        if revised_target is None and not clear_target:
-            unfilled_count += 1
             continue
 
         target_cell = data_sheet[f"{target_column}{source_row}"]
@@ -133,15 +122,11 @@ def apply_workflow_revisions(
             conflict_rows.append(source_row)
             continue
 
-        new_value = None if clear_target else revised_target
-        if cell_text(target_cell.value) == cell_text(new_value):
+        if cell_text(target_cell.value) == cell_text(revised_target):
             unchanged_count += 1
             continue
-        target_cell.value = new_value
-        if clear_target:
-            cleared_count += 1
-        else:
-            revised_count += 1
+        target_cell.value = revised_target
+        revised_count += 1
 
     generated_sheet_names = {
         name
@@ -162,9 +147,7 @@ def apply_workflow_revisions(
         output_path=output_path,
         worksheet_title=data_sheet_name,
         revised_count=revised_count,
-        cleared_count=cleared_count,
         ignored_count=ignored_count,
-        unfilled_count=unfilled_count,
         unchanged_count=unchanged_count,
         conflict_rows=tuple(dict.fromkeys(conflict_rows)),
     )

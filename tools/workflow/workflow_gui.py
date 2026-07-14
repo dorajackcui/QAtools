@@ -668,9 +668,7 @@ class WorkflowRunnerApp(ttk.Frame):
         lines = [
             "修订稿已生成。",
             f"回填修改: {summary.revised_count} 行",
-            f"清空 target: {summary.cleared_count} 行",
-            f"忽略: {summary.ignored_count} 行",
-            f"未填写: {summary.unfilled_count} 行",
+            f"未填写（忽略）: {summary.ignored_count} 行",
             f"内容未变化: {summary.unchanged_count} 行",
         ]
         if summary.conflict_rows:

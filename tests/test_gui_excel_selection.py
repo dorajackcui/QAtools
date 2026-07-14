@@ -716,9 +716,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         revision_summary = SimpleNamespace(
             output_path=Path("/tmp/revised_input.xlsx"),
             revised_count=2,
-            cleared_count=1,
-            ignored_count=1,
-            unfilled_count=3,
+            ignored_count=3,
             unchanged_count=0,
             conflict_rows=(),
         )

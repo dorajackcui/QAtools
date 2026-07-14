@@ -16,9 +16,6 @@ from tools.workflow.workflow_runner import (
     run_workflow,
 )
 from tools.workflow.review_sheet import (
-    REVIEW_STATUS_CLEAR,
-    REVIEW_STATUS_IGNORE,
-    REVIEW_STATUS_PENDING,
     WORKFLOW_REVIEW_SHEET_NAME,
     collect_review_rows,
     read_review_metadata,
@@ -118,16 +115,14 @@ class WorkflowRunnerTests(unittest.TestCase):
             )
             review_sheet = workbook[WORKFLOW_REVIEW_SHEET_NAME]
             self.assertEqual(
-                [review_sheet.cell(1, column).value for column in range(1, 9)],
+                [review_sheet.cell(1, column).value for column in range(1, 7)],
                 [
                     "行号",
-                    "source原文",
-                    "target原文",
-                    "检查项",
-                    "问题描述",
+                    "source",
+                    "target",
                     "修改后target",
-                    "处理状态",
-                    "备注",
+                    "问题描述",
+                    "检查项",
                 ],
             )
             self.assertEqual(
@@ -137,7 +132,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             merged_check_items = [
                 item
                 for row in range(2, 6)
-                for item in review_sheet.cell(row, 4).value.split("；")
+                for item in review_sheet.cell(row, 6).value.split("；")
             ]
             self.assertEqual(merged_check_items.count("术语检查"), 1)
             self.assertEqual(merged_check_items.count("Tag 检查"), 1)
@@ -145,10 +140,11 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(merged_check_items.count("同源译文一致性"), 2)
             self.assertEqual(merged_check_items.count("Target 中文检查"), 4)
             self.assertEqual(review_sheet["A3"].value, 3)
-            self.assertIn("术语检查", review_sheet["D3"].value)
-            self.assertIn("Tag 检查", review_sheet["D3"].value)
-            self.assertIn("换行数量检查", review_sheet["D3"].value)
-            self.assertIn("Target 中文检查", review_sheet["D3"].value)
+            self.assertIsNone(review_sheet["D3"].value)
+            self.assertIn("术语检查", review_sheet["F3"].value)
+            self.assertIn("Tag 检查", review_sheet["F3"].value)
+            self.assertIn("换行数量检查", review_sheet["F3"].value)
+            self.assertIn("Target 中文检查", review_sheet["F3"].value)
             row_three_description = review_sheet["E3"].value
             self.assertIn("source术语：Alpha", row_three_description)
             self.assertIn("预期target术语：阿尔法", row_three_description)
@@ -161,12 +157,11 @@ class WorkflowRunnerTests(unittest.TestCase):
             row_four_description = review_sheet["E4"].value
             self.assertIn("target版本数：2", row_four_description)
             self.assertIn("同组行号：4、5", row_four_description)
-            self.assertEqual(review_sheet["G3"].value, REVIEW_STATUS_PENDING)
             self.assertEqual(review_sheet["A3"].hyperlink.location, "'Data'!B3")
             self.assertIsNone(review_sheet["A3"].hyperlink.target)
-            self.assertTrue(review_sheet.column_dimensions["J"].hidden)
-            self.assertTrue(review_sheet.column_dimensions["K"].hidden)
-            self.assertEqual(len(review_sheet.data_validations.dataValidation), 1)
+            self.assertTrue(review_sheet.column_dimensions["G"].hidden)
+            self.assertTrue(review_sheet.column_dimensions["H"].hidden)
+            self.assertEqual(len(review_sheet.data_validations.dataValidation), 0)
             metadata = read_review_metadata(review_sheet)
             self.assertEqual(metadata["data_sheet_name"], "Data")
             self.assertEqual(metadata["source_column"], "A")
@@ -192,18 +187,14 @@ class WorkflowRunnerTests(unittest.TestCase):
 
             report_workbook = load_workbook(report_path)
             review_sheet = report_workbook[WORKFLOW_REVIEW_SHEET_NAME]
-            review_sheet["F2"] = "第一行修订"
-            review_sheet["F3"] = "第二行修订"
-            review_sheet["G4"] = REVIEW_STATUS_IGNORE
-            review_sheet["G5"] = REVIEW_STATUS_CLEAR
+            review_sheet["D2"] = "第一行修订"
+            review_sheet["D3"] = "第二行修订"
             report_workbook.save(report_path)
 
             summary = apply_workflow_revisions(report_path, output_file=revised_path)
 
             self.assertEqual(summary.revised_count, 2)
-            self.assertEqual(summary.cleared_count, 1)
-            self.assertEqual(summary.ignored_count, 1)
-            self.assertEqual(summary.unfilled_count, 0)
+            self.assertEqual(summary.ignored_count, 2)
             self.assertEqual(summary.unchanged_count, 0)
             self.assertEqual(summary.conflict_rows, ())
             revised_workbook = load_workbook(revised_path)
@@ -212,7 +203,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(data_sheet["B2"].value, "第一行修订")
             self.assertEqual(data_sheet["B3"].value, "第二行修订")
             self.assertEqual(data_sheet["B4"].value, "译文一")
-            self.assertIsNone(data_sheet["B5"].value)
+            self.assertEqual(data_sheet["B5"].value, "译文二")
             self.assertEqual(data_sheet["C1"].value, "note")
             self.assertEqual(data_sheet["C3"].value, "keep me")
 
@@ -235,7 +226,7 @@ class WorkflowRunnerTests(unittest.TestCase):
 
             report_workbook = load_workbook(report_path)
             report_workbook["Data"]["B2"] = "人工直接修改"
-            report_workbook[WORKFLOW_REVIEW_SHEET_NAME]["F2"] = "准备回填的修改"
+            report_workbook[WORKFLOW_REVIEW_SHEET_NAME]["D2"] = "准备回填的修改"
             report_workbook.save(report_path)
 
             summary = apply_workflow_revisions(report_path, output_file=revised_path)
@@ -294,7 +285,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             )
 
             report_workbook = load_workbook(report_path)
-            report_workbook[WORKFLOW_REVIEW_SHEET_NAME]["F2"] = "第一行修订"
+            report_workbook[WORKFLOW_REVIEW_SHEET_NAME]["D2"] = "第一行修订"
             report_workbook.save(report_path)
             apply_workflow_revisions(report_path, output_file=revised_path)
 
