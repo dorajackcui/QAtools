@@ -202,9 +202,41 @@ def strip_supported_marks(
 
     parts: list[str] = []
     last_index = 0
-    for extracted_term in extracted_terms:
+    for term_index, extracted_term in enumerate(extracted_terms):
         parts.append(text_value[last_index : extracted_term.start])
+        if (
+            parts
+            and parts[-1]
+            and extracted_term.plain_text
+            and extracted_term.plain_text[0].isascii()
+            and extracted_term.plain_text[0].isalnum()
+            and _is_ascii_word_char(parts[-1][-1])
+        ):
+            parts.append(" ")
         parts.append(extracted_term.plain_text)
+
+        next_term = extracted_terms[term_index + 1] if term_index + 1 < len(extracted_terms) else None
+        text_until_next_term = text_value[
+            extracted_term.end : next_term.start if next_term is not None else len(text_value)
+        ]
+        next_output_character = (
+            text_until_next_term[0]
+            if text_until_next_term
+            else next_term.plain_text[0]
+            if next_term is not None and next_term.plain_text
+            else ""
+        )
+        if (
+            extracted_term.plain_text
+            and extracted_term.plain_text[-1].isascii()
+            and extracted_term.plain_text[-1].isalnum()
+            and _is_ascii_word_char(next_output_character)
+        ):
+            parts.append(" ")
         last_index = extracted_term.end
     parts.append(text_value[last_index:])
     return "".join(parts)
+
+
+def _is_ascii_word_char(character: str) -> bool:
+    return bool(character) and character.isascii() and (character.isalnum() or character == "_")

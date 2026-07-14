@@ -360,6 +360,76 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["C3"].value, "BETA_OK")
             self.assertEqual(problem_sheet["E3"].value, "target缺少预期术语")
 
+    def test_process_excel_resolves_count_mismatch_for_marked_term_when_other_row_term_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Use [Attack]"
+            worksheet["B2"] = "Use [ATK]"
+            worksheet["A3"] = "Target [Battle_Target_Enemy]"
+            worksheet["B3"] = "Target [Lumi adverse actuel]"
+            worksheet["A4"] = "Attack [Battle_Target_Enemy]"
+            worksheet["B4"] = "Attaque le Lumi adverse actuel."
+            workbook.save(input_path)
+
+            _, _, _, saved_path, term_count, problem_count = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                mark_styles=("[]",),
+            )
+
+            self.assertEqual(term_count, 2)
+            self.assertEqual(problem_count, 1)
+
+            result_workbook = load_workbook(saved_path)
+            data_sheet = result_workbook["Data"]
+            self.assertIn("Attack", data_sheet["C4"].value)
+            self.assertNotIn("Battle_Target_Enemy", data_sheet["C4"].value)
+
+            problem_sheet = result_workbook[term_pair_module.PROBLEM_SHEET_NAME]
+            self.assertEqual(problem_sheet.max_row, 2)
+            self.assertEqual(problem_sheet["A2"].value, 4)
+            self.assertEqual(problem_sheet["B2"].value, "Attack")
+            self.assertEqual(problem_sheet["C2"].value, "ATK")
+            self.assertIn("target", problem_sheet["E2"].value)
+
+    def test_process_excel_preserves_mark_boundaries_next_to_digits(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Target [Battle_Target_EnemyOnGround]"
+            worksheet["B2"] = "Target [tous les Lumi du camp adverse en combat]"
+            worksheet["A3"] = "Restore [Battle_Target_EnemyOnGround]20% Max HP"
+            worksheet["B3"] = "Restaure 20 % des PV max de tous les Lumi du camp adverse en combat."
+            workbook.save(input_path)
+
+            _, _, _, saved_path, term_count, problem_count = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                mark_styles=("[]",),
+            )
+
+            self.assertEqual(term_count, 1)
+            self.assertEqual(problem_count, 0)
+
+            result_workbook = load_workbook(saved_path)
+            data_sheet = result_workbook["Data"]
+            self.assertIsNone(data_sheet["C3"].value)
+
     def test_process_excel_records_mismatched_marked_term_and_missing_target_separately(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
