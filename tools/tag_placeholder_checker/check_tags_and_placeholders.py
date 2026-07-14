@@ -266,6 +266,7 @@ def build_problem_description(
 def write_problem_sheet(
     workbook,
     worksheet_title: str,
+    target_column: str,
     problem_entries: list[tuple[int, str, str, str, str]],
 ) -> None:
     entries_by_row: dict[int, list[tuple[int, str, str, str, str]]] = {}
@@ -293,6 +294,7 @@ def write_problem_sheet(
         sheet_name=PROBLEM_SHEET_NAME,
         headers=PROBLEM_BASE_HEADERS + ("问题类型",),
         rows=rows,
+        row_link_target_column=target_column,
     )
 
 
@@ -504,7 +506,7 @@ def process_excel(
         selected_token_types=normalized_token_types,
     )
 
-    write_problem_sheet(workbook, worksheet.title, problem_entries)
+    write_problem_sheet(workbook, worksheet.title, target_column, problem_entries)
     write_summary_sheet(
         workbook=workbook,
         worksheet_title=worksheet.title,

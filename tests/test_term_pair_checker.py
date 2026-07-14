@@ -1013,6 +1013,11 @@ class ProcessExcelTests(unittest.TestCase):
                 ["行号", "source原文", "target原文", "问题描述", "source术语", "预期target术语", "术语来源"],
             )
             self.assertEqual(problem_sheet.freeze_panes, "A2")
+            self.assertEqual(
+                problem_sheet["A2"].hyperlink.location,
+                f"'Data'!B{problem_sheet['A2'].value}",
+            )
+            self.assertIsNone(problem_sheet["A2"].hyperlink.target)
             self.assertEqual(problem_sheet["E2"].value, "Zebra")
             self.assertEqual(problem_sheet["F2"].value, "Zebre")
             self.assertEqual(problem_sheet["G2"].value, "历史TB")

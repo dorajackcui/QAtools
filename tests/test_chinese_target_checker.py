@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from zipfile import ZipFile
 
 from openpyxl import Workbook, load_workbook
 
@@ -82,6 +83,22 @@ class ChineseTargetExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["C2"].value, "包含中文 target")
             self.assertIn("包含中文", problem_sheet["D2"].value)
             self.assertEqual(problem_sheet["E2"].value, "包含中文")
+            self.assertEqual(problem_sheet["A2"].hyperlink.location, "'Data'!B3")
+            self.assertIsNone(problem_sheet["A2"].hyperlink.target)
+            with ZipFile(summary.output_path) as archive:
+                worksheet_xml = "\n".join(
+                    archive.read(name).decode("utf-8")
+                    for name in archive.namelist()
+                    if name.startswith("xl/worksheets/sheet")
+                    and name.endswith(".xml")
+                )
+                self.assertIn('location="\'Data\'!B3"', worksheet_xml)
+                self.assertFalse(
+                    any(
+                        name.startswith("xl/worksheets/_rels/")
+                        for name in archive.namelist()
+                    )
+                )
             self.assertEqual(problem_sheet.freeze_panes, "A2")
             self.assertEqual(problem_sheet.auto_filter.ref, "A1:E2")
             self.assertEqual(workbook["Data"]["C1"].value, "existing data")

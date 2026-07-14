@@ -15,6 +15,18 @@ from tools.workflow.workflow_runner import (
     count_unique_problem_rows,
     run_workflow,
 )
+from tools.workflow.review_sheet import (
+    REVIEW_STATUS_CLEAR,
+    REVIEW_STATUS_IGNORE,
+    REVIEW_STATUS_PENDING,
+    WORKFLOW_REVIEW_SHEET_NAME,
+    collect_review_rows,
+    read_review_metadata,
+)
+from tools.workflow.revision_applier import (
+    apply_workflow_revisions,
+    build_default_revised_output_path,
+)
 
 
 class WorkflowRunnerTests(unittest.TestCase):
@@ -32,6 +44,8 @@ class WorkflowRunnerTests(unittest.TestCase):
         worksheet["B4"] = "译文一"
         worksheet["A5"] = "Same source"
         worksheet["B5"] = "译文二"
+        worksheet["C1"] = "note"
+        worksheet["C3"] = "keep me"
         workbook.save(path)
 
     def test_run_workflow_writes_all_quality_check_results_into_same_output_file(self) -> None:
@@ -77,36 +91,19 @@ class WorkflowRunnerTests(unittest.TestCase):
                 [
                     "Data",
                     "术语表",
-                    WORKFLOW_TERM_PROBLEM_SHEET_NAME,
-                    "标签占位问题",
-                    "换行数量问题",
-                    "同源译文不一致",
-                    CHINESE_PROBLEM_SHEET_NAME,
+                    WORKFLOW_REVIEW_SHEET_NAME,
                     WORKFLOW_SUMMARY_SHEET_NAME,
                 ],
             )
             self.assertNotIn("问题列", workbook.sheetnames)
             self.assertNotIn("检查汇总", workbook.sheetnames)
-            self.assertEqual(workbook[WORKFLOW_TERM_PROBLEM_SHEET_NAME]["A2"].value, 3)
-            self.assertEqual(workbook["标签占位问题"]["A2"].value, 3)
-            self.assertEqual(workbook["换行数量问题"]["A2"].value, 3)
-            self.assertEqual(workbook["同源译文不一致"]["A2"].value, 4)
-            self.assertEqual(workbook["同源译文不一致"]["A3"].value, 5)
-            self.assertEqual(workbook[CHINESE_PROBLEM_SHEET_NAME]["A2"].value, 2)
-            self.assertEqual(workbook["Data"]["C1"].value, "术语QA问题")
-            for problem_sheet_name in (
-                WORKFLOW_TERM_PROBLEM_SHEET_NAME,
-                "标签占位问题",
-                "换行数量问题",
-                "同源译文不一致",
-                CHINESE_PROBLEM_SHEET_NAME,
-            ):
-                problem_sheet = workbook[problem_sheet_name]
-                self.assertEqual(
-                    [problem_sheet.cell(1, column).value for column in range(1, 5)],
-                    ["行号", "source原文", "target原文", "问题描述"],
-                )
-                self.assertEqual(problem_sheet.freeze_panes, "A2")
+            self.assertNotIn(WORKFLOW_TERM_PROBLEM_SHEET_NAME, workbook.sheetnames)
+            self.assertNotIn("标签占位问题", workbook.sheetnames)
+            self.assertNotIn("换行数量问题", workbook.sheetnames)
+            self.assertNotIn("同源译文不一致", workbook.sheetnames)
+            self.assertNotIn(CHINESE_PROBLEM_SHEET_NAME, workbook.sheetnames)
+            self.assertEqual(workbook["Data"]["C1"].value, "note")
+            self.assertEqual(workbook["Data"]["C3"].value, "keep me")
             summary_sheet = workbook[WORKFLOW_SUMMARY_SHEET_NAME]
             self.assertEqual(
                 list(summary_sheet.values),
@@ -119,6 +116,191 @@ class WorkflowRunnerTests(unittest.TestCase):
                     ("Target 中文检查", 4),
                 ],
             )
+            review_sheet = workbook[WORKFLOW_REVIEW_SHEET_NAME]
+            self.assertEqual(
+                [review_sheet.cell(1, column).value for column in range(1, 9)],
+                [
+                    "行号",
+                    "source原文",
+                    "target原文",
+                    "检查项",
+                    "问题描述",
+                    "修改后target",
+                    "处理状态",
+                    "备注",
+                ],
+            )
+            self.assertEqual(
+                [review_sheet.cell(row, 1).value for row in range(2, 6)],
+                [2, 3, 4, 5],
+            )
+            merged_check_items = [
+                item
+                for row in range(2, 6)
+                for item in review_sheet.cell(row, 4).value.split("；")
+            ]
+            self.assertEqual(merged_check_items.count("术语检查"), 1)
+            self.assertEqual(merged_check_items.count("Tag 检查"), 1)
+            self.assertEqual(merged_check_items.count("换行数量检查"), 1)
+            self.assertEqual(merged_check_items.count("同源译文一致性"), 2)
+            self.assertEqual(merged_check_items.count("Target 中文检查"), 4)
+            self.assertEqual(review_sheet["A3"].value, 3)
+            self.assertIn("术语检查", review_sheet["D3"].value)
+            self.assertIn("Tag 检查", review_sheet["D3"].value)
+            self.assertIn("换行数量检查", review_sheet["D3"].value)
+            self.assertIn("Target 中文检查", review_sheet["D3"].value)
+            row_three_description = review_sheet["E3"].value
+            self.assertIn("source术语：Alpha", row_three_description)
+            self.assertIn("预期target术语：阿尔法", row_three_description)
+            self.assertIn("术语来源：本批次新增", row_three_description)
+            self.assertIn("问题类型：尖括号tag不一致", row_three_description)
+            self.assertIn("source换行数：1", row_three_description)
+            self.assertIn("target换行数：0", row_three_description)
+            self.assertIn("数量差：-1", row_three_description)
+            self.assertIn("命中字符：", row_three_description)
+            row_four_description = review_sheet["E4"].value
+            self.assertIn("target版本数：2", row_four_description)
+            self.assertIn("同组行号：4、5", row_four_description)
+            self.assertEqual(review_sheet["G3"].value, REVIEW_STATUS_PENDING)
+            self.assertEqual(review_sheet["A3"].hyperlink.location, "'Data'!B3")
+            self.assertIsNone(review_sheet["A3"].hyperlink.target)
+            self.assertTrue(review_sheet.column_dimensions["J"].hidden)
+            self.assertTrue(review_sheet.column_dimensions["K"].hidden)
+            self.assertEqual(len(review_sheet.data_validations.dataValidation), 1)
+            metadata = read_review_metadata(review_sheet)
+            self.assertEqual(metadata["data_sheet_name"], "Data")
+            self.assertEqual(metadata["source_column"], "A")
+            self.assertEqual(metadata["target_column"], "B")
+            self.assertEqual(metadata["remove_term_helper"], "0")
+
+    def test_apply_workflow_revisions_writes_targets_and_removes_qa_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            report_path = Path(tmp_dir) / "workflow_output.xlsx"
+            revised_path = Path(tmp_dir) / "revised_input.xlsx"
+            self.create_workbook(input_path)
+            run_workflow(
+                input_file=input_path,
+                output_file=report_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+                term_mark_styles=("[]",),
+                tag_token_types=("angle", "brace"),
+            )
+
+            report_workbook = load_workbook(report_path)
+            review_sheet = report_workbook[WORKFLOW_REVIEW_SHEET_NAME]
+            review_sheet["F2"] = "第一行修订"
+            review_sheet["F3"] = "第二行修订"
+            review_sheet["G4"] = REVIEW_STATUS_IGNORE
+            review_sheet["G5"] = REVIEW_STATUS_CLEAR
+            report_workbook.save(report_path)
+
+            summary = apply_workflow_revisions(report_path, output_file=revised_path)
+
+            self.assertEqual(summary.revised_count, 2)
+            self.assertEqual(summary.cleared_count, 1)
+            self.assertEqual(summary.ignored_count, 1)
+            self.assertEqual(summary.unfilled_count, 0)
+            self.assertEqual(summary.unchanged_count, 0)
+            self.assertEqual(summary.conflict_rows, ())
+            revised_workbook = load_workbook(revised_path)
+            self.assertEqual(revised_workbook.sheetnames, ["Data"])
+            data_sheet = revised_workbook["Data"]
+            self.assertEqual(data_sheet["B2"].value, "第一行修订")
+            self.assertEqual(data_sheet["B3"].value, "第二行修订")
+            self.assertEqual(data_sheet["B4"].value, "译文一")
+            self.assertIsNone(data_sheet["B5"].value)
+            self.assertEqual(data_sheet["C1"].value, "note")
+            self.assertEqual(data_sheet["C3"].value, "keep me")
+
+    def test_apply_workflow_revisions_skips_target_conflicts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            report_path = Path(tmp_dir) / "workflow_output.xlsx"
+            revised_path = Path(tmp_dir) / "revised_input.xlsx"
+            self.create_workbook(input_path)
+            run_workflow(
+                input_file=input_path,
+                output_file=report_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+                term_mark_styles=("[]",),
+                tag_token_types=("angle", "brace"),
+            )
+
+            report_workbook = load_workbook(report_path)
+            report_workbook["Data"]["B2"] = "人工直接修改"
+            report_workbook[WORKFLOW_REVIEW_SHEET_NAME]["F2"] = "准备回填的修改"
+            report_workbook.save(report_path)
+
+            summary = apply_workflow_revisions(report_path, output_file=revised_path)
+
+            self.assertEqual(summary.revised_count, 0)
+            self.assertEqual(summary.conflict_rows, (2,))
+            revised_workbook = load_workbook(revised_path)
+            self.assertEqual(revised_workbook["Data"]["B2"].value, "人工直接修改")
+
+    def test_default_revised_output_path_uses_original_input_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            report_path = Path(tmp_dir) / "workflow_output.xlsx"
+            self.create_workbook(input_path)
+            run_workflow(
+                input_file=input_path,
+                output_file=report_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+                run_term_pair_check=False,
+                run_tag_check=False,
+                run_line_break_check=False,
+                run_source_consistency_check=False,
+                run_chinese_target_check=True,
+            )
+
+            self.assertEqual(
+                build_default_revised_output_path(report_path),
+                Path(tmp_dir) / "revised_input.xlsx",
+            )
+
+    def test_apply_revisions_preserves_unrelated_sheets_from_disabled_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            report_path = Path(tmp_dir) / "workflow_output.xlsx"
+            revised_path = Path(tmp_dir) / "revised_input.xlsx"
+            self.create_workbook(input_path)
+            input_workbook = load_workbook(input_path)
+            legitimate_term_sheet = input_workbook.create_sheet("术语表")
+            legitimate_term_sheet["A1"] = "用户原有内容"
+            input_workbook.save(input_path)
+            run_workflow(
+                input_file=input_path,
+                output_file=report_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+                run_term_pair_check=False,
+                run_tag_check=False,
+                run_line_break_check=False,
+                run_source_consistency_check=False,
+                run_chinese_target_check=True,
+            )
+
+            report_workbook = load_workbook(report_path)
+            report_workbook[WORKFLOW_REVIEW_SHEET_NAME]["F2"] = "第一行修订"
+            report_workbook.save(report_path)
+            apply_workflow_revisions(report_path, output_file=revised_path)
+
+            revised_workbook = load_workbook(revised_path)
+            self.assertIn("术语表", revised_workbook.sheetnames)
+            self.assertEqual(revised_workbook["术语表"]["A1"].value, "用户原有内容")
 
     def test_count_unique_problem_rows_deduplicates_source_rows(self) -> None:
         workbook = Workbook()
@@ -129,6 +311,16 @@ class WorkflowRunnerTests(unittest.TestCase):
         worksheet.append([5])
 
         self.assertEqual(count_unique_problem_rows(worksheet), 2)
+
+    def test_review_merge_rejects_incompatible_problem_sheet_schema(self) -> None:
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = "旧问题表"
+        worksheet.append(["问题行号", "source", "target", "描述"])
+        worksheet.append([2, "Source", "Target", "Problem"])
+
+        with self.assertRaisesRegex(ValueError, "前四列必须为"):
+            collect_review_rows(workbook, (("测试检查", "旧问题表"),))
 
     def test_run_workflow_requires_at_least_one_task(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

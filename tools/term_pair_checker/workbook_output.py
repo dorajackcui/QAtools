@@ -63,7 +63,12 @@ def write_term_sheet(workbook, worksheet_title: str, term_pairs: Iterable["Recor
         term_sheet[f"E{row_index}"] = term_pair.term_source
 
 
-def write_problem_sheet(workbook, worksheet_title: str, problem_entries: Iterable["ProblemEntry"]) -> None:
+def write_problem_sheet(
+    workbook,
+    worksheet_title: str,
+    target_column: str,
+    problem_entries: Iterable["ProblemEntry"],
+) -> None:
     entries_by_row: dict[int, list["ProblemEntry"]] = {}
     for problem_entry in problem_entries:
         entries_by_row.setdefault(problem_entry.row_index, []).append(problem_entry)
@@ -98,6 +103,7 @@ def write_problem_sheet(workbook, worksheet_title: str, problem_entries: Iterabl
         headers=PROBLEM_BASE_HEADERS
         + ("source术语", "预期target术语", "术语来源"),
         rows=rows,
+        row_link_target_column=target_column,
     )
 
 

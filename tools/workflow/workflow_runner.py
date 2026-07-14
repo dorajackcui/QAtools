@@ -8,18 +8,23 @@ from pathlib import Path
 from typing import Iterable
 
 from openpyxl import load_workbook
+from openpyxl.utils import column_index_from_string
 
 from tools.chinese_target_checker.check_chinese_target import (
+    PROBLEM_SHEET_NAME as CHINESE_PROBLEM_SHEET_NAME,
     process_excel as run_chinese_target_check_excel,
 )
-from tools.excel_output import build_prefixed_output_path
+from tools.excel_output import ROW_PROBLEM_COLUMN_HEADER, build_prefixed_output_path
 from tools.line_break_checker.check_line_breaks import (
+    PROBLEM_SHEET_NAME as LINE_BREAK_PROBLEM_SHEET_NAME,
     process_excel as run_line_break_check_excel,
 )
 from tools.source_consistency_checker.check_source_consistency import (
+    PROBLEM_SHEET_NAME as SOURCE_CONSISTENCY_PROBLEM_SHEET_NAME,
     process_excel as run_source_consistency_check_excel,
 )
 from tools.tag_placeholder_checker.check_tags_and_placeholders import (
+    PROBLEM_SHEET_NAME as TAG_PROBLEM_SHEET_NAME,
     SUMMARY_SHEET_NAME as TAG_SUMMARY_SHEET_NAME,
     process_excel as run_tag_check_excel,
 )
@@ -28,7 +33,9 @@ from tools.term_pair_checker.extract_terms_from_excel import (
 )
 from tools.term_pair_checker.workbook_output import (
     PROBLEM_SHEET_NAME as TERM_PROBLEM_SHEET_NAME,
+    TERM_SHEET_NAME,
 )
+from tools.workflow.review_sheet import WORKFLOW_REVIEW_SHEET_NAME, write_review_sheet
 
 
 WORKFLOW_TERM_PROBLEM_SHEET_NAME = "术语问题"
@@ -91,6 +98,10 @@ def finalize_workflow_output(
     line_break_problem_rows: int,
     source_consistency_problem_rows: int,
     chinese_target_problem_rows: int,
+    input_file: Path,
+    source_column: str,
+    target_column: str,
+    start_row: int,
 ) -> int:
     """Normalize workflow-only sheets and write the compact quality summary."""
     workbook = load_workbook(output_path)
@@ -114,6 +125,47 @@ def finalize_workflow_output(
         del workbook[TAG_SUMMARY_SHEET_NAME]
     if WORKFLOW_SUMMARY_SHEET_NAME in workbook.sheetnames:
         del workbook[WORKFLOW_SUMMARY_SHEET_NAME]
+
+    problem_sheets = []
+    if run_term_pair_check:
+        problem_sheets.append(("术语检查", WORKFLOW_TERM_PROBLEM_SHEET_NAME))
+    if run_tag_check:
+        problem_sheets.append(("Tag 检查", TAG_PROBLEM_SHEET_NAME))
+    if run_line_break_check:
+        problem_sheets.append(("换行数量检查", LINE_BREAK_PROBLEM_SHEET_NAME))
+    if run_source_consistency_check:
+        problem_sheets.append(
+            ("同源译文一致性", SOURCE_CONSISTENCY_PROBLEM_SHEET_NAME)
+        )
+    if run_chinese_target_check:
+        problem_sheets.append(("Target 中文检查", CHINESE_PROBLEM_SHEET_NAME))
+    generated_sheet_names = []
+    if run_term_pair_check:
+        generated_sheet_names.append(TERM_SHEET_NAME)
+    generated_sheet_names.extend(
+        (WORKFLOW_REVIEW_SHEET_NAME, WORKFLOW_SUMMARY_SHEET_NAME)
+    )
+    write_review_sheet(
+        workbook,
+        current_sheet_name=worksheet_title,
+        input_file=input_file,
+        source_column=source_column,
+        target_column=target_column,
+        start_row=start_row,
+        problem_sheets=problem_sheets,
+        generated_sheet_names=generated_sheet_names,
+        remove_term_helper=False,
+    )
+
+    for _, problem_sheet_name in problem_sheets:
+        if problem_sheet_name in workbook.sheetnames:
+            del workbook[problem_sheet_name]
+
+    if run_term_pair_check:
+        data_sheet = workbook[worksheet_title]
+        helper_column_index = column_index_from_string(target_column) + 1
+        if data_sheet.cell(1, helper_column_index).value == ROW_PROBLEM_COLUMN_HEADER:
+            data_sheet.delete_cols(helper_column_index)
 
     summary_sheet = workbook.create_sheet(WORKFLOW_SUMMARY_SHEET_NAME)
     summary_sheet.append(["检查项", "问题行数"])
@@ -282,6 +334,10 @@ def run_workflow(
         line_break_problem_rows=line_break_problem_count,
         source_consistency_problem_rows=source_consistency_problem_rows,
         chinese_target_problem_rows=chinese_target_problem_count,
+        input_file=input_path,
+        source_column=normalized_source_column,
+        target_column=normalized_target_column,
+        start_row=start_row,
     )
 
     return WorkflowSummary(

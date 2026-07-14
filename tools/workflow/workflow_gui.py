@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
@@ -20,6 +21,10 @@ from tools.term_pair_checker.extract_terms_from_excel import (
 )
 
 from .workflow_runner import build_default_output_path, run_workflow
+from .revision_applier import (
+    apply_workflow_revisions,
+    build_default_revised_output_path,
+)
 
 
 class WorkflowRunnerApp(ttk.Frame):
@@ -46,6 +51,7 @@ class WorkflowRunnerApp(ttk.Frame):
         self.tag_mode_var = tk.StringVar(value="standard")
         self.term_settings_expanded = False
         self.tag_settings_expanded = False
+        self.last_workflow_output_path = ""
         self.term_mark_style_vars = {
             "【】": tk.BooleanVar(value=True),
             "[]": tk.BooleanVar(value=True),
@@ -340,12 +346,21 @@ class WorkflowRunnerApp(ttk.Frame):
             self.standard_tag_checkbuttons.append(checkbutton)
         self.tag_settings_frame.grid_remove()
 
+        action_frame = ttk.Frame(self)
+        action_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        action_frame.columnconfigure(0, weight=3)
+        action_frame.columnconfigure(1, weight=1)
         ttk.Button(
-            self,
+            action_frame,
             text="开始检查",
             command=self.run_selected_tasks,
             style=PRIMARY_BUTTON_STYLE,
-        ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        ).grid(row=0, column=0, sticky="ew")
+        ttk.Button(
+            action_frame,
+            text="应用修订",
+            command=self.apply_revisions,
+        ).grid(row=0, column=1, sticky="ew", padx=(8, 0))
         ttk.Label(
             self,
             textvariable=self.output_preview_var,
@@ -617,6 +632,58 @@ class WorkflowRunnerApp(ttk.Frame):
             token_types.append("newline")
         return tuple(token_types)
 
+    def apply_revisions(self) -> None:
+        candidate_path = self.last_workflow_output_path or self.input_file_var.get().strip()
+        candidate = Path(candidate_path).expanduser() if candidate_path else None
+        report_file = filedialog.askopenfilename(
+            title="选择已填写的问题处理 Excel",
+            initialdir=str(candidate.parent) if candidate else None,
+            initialfile=candidate.name if candidate else None,
+            filetypes=[("Excel 文件", "*.xlsx *.xlsm"), ("所有文件", "*.*")],
+        )
+        if not report_file:
+            return
+
+        try:
+            default_output = build_default_revised_output_path(report_file)
+        except Exception as exc:
+            messagebox.showerror("读取失败", str(exc))
+            return
+        output_file = filedialog.asksaveasfilename(
+            title="保存修订稿",
+            initialdir=str(default_output.parent),
+            initialfile=default_output.name,
+            defaultextension=default_output.suffix or ".xlsx",
+            filetypes=[("Excel 文件", "*.xlsx *.xlsm"), ("所有文件", "*.*")],
+        )
+        if not output_file:
+            return
+
+        try:
+            summary = apply_workflow_revisions(report_file, output_file=output_file)
+        except Exception as exc:
+            messagebox.showerror("应用失败", str(exc))
+            return
+
+        lines = [
+            "修订稿已生成。",
+            f"回填修改: {summary.revised_count} 行",
+            f"清空 target: {summary.cleared_count} 行",
+            f"忽略: {summary.ignored_count} 行",
+            f"未填写: {summary.unfilled_count} 行",
+            f"内容未变化: {summary.unchanged_count} 行",
+        ]
+        if summary.conflict_rows:
+            lines.append(
+                "因原 target 已变化而跳过: "
+                + "、".join(str(row) for row in summary.conflict_rows)
+            )
+        lines.append(f"输出文件: {summary.output_path}")
+        if summary.conflict_rows:
+            messagebox.showwarning("修订稿已生成（存在冲突）", "\n".join(lines))
+        else:
+            messagebox.showinfo("修订稿已生成", "\n".join(lines))
+
     def run_selected_tasks(self) -> None:
         input_file = self.input_file_var.get().strip()
         term_history_tb_file = self.term_history_tb_file_var.get().strip()
@@ -705,6 +772,8 @@ class WorkflowRunnerApp(ttk.Frame):
         except Exception as exc:
             messagebox.showerror("处理失败", str(exc))
             return
+
+        self.last_workflow_output_path = str(summary.output_path)
 
         lines = [
             "一键质量检查完成。",

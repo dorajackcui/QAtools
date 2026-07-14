@@ -60,6 +60,7 @@ def build_default_output_path(input_file: str | Path) -> Path:
 def write_problem_sheet(
     workbook,
     worksheet_title: str,
+    target_column: str,
     problem_entries: list[tuple[int, str, str, str, int, int, int]],
 ) -> None:
     write_output_table(
@@ -69,6 +70,7 @@ def write_problem_sheet(
         headers=PROBLEM_BASE_HEADERS
         + ("source换行数", "target换行数", "数量差"),
         rows=problem_entries,
+        row_link_target_column=target_column,
     )
 
 
@@ -118,7 +120,7 @@ def process_excel(
             )
         )
 
-    write_problem_sheet(workbook, worksheet.title, problem_entries)
+    write_problem_sheet(workbook, worksheet.title, target_column, problem_entries)
     workbook.save(output_path)
     return CheckSummary(
         output_path=output_path,

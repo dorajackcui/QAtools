@@ -122,6 +122,7 @@ def process_excel(
         sheet_name=PROBLEM_SHEET_NAME,
         headers=PROBLEM_BASE_HEADERS + ("命中字符",),
         rows=problem_entries,
+        row_link_target_column=target_column,
     )
     workbook.save(output_path)
     return CheckSummary(

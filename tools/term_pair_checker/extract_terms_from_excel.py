@@ -785,6 +785,7 @@ def process_excel(
     write_problem_sheet(
         workbook,
         worksheet.title,
+        target_column,
         sorted_problem_entries,
     )
 

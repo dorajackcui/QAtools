@@ -709,6 +709,53 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertFalse(app.term_settings_expanded)
         self.assertFalse(app.tag_settings_expanded)
 
+    def test_workflow_apply_revisions_uses_selected_report_and_output(self) -> None:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        app.input_file_var = FakeVar("/tmp/input.xlsx")
+        app.last_workflow_output_path = "/tmp/workflow_check_input.xlsx"
+        revision_summary = SimpleNamespace(
+            output_path=Path("/tmp/revised_input.xlsx"),
+            revised_count=2,
+            cleared_count=1,
+            ignored_count=1,
+            unfilled_count=3,
+            unchanged_count=0,
+            conflict_rows=(),
+        )
+
+        with (
+            patch(
+                "tools.workflow.workflow_gui.filedialog.askopenfilename",
+                return_value="/tmp/workflow_check_input.xlsx",
+            ) as choose_report_mock,
+            patch(
+                "tools.workflow.workflow_gui.build_default_revised_output_path",
+                return_value=Path("/tmp/revised_input.xlsx"),
+            ),
+            patch(
+                "tools.workflow.workflow_gui.filedialog.asksaveasfilename",
+                return_value="/tmp/revised_input.xlsx",
+            ),
+            patch(
+                "tools.workflow.workflow_gui.apply_workflow_revisions",
+                return_value=revision_summary,
+            ) as apply_mock,
+            patch("tools.workflow.workflow_gui.messagebox.showinfo") as showinfo_mock,
+            patch("tools.workflow.workflow_gui.messagebox.showwarning") as showwarning_mock,
+        ):
+            app.apply_revisions()
+
+        self.assertEqual(
+            choose_report_mock.call_args.kwargs["initialfile"],
+            "workflow_check_input.xlsx",
+        )
+        apply_mock.assert_called_once_with(
+            "/tmp/workflow_check_input.xlsx",
+            output_file="/tmp/revised_input.xlsx",
+        )
+        showinfo_mock.assert_called_once()
+        showwarning_mock.assert_not_called()
+
     def test_workflow_select_all_and_clear_all_keep_settings_collapsed(self) -> None:
         app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
         app.run_term_pair_var = FakeBoolVar(True)

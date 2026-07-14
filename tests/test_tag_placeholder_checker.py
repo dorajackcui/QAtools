@@ -143,6 +143,9 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A6"].value, 7)
             self.assertEqual(problem_sheet["E6"].value, "尖括号tag不一致")
             self.assertIn("target缺少=<apple>", str(problem_sheet["D6"].value))
+            self.assertEqual(problem_sheet["A2"].hyperlink.location, "'Data'!B3")
+            self.assertEqual(problem_sheet["A6"].hyperlink.location, "'Data'!B7")
+            self.assertIsNone(problem_sheet["A2"].hyperlink.target)
             self.assertEqual(problem_sheet.freeze_panes, "A2")
 
             summary_sheet = workbook["检查汇总"]

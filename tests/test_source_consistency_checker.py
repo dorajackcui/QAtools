@@ -88,6 +88,9 @@ class SourceConsistencyExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["B4"].value, "Empty target")
             self.assertIsNone(problem_sheet["C4"].value)
             self.assertEqual(problem_sheet["F4"].value, "9、10")
+            self.assertEqual(problem_sheet["A2"].hyperlink.location, "'Data'!B2")
+            self.assertEqual(problem_sheet["A4"].hyperlink.location, "'Data'!B9")
+            self.assertIsNone(problem_sheet["A2"].hyperlink.target)
             self.assertEqual(problem_sheet.freeze_panes, "A2")
             self.assertNotIn(PROBLEM_SHEET_NAME, load_workbook(input_path).sheetnames)
 

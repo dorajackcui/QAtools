@@ -8,6 +8,7 @@ from pathlib import Path
 
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import column_index_from_string, get_column_letter
+from openpyxl.worksheet.hyperlink import Hyperlink
 
 
 ROW_PROBLEM_COLUMN_HEADER = "术语QA问题"
@@ -43,6 +44,7 @@ def write_output_table(
     sheet_name: str,
     headers,
     rows,
+    row_link_target_column: str | None = None,
 ):
     """Write a consistently formatted output table and return its worksheet."""
     worksheet = rebuild_output_sheet(workbook, current_sheet_name, sheet_name)
@@ -73,7 +75,43 @@ def write_output_table(
     if normalized_headers:
         last_column = get_column_letter(len(normalized_headers))
         worksheet.auto_filter.ref = f"A1:{last_column}{max(worksheet.max_row, 1)}"
+    if row_link_target_column:
+        add_row_number_hyperlinks(
+            worksheet,
+            target_sheet_name=current_sheet_name,
+            target_column=row_link_target_column,
+        )
     return worksheet
+
+
+def add_row_number_hyperlinks(
+    worksheet,
+    *,
+    target_sheet_name: str,
+    target_column: str,
+) -> None:
+    """Link first-column source row numbers to cells in the original data sheet."""
+    normalized_target_column = target_column.strip().upper()
+    column_index_from_string(normalized_target_column)
+    escaped_sheet_name = target_sheet_name.replace("'", "''")
+    for output_row in range(2, worksheet.max_row + 1):
+        row_cell = worksheet.cell(output_row, 1)
+        raw_source_row = row_cell.value
+        if isinstance(raw_source_row, bool):
+            continue
+        try:
+            source_row = int(raw_source_row)
+        except (TypeError, ValueError):
+            continue
+        if source_row < 1:
+            continue
+        row_cell.hyperlink = Hyperlink(
+            ref=row_cell.coordinate,
+            location=f"'{escaped_sheet_name}'!{normalized_target_column}{source_row}",
+            display=str(raw_source_row),
+        )
+        row_cell.style = "Hyperlink"
+        row_cell.alignment = Alignment(vertical="top", wrap_text=True)
 
 
 def build_prefixed_output_path(input_file: str | Path, prefix: str) -> Path:
