@@ -469,6 +469,69 @@ class ProcessExcelTests(unittest.TestCase):
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet.max_row, 1)
 
+    def test_process_excel_ignores_extra_target_mark_when_source_terms_are_aligned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "定义 [Basic CTRL]"
+            worksheet["B2"] = "定义 [CTRL de base]"
+            worksheet["A3"] = "Receives a [Basic CTRL] effect and enters HP Lock."
+            worksheet["B3"] = "Subit [CTRL de base] et entre en [Verrouillage des PV]."
+            workbook.save(input_path)
+
+            _, _, _, saved_path, term_count, problem_count = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                mark_styles=("[]",),
+            )
+
+            self.assertEqual(term_count, 1)
+            self.assertEqual(problem_count, 0)
+
+            result_workbook = load_workbook(saved_path)
+            self.assertIsNone(result_workbook["Data"]["C3"].value)
+            self.assertEqual(result_workbook["问题列"].max_row, 1)
+
+    def test_resolved_count_mismatch_still_checks_other_source_terms(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "定义 [Basic CTRL]"
+            worksheet["B2"] = "定义 [CTRL de base]"
+            worksheet["A3"] = "定义 [Poison]"
+            worksheet["B3"] = "定义 [Poison]"
+            worksheet["A4"] = "Receives [Basic CTRL] and Poison."
+            worksheet["B4"] = "Subit [CTRL de base] et [Marque supplémentaire]."
+            workbook.save(input_path)
+
+            _, _, _, saved_path, _, problem_count = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                mark_styles=("[]",),
+            )
+
+            self.assertEqual(problem_count, 1)
+
+            result_workbook = load_workbook(saved_path)
+            problem_sheet = result_workbook["问题列"]
+            self.assertEqual(problem_sheet["A2"].value, 4)
+            self.assertEqual(problem_sheet["B2"].value, "Poison")
+            self.assertEqual(problem_sheet["E2"].value, "target缺少预期术语")
+
     def test_process_excel_treats_simple_s_plural_source_and_target_as_aligned(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"

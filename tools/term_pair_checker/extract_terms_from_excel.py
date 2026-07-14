@@ -444,16 +444,39 @@ def count_mismatch_is_resolved(
 ) -> bool:
     if not matched_entries:
         return False
-    if not row_terms_are_aligned(matched_entries, normalized_source_text, normalized_target_text):
-        return False
 
-    matched_source_terms = {entry.source_term for entry in matched_entries}
-    matched_target_terms = {entry.target_term for entry in matched_entries}
-    if any(source_term.plain_text not in matched_source_terms for source_term in source_terms):
-        return False
-    if any(target_term.plain_text not in matched_target_terms for target_term in target_terms):
-        return False
-    return True
+    if source_terms:
+        matched_entries_by_source = {entry.source_term: entry for entry in matched_entries}
+        required_entries: list[TermMappingEntry] = []
+        for source_term in source_terms:
+            matched_entry = matched_entries_by_source.get(source_term.plain_text)
+            if matched_entry is None:
+                return False
+            required_entries.append(matched_entry)
+
+        # Source terms define the terminology obligations for the row. A translator
+        # may additionally mark a target phrase whose source phrase is unmarked; that
+        # extra target mark must not turn aligned source terms into a count mismatch.
+        return row_terms_are_aligned(
+            required_entries,
+            normalized_source_text,
+            normalized_target_text,
+        )
+
+    # Preserve target-only recovery when the corresponding source phrase is unmarked
+    # but can be proven through an already-known source -> target mapping.
+    matched_entries_by_target = {entry.target_term: entry for entry in matched_entries}
+    required_entries = []
+    for target_term in target_terms:
+        matched_entry = matched_entries_by_target.get(target_term.plain_text)
+        if matched_entry is None:
+            return False
+        required_entries.append(matched_entry)
+    return row_terms_are_aligned(
+        required_entries,
+        normalized_source_text,
+        normalized_target_text,
+    )
 
 
 def build_recorded_term_pair(
@@ -682,27 +705,27 @@ def process_excel(
         normalized_target_text = normalize_text(target_text, case_sensitive=PAIR_CHECK_CASE_SENSITIVE)
         if row_index in count_mismatch_rows:
             source_terms, target_terms = count_mismatch_rows[row_index]
-            if count_mismatch_is_resolved(
+            count_mismatch_resolved = count_mismatch_is_resolved(
                 source_terms,
                 target_terms,
                 matched_entries,
                 normalized_source_text,
                 normalized_target_text,
-            ):
-                continue
-            append_problem(
-                problem_entries,
-                row_index,
-                format_problem_term(term.plain_text for term in source_terms),
-                format_expected_target_terms(source_terms, term_mapping),
-                format_expected_term_sources(source_terms, term_mapping),
-                (
-                    f"source/target术语数量不一致：{len(source_terms)}（预期数量）- "
-                    f"{len(target_terms)}（实际数量）"
-                ),
-                build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
-                build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
             )
+            if not count_mismatch_resolved:
+                append_problem(
+                    problem_entries,
+                    row_index,
+                    format_problem_term(term.plain_text for term in source_terms),
+                    format_expected_target_terms(source_terms, term_mapping),
+                    format_expected_term_sources(source_terms, term_mapping),
+                    (
+                        f"source/target术语数量不一致：{len(source_terms)}（预期数量）- "
+                        f"{len(target_terms)}（实际数量）"
+                    ),
+                    build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
+                    build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
+                )
 
         conflict_source_terms = conflict_source_terms_by_row.get(row_index, set())
         for entry in matched_entries:

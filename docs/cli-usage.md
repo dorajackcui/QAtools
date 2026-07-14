@@ -401,7 +401,7 @@ python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
 
 说明：
 
-- 默认输出文件名为 `<原文件名>_llm_terms.xlsx`；也可用 `-o/--output` 指定。
+- 默认输出文件名为 `llm_terms_<原文件名>`；也可用 `-o/--output` 指定。
 - 该工具会在内部调用本机 `codex exec`，解析严格 JSON 的返回并写入两张输出工作表：`本批次术语汇总表` 和 `冲突汇总`。
 - `本批次术语汇总表` 会合并历史术语（如传入历史 TB）和本批次新增术语，并包含实例原文列。
 - 单元测试里不要求真实调用 `codex exec`，可通过替身/patch 完成模拟测试。
@@ -460,5 +460,5 @@ python3 tools/xbench_report_transformer/transform_xbench_report.py ./Xbench_QA_R
 - Target 中文检查默认直接修改原文件；显式传 `-o` 时由调用方指定输出名
   - `<原文件名>_split_lines.xlsx`
   - `<原文件名>_french_nbsp_restored.xlsx`
-  - `<原文件名>_llm_terms.xlsx`
+  - `llm_terms_<原文件名>`
   - `xbench_transform_<原文件名>`

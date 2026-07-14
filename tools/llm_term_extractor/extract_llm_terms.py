@@ -741,6 +741,8 @@ def process_excel(
         if output_file
         else build_default_output_path(input_path)
     )
+    if output_path == input_path:
+        raise ValueError("输出文件不能与输入文件相同，请指定不同的输出路径。")
     using_default_extractor = batch_extractor is None
     if batch_extractor is None:
         batch_extractor = build_codex_batch_extractor(

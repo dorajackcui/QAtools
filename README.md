@@ -183,7 +183,7 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp_gui.py
 - 用途：从 Excel 的 `source` 列抽取游戏术语；同行 `target` 有内容则记录已有译法并做冲突复核，空 target 行按 source-only 术语收集处理
 - 默认模型：`gpt-5.3-codex-spark`，`reasoning effort` 默认 `high`
 - prompt 管理：默认使用 `tools/llm_term_extractor/prompts/` 下的 `extract_terms_zh_target.md` 与 `conflict_review_zh_target.md`，支持 CLI 覆盖对应文件
-- 输出方式：生成新的结果 Excel（默认文件名 `<原文件名>_llm_terms.xlsx`），不会覆盖原文件；结果只包含 `本批次术语汇总表` 和 `冲突汇总`
+- 输出方式：生成新的结果 Excel（默认文件名 `llm_terms_<原文件名>`），不会覆盖原文件；结果只包含 `本批次术语汇总表` 和 `冲突汇总`
 - CLI：
 
 ```bash

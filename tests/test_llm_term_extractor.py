@@ -493,6 +493,49 @@ class LlmTermWorkbookTests(unittest.TestCase):
             self.assertEqual(conflicts["A1"].value, "source术语")
             self.assertIsNone(conflicts["A2"].value)
 
+    def test_process_excel_rejects_output_path_matching_input_path(self) -> None:
+        from openpyxl import Workbook, load_workbook
+
+        from tools.llm_term_extractor.codex_term_review import ExtractedLlmTerm, RowExtraction
+        from tools.llm_term_extractor.extract_llm_terms import process_excel
+
+        with tempfile.TemporaryDirectory(prefix="tag-exactor-llm-output-guard-") as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Unlock the Abyssal Vault."
+            worksheet["B2"] = "解锁深渊宝库。"
+            workbook.save(input_path)
+
+            def fake_extractor(rows):
+                return [
+                    RowExtraction(
+                        row_id="2",
+                        terms=(
+                            ExtractedLlmTerm(
+                                source_term="Abyssal Vault",
+                                target_term="深渊宝库",
+                            ),
+                        ),
+                    )
+                ]
+
+            with self.assertRaisesRegex(ValueError, "输出文件不能与输入文件相同"):
+                process_excel(
+                    input_file=input_path,
+                    source_column="A",
+                    target_column="B",
+                    output_file=input_path,
+                    batch_extractor=fake_extractor,
+                )
+
+            original_workbook = load_workbook(input_path)
+            self.assertEqual(original_workbook.sheetnames, ["Data"])
+            self.assertEqual(original_workbook["Data"]["A2"].value, "Unlock the Abyssal Vault.")
+
     def test_process_excel_routes_history_matches(self) -> None:
         from openpyxl import Workbook, load_workbook
 
