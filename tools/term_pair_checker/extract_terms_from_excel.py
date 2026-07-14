@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate source/target term pairs extracted from an Excel worksheet."""
+"""Check Excel terminology from optional marks and an optional history TB."""
 
 from __future__ import annotations
 
@@ -27,12 +27,6 @@ from tools.history_tb import (
     HistoryTbColumns,
     detect_history_tb_columns as shared_detect_history_tb_columns,
     iter_history_rows,
-)
-from tools.false_positive_review import (
-    TERM_PAIR_PROBLEM_MAPPING,
-    Reviewer,
-    apply_false_positive_review_to_sheet,
-    review_clusters_with_codex,
 )
 from tools.excel_output import insert_row_problem_column
 from tools.term_pair_checker.term_marks import (
@@ -86,7 +80,9 @@ class ProblemEntry:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="从 Excel 的 source/target 两列提取术语对，并生成术语表和问题列。"
+        description=(
+            "检查 Excel 的 source/target 术语；可从 mark 提取新术语对，也可仅使用历史 TB 检查。"
+        )
     )
     parser.add_argument("input_file", nargs="?", help="输入 Excel 文件路径，例如 input.xlsx")
     parser.add_argument(
@@ -110,12 +106,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="开始处理的行号，默认通过交互输入，留空时使用 2",
     )
-    parser.add_argument(
+    mark_group = parser.add_mutually_exclusive_group()
+    mark_group.add_argument(
         "--mark-style",
         action="append",
         choices=SUPPORTED_MARKS,
         default=None,
         help="术语包裹符号，可重复传入，例如 --mark-style [] --mark-style '【】'",
+    )
+    mark_group.add_argument(
+        "--no-term-mark",
+        action="store_true",
+        help="不从文本 mark 提取新术语；必须同时提供 --history-tb。",
     )
     parser.add_argument(
         "--exclusion-config",
@@ -148,27 +150,6 @@ def parse_args() -> argparse.Namespace:
         "--output",
         help="输出 Excel 文件路径，默认生成 term_pair_check_<原文件名>",
     )
-    parser.add_argument(
-        "--codex-fp-review",
-        action="store_true",
-        help="检查完成后调用 Codex 对问题列做假阳性筛查，并写回 fp_* 辅助列。",
-    )
-    parser.add_argument(
-        "--codex-fp-sample-size",
-        type=int,
-        default=5,
-        help="每个术语问题 cluster 发送给 Codex 的样本条数，默认 5。",
-    )
-    parser.add_argument(
-        "--codex-model",
-        help="Codex 假阳性筛查使用的模型；不填则使用 Codex 默认模型。",
-    )
-    parser.add_argument(
-        "--codex-reasoning-effort",
-        default="high",
-        choices=("low", "medium", "high"),
-        help="Codex 假阳性筛查使用的 reasoning effort，默认 high。",
-    )
     return parser.parse_args()
 
 
@@ -195,7 +176,9 @@ def prompt_if_missing(args: argparse.Namespace) -> argparse.Namespace:
             args.start_row = int(start_row_text) if start_row_text else 2
         else:
             args.start_row = 2
-    if args.mark_style is None:
+    if getattr(args, "no_term_mark", False):
+        args.mark_style = ()
+    elif args.mark_style is None:
         if interactive_mode and len(sys.argv) == 1:
             mark_style_text = input(
                 "请输入 mark 类型（可多选，逗号分隔，如 【】,[]；默认 【】,[]）: "
@@ -555,8 +538,6 @@ def process_excel(
     history_target_column: str | None = None,
     history_start_row: int = 2,
     output_file: str | Path | None = None,
-    false_positive_reviewer: Reviewer | None = None,
-    false_positive_sample_size: int = 5,
 ) -> tuple[str, str, str, Path, int, int]:
     input_path = Path(input_file).expanduser().resolve()
     if not input_path.exists():
@@ -564,7 +545,23 @@ def process_excel(
 
     source_column = normalize_column(source_column)
     target_column = normalize_column(target_column)
-    normalized_mark_styles = normalize_mark_styles(mark_styles=mark_styles, mark_style=mark_style)
+    if mark_styles is None:
+        normalized_mark_styles = normalize_mark_styles(mark_style=mark_style)
+    else:
+        requested_mark_styles = (
+            (mark_styles,)
+            if isinstance(mark_styles, str)
+            else tuple(style for style in mark_styles if style)
+        )
+        normalized_mark_styles = (
+            normalize_mark_styles(mark_styles=requested_mark_styles)
+            if requested_mark_styles
+            else normalize_mark_styles(mark_style=mark_style)
+            if mark_style
+            else ()
+        )
+    if not normalized_mark_styles and not history_tb_file:
+        raise ValueError("不选择术语 mark 时必须提供历史 TB。")
     effective_exclusion_patterns = resolve_exclusion_patterns(exclusion_patterns, exclusion_config_file)
     history_mapping = (
         load_history_tb_mapping(
@@ -599,16 +596,20 @@ def process_excel(
         source_snapshot = build_text_snapshot(raw_source_value)
         target_snapshot = build_text_snapshot(raw_target_value)
 
-        source_terms = extract_term_details(
-            raw_source_value,
-            mark_styles=normalized_mark_styles,
-            exclusion_patterns=effective_exclusion_patterns,
-        )
-        target_terms = extract_term_details(
-            raw_target_value,
-            mark_styles=normalized_mark_styles,
-            exclusion_patterns=effective_exclusion_patterns,
-        )
+        if normalized_mark_styles:
+            source_terms = extract_term_details(
+                raw_source_value,
+                mark_styles=normalized_mark_styles,
+                exclusion_patterns=effective_exclusion_patterns,
+            )
+            target_terms = extract_term_details(
+                raw_target_value,
+                mark_styles=normalized_mark_styles,
+                exclusion_patterns=effective_exclusion_patterns,
+            )
+        else:
+            source_terms = []
+            target_terms = []
 
         if not source_terms and not target_terms:
             continue
@@ -787,15 +788,6 @@ def process_excel(
         sorted_problem_entries,
     )
 
-    if false_positive_reviewer is not None:
-        apply_false_positive_review_to_sheet(
-            workbook,
-            PROBLEM_SHEET_NAME,
-            TERM_PAIR_PROBLEM_MAPPING,
-            reviewer=false_positive_reviewer,
-            sample_size=false_positive_sample_size,
-        )
-
     delete_legacy_term_sheets(workbook)
 
     workbook.save(output_path)
@@ -812,13 +804,6 @@ def process_excel(
 
 def main() -> None:
     args = prompt_if_missing(parse_args())
-    false_positive_reviewer = None
-    if args.codex_fp_review:
-        false_positive_reviewer = lambda clusters: review_clusters_with_codex(  # noqa: E731
-            clusters,
-            model=args.codex_model,
-            reasoning_effort=args.codex_reasoning_effort,
-        )
 
     (
         worksheet_title,
@@ -841,21 +826,18 @@ def main() -> None:
         history_target_column=args.history_target_column,
         history_start_row=args.history_start_row,
         output_file=args.output,
-        false_positive_reviewer=false_positive_reviewer,
-        false_positive_sample_size=args.codex_fp_sample_size,
     )
 
     print("处理完成。")
     print(f"工作表: {worksheet_title}")
     print(f"source 列: {source_column}")
     print(f"target 列: {target_column}")
-    print(f"mark 类型: {'、'.join(args.mark_style)}")
+    mark_description = "、".join(args.mark_style) if args.mark_style else "未选择（仅历史 TB）"
+    print(f"mark 类型: {mark_description}")
     if args.history_tb:
         print(f"历史 TB: {Path(args.history_tb).expanduser().resolve()}")
     print(f"术语表条目数: {term_count}")
     print(f"问题条数: {problem_count}")
-    if args.codex_fp_review:
-        print("Codex 假阳性筛查: 已写入 fp_* 辅助列")
     print(f"输出文件: {output_path}")
 
 

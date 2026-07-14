@@ -1,6 +1,9 @@
-# Excel 术语对检查工具
+# Excel 术语检查工具
 
-用于从 Excel 的 `source` 列和 `target` 列同时提取术语，检查术语对是否对齐，并输出为新的 Excel 文件。
+统一处理两种术语检查模式：
+
+- 选择术语 mark：从 Excel 的 `source` / `target` 中提取新术语对，并结合历史 TB 回扫整表。
+- 不选择术语 mark：必须提供历史 TB，仅检查文本中的历史术语是否使用了预期 target；该模式替代原“术语表命中检查”。
 
 处理完成后会新增两个工作表：
 
@@ -9,7 +12,7 @@
 
 ## 规则
 
-- 新术语只会由带所选 mark 的显式术语对触发发现
+- 新术语只会由带所选 mark 的显式术语对触发发现；无 mark 模式不会新增术语
 - 术语特征：被所选 mark 包裹的完整片段，输出到 `术语表` 时会同时保留带 mark 和去 mark 两套结果
 - 当前支持两种术语 mark：`【】`、普通 `[]`
 - `<...>` 和 `{...}` 不作为术语 mark，统一交给 tag / placeholder 检查
@@ -20,6 +23,7 @@
 - 术语检查时会忽略支持的 tag 外壳，按去 mark 后的纯术语进行匹配
 - 可选传入历史 TB；历史 TB 会自动识别第 1 行的 `source` / `target` 列（也兼容 `source术语` / `target术语`），读取值时会去掉支持的 mark
 - 传入历史 TB 后，会先把历史 TB 全量加入检查词库，再合并本批次新增术语；最终用“历史 TB 全量 + 本批次新增 TB”回扫整表
+- 不选择任何 mark 时，历史 TB 为必填；程序跳过新术语提取，直接用历史 TB 回扫整表
 - 本批次 source 如果命中历史 TB，会使用历史 target 作为配对和校验目标；未命中历史 TB 的 source 才按本批次第一次出现建立新增配对
 - 输出的 `术语表` 不会把历史 TB 全量写出，只写本次检查文本中实际涉及的历史术语和本批次新增术语
 - 一旦后面某行通过 tag 学到术语对，会回溯检查整张表中更早和更晚的未标注出现
@@ -40,6 +44,16 @@
 python3 tools/term_pair_checker/extract_terms_from_excel.py input.xlsx -c A -t B
 ```
 
+仅使用历史 TB 检查：
+
+```bash
+python3 tools/term_pair_checker/extract_terms_from_excel.py input.xlsx \
+  -c A -t B \
+  --no-term-mark \
+  --history-tb glossary.xlsx \
+  --history-sheet Glossary
+```
+
 兼容旧入口：
 
 ```bash
@@ -56,10 +70,10 @@ GUI 现在支持：
 
 - 选择 Excel 后自动读取工作表列表，用下拉框选择工作表
 - 可选选择历史 TB，并自动识别历史 TB 的工作表和 `source` / `target` 列
+- 可以取消所有术语 mark；此时 GUI 会要求已选择历史 TB，并进入仅历史 TB 检查模式
 - 默认输出为新的 Excel 文件，也可手动指定输出路径
 - 自动识别第 1 行表头中的 `source` / `target` 列并回填
 - 如果未识别到列，可继续手动填写列字母作为回退
-- 可勾选“使用 Codex 筛查术语误报”，在 `问题列` 末尾写入 `fp_*` 辅助列
 
 兼容旧入口：
 
@@ -74,13 +88,10 @@ python3 extract_terms_gui.py
 - `-s, --sheet`：工作表名称，可选
 - `--start-row`：从第几行开始处理，默认 `2`
 - `--mark-style`：提取术语 mark 类型，可重复传入，例如 `--mark-style [] --mark-style '【】'`
+- `--no-term-mark`：不从文本提取新术语；必须同时使用 `--history-tb`
 - `--exclusion-config`：可选的自定义术语候选排除 JSON 配置文件路径
 - `--history-tb`：历史 TB Excel 文件路径，可选
 - `--history-sheet`：历史 TB 工作表名称，可选；默认优先使用 `术语表`
 - `--history-source-column` / `--history-target-column`：历史 TB source / target 列，可选；不填则自动识别表头
 - `--history-start-row`：历史 TB 开始读取行号，默认 `2`
-- `--codex-fp-review`：检查完成后调用本机 `codex exec` 做假阳性筛查，并在 `问题列` 末尾写入 `fp_decision`、`fp_category`、`fp_confidence`、`fp_note`、`fp_by`
-- `--codex-fp-sample-size`：每个同术语、期望译法、问题类型和原文/译文文本 cluster 发送给 Codex 的样本数，默认 `5`
-- `--codex-model`：Codex 假阳性筛查使用的模型；不填则使用 Codex 默认模型
-- `--codex-reasoning-effort`：Codex 假阳性筛查使用的 reasoning effort，默认 `high`
 - `-o, --output`：输出文件路径，可选，默认生成 `term_pair_check_<原文件名>`

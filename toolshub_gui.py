@@ -11,9 +11,7 @@ from tkinter import ttk
 from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
 from tools.excel_line_splitter.split_excel_lines_gui import SplitExcelLinesApp
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
-from tools.llm_term_extractor.extract_llm_terms_gui import LlmTermExtractorApp
 from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
-from tools.term_glossary_checker.check_terms_against_glossary_gui import TermGlossaryCheckerApp
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
 from tools.workflow.workflow_gui import WorkflowRunnerApp
 from tools.xbench_report_transformer.transform_xbench_report_gui import XbenchReportTransformerApp
@@ -43,7 +41,7 @@ TOOL_GROUPS = (
             ToolItem(
                 key="workflow",
                 title="Workflow 编排",
-                description="按顺序执行术语对检查和 Tag 检查，统一写入输出 Excel。",
+                description="按顺序执行术语检查和 Tag 检查，统一写入输出 Excel。",
                 factory=WorkflowRunnerApp,
             ),
         ),
@@ -53,21 +51,9 @@ TOOL_GROUPS = (
         tools=(
             ToolItem(
                 key="term_pair",
-                title="术语对检查",
-                description="检查 source 和 target 中的术语对应关系，并结合历史 TB 优先匹配。",
+                title="术语检查",
+                description="从可选 mark 提取新术语对，或仅用历史 TB 检查 source / target 命中。",
                 factory=ExtractTermsApp,
-            ),
-            ToolItem(
-                key="llm_terms",
-                title="LLM 术语提取",
-                description="从 Excel 文本中批量抽取术语，并可结合历史 TB 做冲突复核。",
-                factory=LlmTermExtractorApp,
-            ),
-            ToolItem(
-                key="glossary",
-                title="术语表命中检查",
-                description="用术语表检查文本中的 source / target 术语命中情况。",
-                factory=TermGlossaryCheckerApp,
             ),
         ),
     ),

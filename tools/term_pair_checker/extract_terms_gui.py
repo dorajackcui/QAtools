@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal desktop UI for validating source/target term pairs in Excel."""
+"""Desktop UI for mark-based and history-TB terminology checking."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
-from tools.false_positive_review import review_clusters_with_codex
 from tools.gui_common import parse_positive_int
 
 try:
@@ -41,8 +40,6 @@ class ExtractTermsApp(ttk.Frame):
             "【】": tk.BooleanVar(value=True),
             "[]": tk.BooleanVar(value=True),
         }
-        self.codex_fp_review_var = tk.BooleanVar(value=False)
-
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -121,22 +118,16 @@ class ExtractTermsApp(ttk.Frame):
         ttk.Checkbutton(mark_frame, text="[]", variable=self.mark_style_vars["[]"]).grid(
             row=0, column=1, sticky="w", padx=(12, 0)
         )
-        ttk.Checkbutton(
-            self,
-            text="使用 Codex 筛查术语误报",
-            variable=self.codex_fp_review_var,
-        ).grid(row=12, column=0, columnspan=3, sticky="w", pady=(0, 12))
-
         ttk.Button(self, text="开始检查", command=self.run_extraction).grid(
-            row=13, column=0, columnspan=3, sticky="ew"
+            row=12, column=0, columnspan=3, sticky="ew"
         )
 
         note = (
-            "规则：术语表保留 tag，术语检查忽略 tag；"
+            "规则：有 mark 时提取并检查新术语对；不选 mark 时必须提供历史 TB；"
             "历史 TB 命中时优先使用历史 target；"
             "<...> 和 {...} 不作为术语 mark。"
         )
-        ttk.Label(self, text=note).grid(row=14, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ttk.Label(self, text=note).grid(row=13, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         self.columnconfigure(1, weight=1)
 
@@ -279,8 +270,11 @@ class ExtractTermsApp(ttk.Frame):
         if not source_column or not target_column:
             messagebox.showerror("缺少列信息", "请填写 source 列和 target 列。")
             return
-        if not selected_mark_styles:
-            messagebox.showerror("缺少术语 mark", "请至少选择一种术语 mark。")
+        if not selected_mark_styles and not history_tb_file:
+            messagebox.showerror(
+                "缺少术语来源",
+                "请至少选择一种术语 mark，或提供历史 TB。",
+            )
             return
 
         try:
@@ -324,7 +318,6 @@ class ExtractTermsApp(ttk.Frame):
                 history_target_column=history_target_column,
                 history_start_row=history_start_row,
                 output_file=None,
-                false_positive_reviewer=review_clusters_with_codex if self.codex_fp_review_var.get() else None,
             )
         except Exception as exc:
             messagebox.showerror("处理失败", str(exc))
@@ -335,12 +328,10 @@ class ExtractTermsApp(ttk.Frame):
             f"工作表: {worksheet_title}",
             f"source 列: {source_col}",
             f"target 列: {target_col}",
-            f"术语 mark: {'、'.join(selected_mark_styles)}",
+            f"术语 mark: {'、'.join(selected_mark_styles) if selected_mark_styles else '未选择（仅历史 TB）'}",
         ]
         if history_tb_file:
             message_lines.append(f"历史 TB: {history_tb_file}")
-        if self.codex_fp_review_var.get():
-            message_lines.append("Codex 假阳性筛查: 已写入 fp_* 辅助列")
         message_lines.extend(
             [
                 f"术语表条目数: {term_count}",
@@ -356,7 +347,7 @@ class ExtractTermsApp(ttk.Frame):
 
 def main() -> None:
     root = tk.Tk()
-    root.title("Excel 术语对校验")
+    root.title("Excel 术语检查")
     root.resizable(False, False)
     app = ExtractTermsApp(root)
     app.grid(row=0, column=0, sticky="nsew")

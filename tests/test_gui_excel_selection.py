@@ -11,9 +11,7 @@ from openpyxl import Workbook
 from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
 from tools.excel_line_splitter.split_excel_lines_gui import SplitExcelLinesApp
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
-from tools.llm_term_extractor.extract_llm_terms_gui import LlmTermExtractorApp
 from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
-from tools.term_glossary_checker.check_terms_against_glossary_gui import TermGlossaryCheckerApp
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
 from tools.workflow.workflow_gui import WorkflowRunnerApp
 from tools.xbench_report_transformer.transform_xbench_report_gui import XbenchReportTransformerApp
@@ -82,54 +80,6 @@ class GuiSheetSelectionTests(unittest.TestCase):
         workbook.active = 0
         workbook.save(path)
 
-    def create_offset_history_tb_workbook(self, path: Path) -> None:
-        workbook = Workbook()
-        term_sheet = workbook.active
-        term_sheet.title = "术语表"
-        term_sheet["A1"] = "metadata"
-        term_sheet["B1"] = "notes"
-        term_sheet["C2"] = "source术语（无mark）"
-        term_sheet["D2"] = "target术语（无mark）"
-        term_sheet["C3"] = "花艺"
-        term_sheet["D3"] = "Art Floral"
-        workbook.save(path)
-
-    def create_glossary_workbook(self, path: Path) -> None:
-        workbook = Workbook()
-        glossary_sheet = workbook.active
-        glossary_sheet.title = "Glossary"
-        glossary_sheet["B1"] = "source"
-        glossary_sheet["D1"] = "target"
-
-        backup_sheet = workbook.create_sheet("Backup")
-        backup_sheet["A1"] = "source"
-        backup_sheet["C1"] = "target"
-
-        workbook.active = 0
-        workbook.save(path)
-
-    def create_data_workbook(self, path: Path) -> None:
-        workbook = Workbook()
-        data_sheet = workbook.active
-        data_sheet.title = "Data"
-        data_sheet["C1"] = "source"
-        data_sheet["F1"] = "target"
-
-        archive_sheet = workbook.create_sheet("Archive")
-        archive_sheet["A1"] = "source"
-        archive_sheet["B1"] = "target"
-
-        workbook.active = 1
-        workbook.save(path)
-
-    def create_source_only_workbook(self, path: Path) -> None:
-        workbook = Workbook()
-        data_sheet = workbook.active
-        data_sheet.title = "SourceOnly"
-        data_sheet["A1"] = "source"
-        data_sheet["B1"] = "note"
-        workbook.save(path)
-
     def create_splitter_workbook(self, path: Path) -> None:
         workbook = Workbook()
         data_sheet = workbook.active
@@ -180,20 +130,6 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.history_source_column_var = FakeVar("")
         app.history_target_column_var = FakeVar("")
         app.history_sheet_combobox = FakeCombobox()
-        return app
-
-    def build_glossary_checker_app(self, glossary_path: Path, data_path: Path) -> TermGlossaryCheckerApp:
-        app = TermGlossaryCheckerApp.__new__(TermGlossaryCheckerApp)
-        app.glossary_file_var = FakeVar(str(glossary_path))
-        app.data_file_var = FakeVar(str(data_path))
-        app.glossary_sheet_var = FakeVar("")
-        app.data_sheet_var = FakeVar("")
-        app.glossary_source_column_var = FakeVar("A")
-        app.glossary_target_column_var = FakeVar("B")
-        app.data_source_column_var = FakeVar("A")
-        app.data_target_column_var = FakeVar("B")
-        app.glossary_sheet_combobox = FakeCombobox()
-        app.data_sheet_combobox = FakeCombobox()
         return app
 
     def build_splitter_app(self, input_path: Path) -> SplitExcelLinesApp:
@@ -253,31 +189,11 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.term_history_sheet_combobox = FakeCombobox()
         return app
 
-    def build_llm_term_extractor_app(self, input_path: Path) -> LlmTermExtractorApp:
-        app = LlmTermExtractorApp.__new__(LlmTermExtractorApp)
-        app.input_file_var = FakeVar(str(input_path))
-        app.output_file_var = FakeVar("")
-        app.sheet_var = FakeVar("")
-        app.source_column_var = FakeVar("A")
-        app.target_column_var = FakeVar("")
-        app.sheet_combobox = FakeCombobox()
-        return app
-
     def build_xbench_report_transformer_app(self, input_path: Path) -> XbenchReportTransformerApp:
         app = XbenchReportTransformerApp.__new__(XbenchReportTransformerApp)
         app.input_file_var = FakeVar(str(input_path))
         app.sheet_var = FakeVar("")
         app.sheet_combobox = FakeCombobox()
-        return app
-
-    def build_llm_term_extractor_app_with_history(self, history_path: Path) -> LlmTermExtractorApp:
-        app = LlmTermExtractorApp.__new__(LlmTermExtractorApp)
-        app.history_tb_file_var = FakeVar(str(history_path))
-        app.history_sheet_var = FakeVar("")
-        app.history_source_column_var = FakeVar("")
-        app.history_target_column_var = FakeVar("")
-        app.history_start_row_var = FakeVar("2")
-        app.history_sheet_combobox = FakeCombobox()
         return app
 
     def test_term_pair_refresh_populates_sheet_choices_and_detects_columns(self) -> None:
@@ -332,42 +248,6 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.history_sheet_var.get(), "术语表")
             self.assertEqual(app.history_source_column_var.get(), "A")
             self.assertEqual(app.history_target_column_var.get(), "B")
-
-    def test_glossary_checker_refreshes_each_file_independently(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            glossary_path = Path(tmp_dir) / "glossary.xlsx"
-            data_path = Path(tmp_dir) / "data.xlsx"
-            self.create_glossary_workbook(glossary_path)
-            self.create_data_workbook(data_path)
-            app = self.build_glossary_checker_app(glossary_path, data_path)
-
-            app.refresh_glossary_sheet_choices(show_error=False)
-            app.refresh_data_sheet_choices(show_error=False)
-
-            self.assertEqual(app.glossary_sheet_combobox["values"], ("Glossary", "Backup"))
-            self.assertEqual(app.glossary_sheet_var.get(), "Glossary")
-            self.assertEqual(app.glossary_source_column_var.get(), "B")
-            self.assertEqual(app.glossary_target_column_var.get(), "D")
-
-            self.assertEqual(app.data_sheet_combobox["values"], ("Data", "Archive"))
-            self.assertEqual(app.data_sheet_var.get(), "Archive")
-            self.assertEqual(app.data_source_column_var.get(), "A")
-            self.assertEqual(app.data_target_column_var.get(), "B")
-
-    def test_glossary_checker_switching_sheet_redetects_columns(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            glossary_path = Path(tmp_dir) / "glossary.xlsx"
-            data_path = Path(tmp_dir) / "data.xlsx"
-            self.create_glossary_workbook(glossary_path)
-            self.create_data_workbook(data_path)
-            app = self.build_glossary_checker_app(glossary_path, data_path)
-
-            app.refresh_data_sheet_choices(show_error=False)
-            app.data_sheet_var.set("Data")
-            app.handle_data_sheet_selected(show_error=False)
-
-            self.assertEqual(app.data_source_column_var.get(), "C")
-            self.assertEqual(app.data_target_column_var.get(), "F")
 
     def test_splitter_refresh_populates_sheet_choices(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -496,46 +376,6 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.term_history_source_column_var.get(), "A")
             self.assertEqual(app.term_history_target_column_var.get(), "B")
 
-    def test_llm_term_extractor_refresh_populates_sheet_choices_and_detects_columns(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            workbook_path = Path(tmp_dir) / "llm_terms.xlsx"
-            self.create_data_workbook(workbook_path)
-            app = self.build_llm_term_extractor_app(workbook_path)
-
-            app.refresh_sheet_choices(show_error=False)
-
-            self.assertEqual(app.sheet_combobox["values"], ("Data", "Archive"))
-            self.assertEqual(app.sheet_var.get(), "Archive")
-            self.assertEqual(app.source_column_var.get(), "A")
-            self.assertEqual(app.target_column_var.get(), "B")
-
-    def test_llm_term_extractor_switching_sheet_redetects_columns(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            workbook_path = Path(tmp_dir) / "llm_terms.xlsx"
-            self.create_data_workbook(workbook_path)
-            app = self.build_llm_term_extractor_app(workbook_path)
-
-            app.refresh_sheet_choices(show_error=False)
-            app.sheet_var.set("Data")
-            app.handle_sheet_selected(show_error=False)
-
-            self.assertEqual(app.source_column_var.get(), "C")
-            self.assertEqual(app.target_column_var.get(), "F")
-
-    def test_llm_term_extractor_source_only_refresh_clears_target_column(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            workbook_path = Path(tmp_dir) / "source_only.xlsx"
-            self.create_source_only_workbook(workbook_path)
-            app = self.build_llm_term_extractor_app(workbook_path)
-            app.target_column_var.set("B")
-
-            app.refresh_sheet_choices(show_error=False)
-
-            self.assertEqual(app.sheet_combobox["values"], ("SourceOnly",))
-            self.assertEqual(app.sheet_var.get(), "SourceOnly")
-            self.assertEqual(app.source_column_var.get(), "A")
-            self.assertEqual(app.target_column_var.get(), "")
-
     def test_xbench_report_transformer_refresh_populates_sheet_choices(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workbook_path = Path(tmp_dir) / "xbench.xlsx"
@@ -573,133 +413,6 @@ class GuiSheetSelectionTests(unittest.TestCase):
             output_file=None,
         )
 
-    def test_llm_term_extractor_history_tb_defaults_to_term_sheet_and_detects_nomark_columns(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            history_path = Path(tmp_dir) / "history.xlsx"
-            self.create_history_tb_workbook(history_path)
-            app = self.build_llm_term_extractor_app_with_history(history_path)
-
-            app.refresh_history_sheet_choices(show_error=False)
-
-            self.assertEqual(app.history_sheet_combobox["values"], ("Raw", "术语表"))
-            self.assertEqual(app.history_sheet_var.get(), "术语表")
-            self.assertEqual(app.history_source_column_var.get(), "C")
-            self.assertEqual(app.history_target_column_var.get(), "D")
-
-    def test_llm_term_extractor_history_tb_detection_uses_history_start_row(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            history_path = Path(tmp_dir) / "history_offset.xlsx"
-            self.create_offset_history_tb_workbook(history_path)
-            app = self.build_llm_term_extractor_app_with_history(history_path)
-            app.history_start_row_var.set("3")
-
-            app.refresh_history_sheet_choices(show_error=False)
-
-            self.assertEqual(app.history_sheet_combobox["values"], ("术语表",))
-            self.assertEqual(app.history_sheet_var.get(), "术语表")
-            self.assertEqual(app.history_source_column_var.get(), "C")
-            self.assertEqual(app.history_target_column_var.get(), "D")
-
-    def test_llm_term_extractor_blank_target_and_history_fields_pass_to_processor(self) -> None:
-        app = LlmTermExtractorApp.__new__(LlmTermExtractorApp)
-        app.input_file_var = FakeVar("/tmp/input.xlsx")
-        app.output_file_var = FakeVar("/tmp/output.xlsx")
-        app.sheet_var = FakeVar("Data")
-        app.source_column_var = FakeVar("A")
-        app.target_column_var = FakeVar("")
-        app.start_row_var = FakeVar("3")
-        app.batch_size_var = FakeVar("25")
-        app.codex_model_var = FakeVar("codex-model")
-        app.codex_reasoning_effort_var = FakeVar("high")
-        app.extract_prompt_file_var = FakeVar("")
-        app.conflict_prompt_file_var = FakeVar("/tmp/conflict.md")
-        app.history_tb_file_var = FakeVar("/tmp/history.xlsx")
-        app.history_sheet_var = FakeVar("术语表")
-        app.history_source_column_var = FakeVar("C")
-        app.history_target_column_var = FakeVar("D")
-        app.history_start_row_var = FakeVar("4")
-        app.keep_raw_codex_output_var = FakeBoolVar(True)
-        summary = SimpleNamespace(
-            output_path=Path("/tmp/output.xlsx"),
-            worksheet_title="Data",
-            source_column="A",
-            target_column="",
-            start_row=3,
-            scanned_row_count=10,
-            batch_count=1,
-            term_count=4,
-            conflict_count=2,
-        )
-
-        with (
-            patch(
-                "tools.llm_term_extractor.extract_llm_terms_gui.process_excel",
-                return_value=summary,
-            ) as process_excel_mock,
-            patch("tools.llm_term_extractor.extract_llm_terms_gui.messagebox.showinfo"),
-        ):
-            app.run_extraction()
-
-        process_excel_mock.assert_called_once()
-        self.assertIsNone(process_excel_mock.call_args.kwargs["target_column"])
-        self.assertEqual(process_excel_mock.call_args.kwargs["batch_size"], 25)
-        self.assertEqual(process_excel_mock.call_args.kwargs["extract_prompt_file"], None)
-        self.assertEqual(process_excel_mock.call_args.kwargs["conflict_prompt_file"], "/tmp/conflict.md")
-        self.assertEqual(process_excel_mock.call_args.kwargs["history_sheet"], "术语表")
-        self.assertEqual(process_excel_mock.call_args.kwargs["history_source_column"], "C")
-        self.assertEqual(process_excel_mock.call_args.kwargs["history_target_column"], "D")
-        self.assertEqual(process_excel_mock.call_args.kwargs["history_start_row"], 4)
-        self.assertEqual(process_excel_mock.call_args.kwargs["keep_raw_codex_output"], True)
-
-    def test_llm_term_extractor_ignores_invalid_history_start_without_history_file(self) -> None:
-        app = LlmTermExtractorApp.__new__(LlmTermExtractorApp)
-        app.input_file_var = FakeVar("/tmp/input.xlsx")
-        app.output_file_var = FakeVar("/tmp/output.xlsx")
-        app.sheet_var = FakeVar("Data")
-        app.source_column_var = FakeVar("A")
-        app.target_column_var = FakeVar("")
-        app.start_row_var = FakeVar("3")
-        app.batch_size_var = FakeVar("25")
-        app.codex_model_var = FakeVar("codex-model")
-        app.codex_reasoning_effort_var = FakeVar("high")
-        app.extract_prompt_file_var = FakeVar("")
-        app.conflict_prompt_file_var = FakeVar("")
-        app.history_tb_file_var = FakeVar("")
-        app.history_sheet_var = FakeVar("术语表")
-        app.history_source_column_var = FakeVar("C")
-        app.history_target_column_var = FakeVar("D")
-        app.history_start_row_var = FakeVar("not-an-int")
-        app.keep_raw_codex_output_var = FakeBoolVar(False)
-        summary = SimpleNamespace(
-            output_path=Path("/tmp/output.xlsx"),
-            worksheet_title="Data",
-            source_column="A",
-            target_column="",
-            start_row=3,
-            scanned_row_count=10,
-            batch_count=1,
-            term_count=4,
-            conflict_count=2,
-        )
-
-        with (
-            patch(
-                "tools.llm_term_extractor.extract_llm_terms_gui.process_excel",
-                return_value=summary,
-            ) as process_excel_mock,
-            patch("tools.llm_term_extractor.extract_llm_terms_gui.messagebox.showerror") as showerror_mock,
-            patch("tools.llm_term_extractor.extract_llm_terms_gui.messagebox.showinfo"),
-        ):
-            app.run_extraction()
-
-        showerror_mock.assert_not_called()
-        process_excel_mock.assert_called_once()
-        self.assertIsNone(process_excel_mock.call_args.kwargs["history_tb_file"])
-        self.assertIsNone(process_excel_mock.call_args.kwargs["history_sheet"])
-        self.assertIsNone(process_excel_mock.call_args.kwargs["history_source_column"])
-        self.assertIsNone(process_excel_mock.call_args.kwargs["history_target_column"])
-        self.assertEqual(process_excel_mock.call_args.kwargs["history_start_row"], 2)
-
     def test_term_pair_ignores_invalid_history_start_without_history_file(self) -> None:
         app = ExtractTermsApp.__new__(ExtractTermsApp)
         app.input_file_var = FakeVar("/tmp/input.xlsx")
@@ -717,7 +430,6 @@ class GuiSheetSelectionTests(unittest.TestCase):
             "【】": FakeBoolVar(True),
             "[]": FakeBoolVar(True),
         }
-        app.codex_fp_review_var = FakeBoolVar(False)
 
         with (
             patch(
@@ -737,6 +449,41 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertIsNone(process_excel_mock.call_args.kwargs["history_target_column"])
         self.assertEqual(process_excel_mock.call_args.kwargs["history_start_row"], 2)
 
+    def test_term_check_allows_history_tb_without_selected_marks(self) -> None:
+        app = ExtractTermsApp.__new__(ExtractTermsApp)
+        app.input_file_var = FakeVar("/tmp/input.xlsx")
+        app.history_tb_file_var = FakeVar("/tmp/history.xlsx")
+        app.history_sheet_var = FakeVar("术语表")
+        app.history_source_column_var = FakeVar("A")
+        app.history_target_column_var = FakeVar("B")
+        app.history_start_row_var = FakeVar("2")
+        app.source_column_var = FakeVar("A")
+        app.target_column_var = FakeVar("B")
+        app.sheet_var = FakeVar("Data")
+        app.start_row_var = FakeVar("2")
+        app.mark_style_vars = {
+            "【】": FakeBoolVar(False),
+            "[]": FakeBoolVar(False),
+        }
+
+        with (
+            patch(
+                "tools.term_pair_checker.extract_terms_gui.process_excel",
+                return_value=("Data", "A", "B", Path("/tmp/output.xlsx"), 2, 0),
+            ) as process_excel_mock,
+            patch("tools.term_pair_checker.extract_terms_gui.messagebox.showerror") as showerror_mock,
+            patch("tools.term_pair_checker.extract_terms_gui.messagebox.showinfo"),
+        ):
+            app.run_extraction()
+
+        showerror_mock.assert_not_called()
+        process_excel_mock.assert_called_once()
+        self.assertEqual(process_excel_mock.call_args.kwargs["mark_styles"], [])
+        self.assertEqual(
+            process_excel_mock.call_args.kwargs["history_tb_file"],
+            "/tmp/history.xlsx",
+        )
+
     def test_workflow_ignores_invalid_history_start_without_history_file(self) -> None:
         app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
         app.input_file_var = FakeVar("/tmp/input.xlsx")
@@ -752,7 +499,6 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.start_row_var = FakeVar("2")
         app.run_term_pair_var = FakeBoolVar(True)
         app.run_tag_check_var = FakeBoolVar(True)
-        app.codex_fp_review_var = FakeBoolVar(False)
         app.term_mark_style_vars = {
             "【】": FakeBoolVar(True),
             "[]": FakeBoolVar(True),

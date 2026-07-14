@@ -14,7 +14,6 @@ from tools.tag_placeholder_checker.check_tags_and_placeholders import (
 from tools.term_pair_checker.extract_terms_from_excel import (
     process_excel as run_term_pair_check_excel,
 )
-from tools.false_positive_review import Reviewer
 
 
 @dataclass(frozen=True)
@@ -50,8 +49,6 @@ def run_workflow(
     term_history_source_column: str | None = None,
     term_history_target_column: str | None = None,
     term_history_start_row: int = 2,
-    false_positive_reviewer: Reviewer | None = None,
-    false_positive_sample_size: int = 5,
     run_tag_check: bool = True,
     tag_token_types: tuple[str, ...] | list[str] | None = None,
 ) -> WorkflowSummary:
@@ -94,8 +91,6 @@ def run_workflow(
             history_target_column=term_history_target_column,
             history_start_row=term_history_start_row,
             output_file=output_path,
-            false_positive_reviewer=false_positive_reviewer,
-            false_positive_sample_size=false_positive_sample_size,
         )
         current_input_path = saved_path
 

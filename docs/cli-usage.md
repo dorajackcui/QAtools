@@ -17,10 +17,7 @@
 
 - `tools/term_pair_checker/extract_terms_from_excel.py`
   - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
-  - 常用可选：`-s/--sheet`、`--start-row`、`--mark-style`、`--exclusion-config`、`--history-tb`、`--history-sheet`、`--history-source-column`、`--history-target-column`、`--history-start-row`、`-o/--output`
-- `tools/term_glossary_checker/check_terms_against_glossary.py`
-  - 必填：`glossary_file`、`data_file`、`--glossary-source-column`、`--glossary-target-column`、`--data-source-column`、`--data-target-column`
-  - 常用可选：`--glossary-sheet`、`--data-sheet`、`--start-row`、`--case-sensitive`、`--match-mode`、`-o/--output`
+  - 常用可选：`-s/--sheet`、`--start-row`、`--mark-style`、`--no-term-mark`、`--exclusion-config`、`--history-tb`、`--history-sheet`、`--history-source-column`、`--history-target-column`、`--history-start-row`、`-o/--output`
 - `tools/tag_placeholder_checker/check_tags_and_placeholders.py`
   - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
   - 常用可选：`-s/--sheet`、`--start-row`、`--token-type`、`--angle-config`、`-o/--output`
@@ -33,16 +30,13 @@
 - `tools/french_nbsp_restorer/restore_french_nbsp.py`
   - 必填：`input_file`、`-t/--target-column`
   - 常用可选：`-s/--sheet`、`-r/--result-column`、`--start-row`、`-o/--output`
-- `tools/llm_term_extractor/extract_llm_terms.py`
-  - 必填：`input_file`、`-c/--source-column`
-  - 常用可选：`-s/--sheet`、`-t/--target-column`、`--start-row`、`--batch-size`、`--codex-model`、`--codex-reasoning-effort`、`--extract-prompt-file`、`--conflict-prompt-file`、`--dump-prompts-dir`、`--keep-raw-codex-output`、`--history-tb`、`--history-sheet`、`--history-source-column`、`--history-target-column`、`--history-start-row`、`-o/--output`
 - `tools/xbench_report_transformer/transform_xbench_report.py`
   - 必填：`input_file`
   - 常用可选：`-s/--sheet`、`-o/--output`
 
 ## 推荐命令模板
 
-### 1. 术语对检查
+### 1. 术语检查
 
 最稳妥的 agent 调用方式：
 
@@ -98,6 +92,22 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
 
 历史 TB 会自动识别第 1 行的 `source` / `target` 列；也兼容本工具输出里的 `source术语` / `target术语` 表头。读取历史值时会去掉支持的 mark。传入历史 TB 后，会先把历史 TB 全量加入检查词库，再合并本批次新增术语；命中历史 source 时使用历史 target，未命中的 source 才按本批次第一次出现建立新增术语对。输出的 `术语表` 只写本次检查文本中实际涉及的历史术语和本批次新增术语。
 
+如果不需要从 mark 提取新术语、只想用历史 TB 检查：
+
+```bash
+python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
+  -s Sheet1 -c A -t B \
+  --start-row 2 \
+  --no-term-mark \
+  --history-tb ./glossary.xlsx \
+  --history-sheet Glossary \
+  --history-source-column A \
+  --history-target-column B \
+  -o ./artifacts/term_pair_check_input.xlsx
+```
+
+`--no-term-mark` 必须与 `--history-tb` 一起使用。该模式替代原“术语表命中检查”，输出统一为 `术语表` 和 `问题列`。
+
 输出结果中会新增这些工作表：
 
 - `术语表`：包含保留 mark、无 mark 和 `术语来源` 列；来源为 `历史TB` 或 `本批次新增`
@@ -112,92 +122,7 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
 - 问题条数
 - 输出文件路径
 
-如果需要在 `问题列` 上追加 Codex 假阳性筛查结果：
-
-```bash
-python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --mark-style '【】' \
-  --mark-style [] \
-  --codex-fp-review \
-  -o ./artifacts/term_pair_check_input.xlsx
-```
-
-该模式会调用本机 `codex exec`，按 `问题source术语 + 预期target术语 + 问题简述 + source原文 + target原文` 聚类，并写入 `fp_decision`、`fp_category`、`fp_confidence`、`fp_note`、`fp_by`。
-
-### 2. 术语表命中检查
-
-推荐完整调用：
-
-```bash
-python3 tools/term_glossary_checker/check_terms_against_glossary.py \
-  ./glossary.xlsx \
-  ./data.xlsx \
-  --glossary-sheet Glossary \
-  --glossary-source-column A \
-  --glossary-target-column B \
-  --data-sheet Sheet1 \
-  --data-source-column A \
-  --data-target-column B \
-  --start-row 2 \
-  --match-mode hybrid-boundary \
-  -o ./artifacts/data_glossary_checked.xlsx
-```
-
-如果需要大小写敏感：
-
-```bash
-python3 tools/term_glossary_checker/check_terms_against_glossary.py \
-  ./glossary.xlsx \
-  ./data.xlsx \
-  --glossary-sheet Glossary \
-  --glossary-source-column A \
-  --glossary-target-column B \
-  --data-sheet Sheet1 \
-  --data-source-column A \
-  --data-target-column B \
-  --start-row 2 \
-  --case-sensitive \
-  --match-mode hybrid-boundary \
-  -o ./artifacts/data_glossary_checked.xlsx
-```
-
-输出结果中会新增：
-
-- `术语命中问题`
-- `检查汇总`
-
-如果需要在 `术语命中问题` 上追加 Codex 假阳性筛查结果：
-
-```bash
-python3 tools/term_glossary_checker/check_terms_against_glossary.py \
-  ./glossary.xlsx \
-  ./data.xlsx \
-  --glossary-source-column A \
-  --glossary-target-column B \
-  --data-source-column A \
-  --data-target-column B \
-  --codex-fp-review \
-  -o ./artifacts/data_glossary_checked.xlsx
-```
-
-该模式会调用本机 `codex exec`，按 `source术语 + 期望target术语 + 问题类型 + source文本 + target文本` 聚类，并写入 `fp_decision`、`fp_category`、`fp_confidence`、`fp_note`、`fp_by`。
-
-标准输出会打印：
-
-- 术语表工作表 / 检查工作表
-- 大小写模式
-- 匹配模式
-- 术语表条数
-- 冲突术语数
-- 总行数
-- 命中术语行数
-- 问题行数 / 问题条数
-- 输出文件路径
-
-### 3. Excel 分行拆列
+### 2. Excel 分行拆列
 
 推荐完整调用：
 
@@ -218,7 +143,7 @@ python3 tools/excel_line_splitter/split_excel_lines.py ./input.xlsx \
 - 写入条目数
 - 输出文件路径
 
-### 4. Tag / Placeholder 检查
+### 3. Tag / Placeholder 检查
 
 推荐完整调用：
 
@@ -273,7 +198,7 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xls
 - 问题行数 / 问题条数
 - 输出文件路径
 
-### 5. Target 中文检查
+### 4. Target 中文检查
 
 默认直接修改原文件，在 target 右侧新增一列：
 
@@ -314,7 +239,7 @@ python3 tools/chinese_target_checker/check_chinese_target.py ./input.xlsx \
 - 含中文行数
 - 输出文件路径
 
-### 6. 法语 NBSP 恢复
+### 5. 法语 NBSP 恢复
 
 直接修复 target 列：
 
@@ -353,71 +278,7 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp.py ./input.xlsx \
 - 修复行数
 - 输出文件路径
 
-### 7. LLM 术语提取
-
-推荐完整调用（target / mixed 模式，空 target 行会按 source-only 处理）：
-
-```bash
-python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  --batch-size 50 \
-  --codex-model gpt-5.3-codex-spark \
-  --codex-reasoning-effort high \
-  -o ./artifacts/input_llm_terms.xlsx
-```
-
-如果是 source-only 模式（不传 `-t`，或所选 target 列单元格为空）：
-
-```bash
-python3 tools/llm_term_extractor/extract_llm_terms.py ./source_only.xlsx \
-  -s Sheet1 \
-  -c A \
-  --start-row 2 \
-  --batch-size 50 \
-  -o ./artifacts/source_only_llm_terms.xlsx
-```
-
-带历史 TB 与 prompt 覆盖的推荐调用：
-
-```bash
-python3 tools/llm_term_extractor/extract_llm_terms.py ./input.xlsx \
-  -s Sheet1 \
-  -c A -t B \
-  --start-row 2 \
-  --batch-size 50 \
-  --history-tb ./history_tb.xlsx \
-  --history-sheet Glossary \
-  --history-source-column source \
-  --history-target-column target \
-  --extract-prompt-file ./tools/llm_term_extractor/prompts/extract_terms_zh_target.md \
-  --conflict-prompt-file ./tools/llm_term_extractor/prompts/conflict_review_zh_target.md \
-  --dump-prompts-dir ./artifacts/prompt_dumps \
-  --keep-raw-codex-output \
-  -o ./artifacts/input_llm_terms.xlsx
-```
-
-说明：
-
-- 默认输出文件名为 `llm_terms_<原文件名>`；也可用 `-o/--output` 指定。
-- 该工具会在内部调用本机 `codex exec`，解析严格 JSON 的返回并写入两张输出工作表：`本批次术语汇总表` 和 `冲突汇总`。
-- `本批次术语汇总表` 会合并历史术语（如传入历史 TB）和本批次新增术语，并包含实例原文列。
-- 单元测试里不要求真实调用 `codex exec`，可通过替身/patch 完成模拟测试。
-
-标准输出会打印：
-
-- 工作表名
-- source 列 / target 列
-- 开始行
-- 扫描行数
-- 批次数
-- 术语数
-- 冲突数
-- 输出文件路径
-
-### 8. Xbench QA Report 转换
+### 6. Xbench QA Report 转换
 
 推荐完整调用：
 
@@ -455,10 +316,8 @@ python3 tools/xbench_report_transformer/transform_xbench_report.py ./Xbench_QA_R
 - 如果要批量处理多个文件，建议为每次运行都显式传入独立输出文件名，避免后续步骤误读旧结果。
 - 如果只需要默认输出命名，也可以省略 `-o`；默认命名分别是：
   - `term_pair_check_<原文件名>`
-  - `<原文件名>_glossary_checked.xlsx`
   - `tag_check_<原文件名>`
 - Target 中文检查默认直接修改原文件；显式传 `-o` 时由调用方指定输出名
   - `<原文件名>_split_lines.xlsx`
   - `<原文件名>_french_nbsp_restored.xlsx`
-  - `llm_terms_<原文件名>`
   - `xbench_transform_<原文件名>`

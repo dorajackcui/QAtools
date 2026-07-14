@@ -36,7 +36,7 @@ class ToolshubLayoutTests(unittest.TestCase):
         self.assertEqual(grouped_tools["常用流程"], ["Workflow 编排"])
         self.assertEqual(
             grouped_tools["术语处理"],
-            ["术语对检查", "LLM 术语提取", "术语表命中检查"],
+            ["术语检查"],
         )
         self.assertEqual(grouped_tools["质量检查"], ["Tag 检查", "Target 中文检查", "Xbench QA 转换"])
         self.assertEqual(grouped_tools["文本修复"], ["分行拆列", "法语 NBSP 恢复"])

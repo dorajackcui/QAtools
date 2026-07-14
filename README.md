@@ -6,16 +6,15 @@
 
 ## 当前工具
 
-### 1. 术语对检查
+### 1. 术语检查
 
 - 目录：`tools/term_pair_checker`
-- 用途：从 Excel 的 `source` / `target` 列提取术语并检查是否对齐
+- 用途：从可选 mark 提取新术语对，并结合历史 TB 检查 `source` / `target` 是否对齐
 - mark 支持：`【】`、普通 `[]`，且可在 GUI 中多选组合检查；`<...>`、`{...}` 统一按 tag / placeholder 处理
 - 检查规则：`术语表` 保留 tag，实际术语检查会忽略 tag，并回溯整表未标注出现
 - 复数处理：回扫时双边整条 `术语+s` / `译法+s` 直接放行；其他复数形态疑似变体不进入问题报告
-- 历史 TB：可选选择历史 TB；选择后会用“历史 TB 全量 + 本批次新增 TB”一起检查
+- 历史 TB：可选选择历史 TB；选择后会用“历史 TB 全量 + 本批次新增 TB”一起检查；不选 mark 时仅使用历史 TB，等价于原“术语表命中检查”
 - 方括号处理：`[color=...]` / `[/color]` 这类格式 tag 不进入术语表
-- Codex 假阳性筛查：可选开启；检查完成后按术语、期望译法、问题类型和原文/译文文本组成的问题 cluster 调用本机 `codex exec`，在 `问题列` 追加 `fp_*` 辅助列
 - 输出增强：结果会给出合并后的 `术语表`（只包含本次检查文本中涉及的术语，并包含保留 mark、无 mark 和术语来源列），以及带原文上下文的 `问题列`
 - GUI 增强：自动读取工作表列表，并尝试自动识别本批次和历史 TB 的 `source` / `target` 列
 - 输出方式：生成新的结果 Excel，不覆盖原文件
@@ -32,6 +31,16 @@ python3 tools/term_pair_checker/extract_terms_from_excel.py input.xlsx \
   -o term_pair_check_output.xlsx
 ```
 
+仅使用历史 TB 检查、不从 mark 提取新术语：
+
+```bash
+python3 tools/term_pair_checker/extract_terms_from_excel.py input.xlsx \
+  -s Sheet1 -c A -t B \
+  --no-term-mark \
+  --history-tb glossary.xlsx \
+  --history-sheet Glossary
+```
+
 - 兼容旧入口：
 
 ```bash
@@ -46,33 +55,7 @@ python3 tools/term_pair_checker/extract_terms_gui.py
 
 详情见 `tools/term_pair_checker/README.md`。
 
-### 2. 术语表命中检查
-
-- 目录：`tools/term_glossary_checker`
-- 用途：使用术语表检查双语 Excel 中的 source 是否按约定 target 进行了翻译
-- 复数处理：双边整条 `术语+s` / `译法+s` 直接放行；其他复数形态疑似变体不进入问题报告
-- Codex 假阳性筛查：可选开启；检查完成后按术语、期望译法、问题类型和原文/译文文本组成的问题 cluster 调用本机 `codex exec`，在 `术语命中问题` 追加 `fp_*` 辅助列
-- GUI 增强：术语表文件和检查文件都支持工作表下拉选择与 `source` / `target` 列自动识别
-- 输出方式：生成新的结果 Excel，不覆盖原文件
-- CLI：
-
-```bash
-python3 tools/term_glossary_checker/check_terms_against_glossary.py glossary.xlsx data.xlsx \
-  --glossary-sheet Glossary \
-  --glossary-source-column A --glossary-target-column B \
-  --data-sheet Sheet1 \
-  --data-source-column A --data-target-column B
-```
-
-- GUI：
-
-```bash
-python3 tools/term_glossary_checker/check_terms_against_glossary_gui.py
-```
-
-详情见 `tools/term_glossary_checker/README.md`。
-
-### 3. Excel 分行拆列
+### 2. Excel 分行拆列
 
 - 目录：`tools/excel_line_splitter`
 - 用途：把指定列中带回车的单元格内容拆开，并连续写入结果列
@@ -97,7 +80,7 @@ python3 tools/excel_line_splitter/split_excel_lines_gui.py
 
 详情见 `tools/excel_line_splitter/README.md`。
 
-### 4. Tag / Placeholder 检查
+### 3. Tag / Placeholder 检查
 
 - 目录：`tools/tag_placeholder_checker`
 - 用途：逐行检查双语 Excel 中 `source` / `target` 的 `<...>`、`[color=...]` / `[/color]`、`{...}`、`\n` 和 memoQ tag 是否一致
@@ -127,7 +110,7 @@ python3 tools/tag_placeholder_checker/check_tags_and_placeholders_gui.py
 
 详情见 `tools/tag_placeholder_checker/README.md`。
 
-### 5. Target 中文检查
+### 4. Target 中文检查
 
 - 目录：`tools/chinese_target_checker`
 - 用途：检查 Excel `target` 列是否包含中文字符或中文/全角标点
@@ -150,7 +133,7 @@ python3 tools/chinese_target_checker/check_chinese_target_gui.py
 
 详情见 `tools/chinese_target_checker/README.md`。
 
-### 6. 法语 NBSP 恢复
+### 5. 法语 NBSP 恢复
 
 - 目录：`tools/french_nbsp_restorer`
 - 用途：恢复 Excel target 列中的法语 non-breaking space（NBSP）
@@ -177,45 +160,7 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp_gui.py
 
 详情见 `tools/french_nbsp_restorer/README.md`。
 
-### 7. LLM 术语提取
-
-- 目录：`tools/llm_term_extractor`
-- 用途：从 Excel 的 `source` 列抽取游戏术语；同行 `target` 有内容则记录已有译法并做冲突复核，空 target 行按 source-only 术语收集处理
-- 默认模型：`gpt-5.3-codex-spark`，`reasoning effort` 默认 `high`
-- prompt 管理：默认使用 `tools/llm_term_extractor/prompts/` 下的 `extract_terms_zh_target.md` 与 `conflict_review_zh_target.md`，支持 CLI 覆盖对应文件
-- 输出方式：生成新的结果 Excel（默认文件名 `llm_terms_<原文件名>`），不会覆盖原文件；结果只包含 `本批次术语汇总表` 和 `冲突汇总`
-- CLI：
-
-```bash
-python3 tools/llm_term_extractor/extract_llm_terms.py input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  --batch-size 50 \
-  --codex-model gpt-5.3-codex-spark \
-  --codex-reasoning-effort high \
-  --history-tb history_tb.xlsx \
-  --extract-prompt-file ./tools/llm_term_extractor/prompts/extract_terms_zh_target.md \
-  --conflict-prompt-file ./tools/llm_term_extractor/prompts/conflict_review_zh_target.md \
-  -o output_llm_terms.xlsx
-```
-
-- GUI：
-
-```bash
-python3 tools/llm_term_extractor/extract_llm_terms_gui.py
-```
-
-也可在统一入口启动：
-
-```bash
-python3 toolshub_gui.py
-```
-
-详情见 `tools/llm_term_extractor/README.md`。
-
-### 8. Xbench QA Report 转换
+### 6. Xbench QA Report 转换
 
 - 目录：`tools/xbench_report_transformer`
 - 用途：把 Xbench 导出的 QA Report 转换成 `文件名, key, source, target, QA问题` 五列表格
@@ -246,13 +191,11 @@ pip install -r requirements.txt
 ## 文档导航
 
 - Agent / 脚本调用请看：[CLI 使用指南](docs/cli-usage.md)
-- 术语对检查详细说明：`tools/term_pair_checker/README.md`
-- 术语表命中检查详细说明：`tools/term_glossary_checker/README.md`
+- 术语检查详细说明：`tools/term_pair_checker/README.md`
 - Tag / Placeholder 检查详细说明：`tools/tag_placeholder_checker/README.md`
 - Excel 分行拆列详细说明：`tools/excel_line_splitter/README.md`
 - Target 中文检查详细说明：`tools/chinese_target_checker/README.md`
 - 法语 NBSP 恢复详细说明：`tools/french_nbsp_restorer/README.md`
-- LLM 术语提取详细说明：`tools/llm_term_extractor/README.md`
 - Xbench QA Report 转换详细说明：`tools/xbench_report_transformer/README.md`
 
 ## 统一 GUI 入口
@@ -261,6 +204,4 @@ pip install -r requirements.txt
 python3 toolshub_gui.py
 ```
 
-会打开一个统一窗口，使用标签页管理这些工具；Workflow 编排页也支持给术语对检查选择历史 TB；原有各自的 GUI 入口仍然保留。
-
-统一入口同样包含 `LLM术语提取` 和 `Xbench QA 转换` 页面；LLM 页面支持 source-only 与 target 两种模式和历史 TB 参数，GUI 内可选择或覆盖抽取 / 冲突复核的 prompt 文件。
+会打开一个统一窗口管理这些工具；Workflow 编排页也支持给术语检查选择历史 TB。术语检查未选择 mark 时，会仅使用历史 TB 做全表命中检查。

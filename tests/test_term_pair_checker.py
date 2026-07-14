@@ -12,9 +12,6 @@ from tools.term_pair_checker.extract_terms_from_excel import (
     extract_terms,
     process_excel,
 )
-from tools.false_positive_review import ReviewDecision
-
-
 class ExtractTermsTests(unittest.TestCase):
     def test_term_mark_helpers_are_available_from_focused_module(self) -> None:
         from tools.term_pair_checker.term_marks import (
@@ -265,48 +262,6 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["E2"].value, "target缺少预期术语")
             self.assertEqual(problem_sheet["F2"].value, "第三行先出现苹果")
             self.assertEqual(problem_sheet["G2"].value, "第三行先出现banana")
-
-    def test_process_excel_can_run_false_positive_reviewer_on_problem_sheet(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            input_path = Path(tmp_dir) / "input.xlsx"
-
-            workbook = Workbook()
-            worksheet = workbook.active
-            worksheet.title = "Data"
-            worksheet["A1"] = "source"
-            worksheet["B1"] = "target"
-            worksheet["A2"] = "建立 [Lineup]"
-            worksheet["B2"] = "建立 [Équipe]"
-            worksheet["A3"] = "Lineup RCMD:"
-            worksheet["B3"] = "Compo conseillée:"
-            workbook.save(input_path)
-
-            def reviewer(clusters):
-                return {
-                    clusters[0].key: ReviewDecision(
-                        decision="review",
-                        category="需人工确认",
-                        confidence="medium",
-                        note="项目是否接受 Compo 作为 Équipe 短称需要确认",
-                    )
-                }
-
-            _, _, _, saved_path, _, problem_count = process_excel(
-                input_file=input_path,
-                source_column="A",
-                target_column="B",
-                start_row=2,
-                mark_styles=("[]",),
-                false_positive_reviewer=reviewer,
-            )
-
-            self.assertEqual(problem_count, 1)
-            result_workbook = load_workbook(saved_path)
-            problem_sheet = result_workbook["问题列"]
-            self.assertEqual(problem_sheet["H1"].value, "fp_decision")
-            self.assertEqual(problem_sheet["H2"].value, "review")
-            self.assertEqual(problem_sheet["I2"].value, "需人工确认")
-            self.assertEqual(problem_sheet["K2"].value, "项目是否接受 Compo 作为 Équipe 短称需要确认")
 
     def test_process_excel_records_count_mismatch_and_missing_target_separately(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -754,12 +709,12 @@ class ProcessExcelTests(unittest.TestCase):
             result_workbook = load_workbook(saved_path)
             self.assertEqual(result_workbook["问题列"].max_row, 1)
 
-    def test_process_excel_rejects_empty_selected_tag_types(self) -> None:
+    def test_process_excel_rejects_empty_marks_without_history_tb(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
             self.create_workbook(input_path)
 
-            with self.assertRaisesRegex(ValueError, "请至少选择一种 mark 类型"):
+            with self.assertRaisesRegex(ValueError, "必须提供历史 TB"):
                 process_excel(
                     input_file=input_path,
                     source_column="A",
@@ -964,6 +919,59 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A2"].value, 3)
             self.assertEqual(problem_sheet["B2"].value, "Apple")
             self.assertEqual(problem_sheet["C2"].value, "Pomme")
+
+    def test_process_excel_can_check_history_tb_without_term_marks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            history_path = Path(tmp_dir) / "history.xlsx"
+
+            history_workbook = Workbook()
+            history_sheet = history_workbook.active
+            history_sheet.title = "TB"
+            history_sheet["A1"] = "source"
+            history_sheet["B1"] = "target"
+            history_sheet["A2"] = "Apple"
+            history_sheet["B2"] = "Pomme"
+            history_sheet["A3"] = "Banana"
+            history_sheet["B3"] = "Banane"
+            history_workbook.save(history_path)
+
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Use Apple"
+            worksheet["B2"] = "Utiliser Pomme"
+            worksheet["A3"] = "Use Banana"
+            worksheet["B3"] = "Utiliser le mauvais terme"
+            workbook.save(input_path)
+
+            _, _, _, saved_path, term_count, problem_count = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                start_row=2,
+                mark_styles=(),
+                history_tb_file=history_path,
+                history_sheet="TB",
+            )
+
+            self.assertEqual(term_count, 2)
+            self.assertEqual(problem_count, 1)
+
+            result_workbook = load_workbook(saved_path)
+            term_sheet = result_workbook["术语表"]
+            self.assertEqual(term_sheet["A2"].value, "Apple")
+            self.assertEqual(term_sheet["A3"].value, "Banana")
+            self.assertEqual(term_sheet["E2"].value, "历史TB")
+            self.assertEqual(term_sheet["E3"].value, "历史TB")
+
+            problem_sheet = result_workbook["问题列"]
+            self.assertEqual(problem_sheet.max_row, 2)
+            self.assertEqual(problem_sheet["A2"].value, 3)
+            self.assertEqual(problem_sheet["B2"].value, "Banana")
+            self.assertEqual(problem_sheet["C2"].value, "Banane")
 
     def test_problem_sheet_includes_term_source_and_sorts_history_first(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

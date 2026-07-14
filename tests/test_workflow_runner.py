@@ -6,7 +6,6 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
-from tools.false_positive_review import ReviewDecision
 from tools.workflow.workflow_runner import run_workflow
 
 
@@ -117,51 +116,44 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(term_sheet["B2"].value, "历史译法")
             self.assertEqual(term_sheet["E2"].value, "历史TB")
 
-    def test_run_workflow_can_pass_false_positive_reviewer_to_term_pair_check(self) -> None:
+    def test_run_workflow_can_check_history_tb_without_term_marks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
-            output_path = Path(tmp_dir) / "workflow_output.xlsx"
+            history_path = Path(tmp_dir) / "history.xlsx"
 
             workbook = Workbook()
             worksheet = workbook.active
             worksheet.title = "Data"
             worksheet["A1"] = "source"
             worksheet["B1"] = "target"
-            worksheet["A2"] = "建立 [Lineup]"
-            worksheet["B2"] = "建立 [Équipe]"
-            worksheet["A3"] = "Lineup RCMD:"
-            worksheet["B3"] = "Compo conseillée:"
+            worksheet["A2"] = "Alpha appears here"
+            worksheet["B2"] = "这里使用错误译法"
             workbook.save(input_path)
 
-            def reviewer(clusters):
-                return {
-                    clusters[0].key: ReviewDecision(
-                        decision="review",
-                        category="需人工确认",
-                        confidence="medium",
-                        note="项目是否接受 Compo 作为 Équipe 短称需要确认",
-                    )
-                }
+            history_workbook = Workbook()
+            history_sheet = history_workbook.active
+            history_sheet.title = "TB"
+            history_sheet["A1"] = "source"
+            history_sheet["B1"] = "target"
+            history_sheet["A2"] = "Alpha"
+            history_sheet["B2"] = "历史译法"
+            history_workbook.save(history_path)
 
             summary = run_workflow(
                 input_file=input_path,
-                output_file=output_path,
                 source_column="A",
                 target_column="B",
                 sheet="Data",
                 start_row=2,
                 run_term_pair_check=True,
-                term_mark_styles=("[]",),
+                term_mark_styles=(),
+                term_history_tb_file=history_path,
+                term_history_sheet="TB",
                 run_tag_check=False,
-                false_positive_reviewer=reviewer,
             )
 
+            self.assertEqual(summary.term_count, 1)
             self.assertEqual(summary.term_problem_count, 1)
-            workbook = load_workbook(summary.output_path)
-            problem_sheet = workbook["问题列"]
-            self.assertEqual(problem_sheet["H1"].value, "fp_decision")
-            self.assertEqual(problem_sheet["H2"].value, "review")
-
 
 if __name__ == "__main__":
     unittest.main()
