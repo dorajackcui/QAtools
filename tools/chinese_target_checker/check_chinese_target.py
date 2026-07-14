@@ -13,14 +13,17 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from openpyxl import load_workbook
-from openpyxl.utils import column_index_from_string, get_column_letter
+from openpyxl.utils import column_index_from_string
 
-from tools.excel_output import build_prefixed_output_path
+from tools.excel_output import (
+    PROBLEM_BASE_HEADERS,
+    build_prefixed_output_path,
+    write_output_table,
+)
 
 
-PROBLEM_SHEET_NAME = "中文检查问题"
-RESULT_HEADER = "中文检查"
-CHINESE_MARKER = "含中文"
+PROBLEM_SHEET_NAME = "Target中文问题"
+LEGACY_PROBLEM_SHEET_NAMES = ("中文检查问题",)
 CHINESE_PATTERN = re.compile(
     r"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF"
     r"\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65"
@@ -32,8 +35,8 @@ CHINESE_PATTERN = re.compile(
 class CheckSummary:
     output_path: Path
     worksheet_title: str
+    source_column: str
     target_column: str
-    result_column: str
     start_row: int
     processed_count: int
     matched_count: int
@@ -45,12 +48,12 @@ def normalize_column(column_name: str) -> str:
     return normalized
 
 
+def cell_text(value: object) -> str:
+    return "" if value is None else str(value)
+
+
 def build_default_output_path(input_file: str | Path) -> Path:
     return build_prefixed_output_path(input_file, "target_chinese_check_")
-
-
-def build_default_result_column(target_column: str) -> str:
-    return get_column_letter(column_index_from_string(target_column) + 1)
 
 
 def contains_chinese(value: object) -> bool:
@@ -65,8 +68,8 @@ def extract_chinese_characters(value: object) -> str:
 
 def process_excel(
     input_file: str | Path,
+    source_column: str,
     target_column: str,
-    result_column: str | None = None,
     sheet: str | None = None,
     start_row: int = 2,
     output_file: str | Path | None = None,
@@ -77,12 +80,8 @@ def process_excel(
     if start_row < 1:
         raise ValueError("开始行必须大于等于 1。")
 
+    source_column = normalize_column(source_column)
     target_column = normalize_column(target_column)
-    normalized_result_column = (
-        normalize_column(result_column)
-        if result_column
-        else build_default_result_column(target_column)
-    )
     output_path = (
         Path(output_file).expanduser().resolve()
         if output_file
@@ -91,51 +90,59 @@ def process_excel(
 
     workbook = load_workbook(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
-    if PROBLEM_SHEET_NAME in workbook.sheetnames and worksheet.title != PROBLEM_SHEET_NAME:
-        del workbook[PROBLEM_SHEET_NAME]
-    should_insert_result_column = (
-        result_column is None
-        and worksheet[f"{normalized_result_column}1"].value != RESULT_HEADER
-    )
-    if should_insert_result_column:
-        worksheet.insert_cols(column_index_from_string(normalized_result_column))
-    worksheet[f"{normalized_result_column}1"] = RESULT_HEADER
+    for legacy_sheet_name in LEGACY_PROBLEM_SHEET_NAMES:
+        if (
+            legacy_sheet_name in workbook.sheetnames
+            and worksheet.title != legacy_sheet_name
+        ):
+            del workbook[legacy_sheet_name]
 
     processed_count = 0
-    matched_count = 0
+    problem_entries: list[tuple[int, str, str, str, str]] = []
     for row_index in range(start_row, worksheet.max_row + 1):
+        source_value = worksheet[f"{source_column}{row_index}"].value
         target_value = worksheet[f"{target_column}{row_index}"].value
         chinese_characters = extract_chinese_characters(target_value)
-        has_chinese = bool(chinese_characters)
-        worksheet[f"{normalized_result_column}{row_index}"] = CHINESE_MARKER if has_chinese else None
         processed_count += 1
-        if has_chinese:
-            matched_count += 1
+        if not chinese_characters:
+            continue
+        problem_entries.append(
+            (
+                row_index,
+                cell_text(source_value),
+                cell_text(target_value),
+                f"Target 中包含中文或全角标点：{chinese_characters}",
+                chinese_characters,
+            )
+        )
 
+    write_output_table(
+        workbook,
+        current_sheet_name=worksheet.title,
+        sheet_name=PROBLEM_SHEET_NAME,
+        headers=PROBLEM_BASE_HEADERS + ("命中字符",),
+        rows=problem_entries,
+    )
     workbook.save(output_path)
     return CheckSummary(
         output_path=output_path,
         worksheet_title=worksheet.title,
+        source_column=source_column,
         target_column=target_column,
-        result_column=normalized_result_column,
         start_row=start_row,
         processed_count=processed_count,
-        matched_count=matched_count,
+        matched_count=len(problem_entries),
     )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="检查 Excel target 列是否包含中文字符或中文/全角标点，并在结果列标记。"
+        description="检查 Excel target 列是否包含中文字符或中文/全角标点。"
     )
     parser.add_argument("input_file", nargs="?", help="输入 Excel 文件路径，例如 input.xlsx")
     parser.add_argument("-s", "--sheet", help="工作表名称，不填则默认处理当前活动工作表")
+    parser.add_argument("-c", "--source-column", help="source 列，例如 A")
     parser.add_argument("-t", "--target-column", help="需要检查的 target 列，例如 B")
-    parser.add_argument(
-        "-r",
-        "--result-column",
-        help="可选，写入中文检查标记的结果列；不填则默认在 target 右侧新增一列",
-    )
     parser.add_argument("--start-row", type=int, default=None, help="开始处理的行号，默认 2")
     parser.add_argument(
         "-o",
@@ -147,19 +154,20 @@ def parse_args() -> argparse.Namespace:
 
 def prompt_if_missing(args: argparse.Namespace) -> argparse.Namespace:
     interactive_mode = sys.stdin.isatty()
-
     if not args.input_file and not interactive_mode:
         raise ValueError("缺少输入文件路径，请传入 input_file 参数。")
     if not args.input_file:
         args.input_file = input("请输入 Excel 文件路径: ").strip()
     if not args.sheet and interactive_mode and len(sys.argv) == 1:
         args.sheet = input("请输入工作表名称（直接回车使用当前活动工作表）: ").strip() or None
+    if not args.source_column and not interactive_mode:
+        raise ValueError("缺少 source 列，请使用 -c 或 --source-column 指定。")
+    if not args.source_column:
+        args.source_column = input("请输入 source 列（例如 A）: ").strip().upper()
     if not args.target_column and not interactive_mode:
         raise ValueError("缺少 target 列，请使用 -t 或 --target-column 指定。")
     if not args.target_column:
         args.target_column = input("请输入 target 列（例如 B）: ").strip().upper()
-    if not args.result_column and interactive_mode and len(sys.argv) == 1:
-        args.result_column = input("请输入结果列（直接回车则在 target 右侧新增一列）: ").strip().upper() or None
     if args.start_row is None:
         if interactive_mode and len(sys.argv) == 1:
             start_row_text = input("请输入开始处理的行号（默认 2）: ").strip()
@@ -173,17 +181,15 @@ def main() -> None:
     args = prompt_if_missing(parse_args())
     summary = process_excel(
         input_file=args.input_file,
+        source_column=args.source_column,
         target_column=args.target_column,
-        result_column=args.result_column,
         sheet=args.sheet,
         start_row=args.start_row,
         output_file=args.output,
     )
-
     print("处理完成。")
     print(f"工作表: {summary.worksheet_title}")
-    print(f"target 列: {summary.target_column}")
-    print(f"结果列: {summary.result_column}")
+    print(f"source / target 列: {summary.source_column} / {summary.target_column}")
     print(f"开始行: {summary.start_row}")
     print(f"处理行数: {summary.processed_count}")
     print(f"含中文行数: {summary.matched_count}")

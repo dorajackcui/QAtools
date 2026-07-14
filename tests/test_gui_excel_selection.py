@@ -195,8 +195,8 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.input_file_var = FakeVar(str(input_path))
         app.output_file_var = FakeVar("")
         app.sheet_var = FakeVar("")
+        app.source_column_var = FakeVar("A")
         app.target_column_var = FakeVar("B")
-        app.result_column_var = FakeVar("")
         app.sheet_combobox = FakeCombobox()
         return app
 
@@ -205,8 +205,8 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.input_file_var = FakeVar(str(input_path))
         app.output_file_var = FakeVar("")
         app.sheet_var = FakeVar("")
+        app.source_column_var = FakeVar("A")
         app.target_column_var = FakeVar("B")
-        app.result_column_var = FakeVar("")
         app.sheet_combobox = FakeCombobox()
         app.output_preview_var = FakeVar("")
         return app
@@ -429,7 +429,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.sheet_var.get(), "Tags")
             self.assertEqual(app.target_column_var.get(), "F")
 
-    def test_chinese_target_checker_refresh_populates_sheet_choices_and_detects_target_column(self) -> None:
+    def test_chinese_target_checker_refresh_detects_source_and_target_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workbook_path = Path(tmp_dir) / "chinese.xlsx"
             self.create_tag_checker_workbook(workbook_path)
@@ -439,9 +439,10 @@ class GuiSheetSelectionTests(unittest.TestCase):
 
             self.assertEqual(app.sheet_combobox["values"], ("Tags", "Archive"))
             self.assertEqual(app.sheet_var.get(), "Tags")
+            self.assertEqual(app.source_column_var.get(), "D")
             self.assertEqual(app.target_column_var.get(), "F")
 
-    def test_chinese_target_checker_choose_input_keeps_output_blank_for_in_place_default(self) -> None:
+    def test_chinese_target_checker_choose_input_updates_output_preview(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workbook_path = Path(tmp_dir) / "chinese.xlsx"
             self.create_tag_checker_workbook(workbook_path)
@@ -454,8 +455,12 @@ class GuiSheetSelectionTests(unittest.TestCase):
                 app.choose_input_file()
 
             self.assertEqual(app.input_file_var.get(), str(workbook_path))
-            self.assertEqual(app.output_file_var.get(), "")
             self.assertEqual(app.sheet_var.get(), "Tags")
+            self.assertTrue(
+                app.output_preview_var.get().endswith(
+                    "target_chinese_check_chinese.xlsx"
+                )
+            )
 
     def test_chinese_target_checker_has_no_problem_sheet_toggle(self) -> None:
         app = ChineseTargetCheckerApp.__new__(ChineseTargetCheckerApp)
@@ -468,6 +473,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
             ChineseTargetCheckerApp.__init__(app, object())
 
         self.assertFalse(hasattr(app, "problem_sheet_var"))
+        self.assertFalse(hasattr(app, "result_column_var"))
 
     def test_french_nbsp_restorer_switching_sheet_redetects_target_column(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

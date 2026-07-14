@@ -261,6 +261,7 @@ def run_workflow(
     if run_chinese_target_check:
         chinese_target_summary = run_chinese_target_check_excel(
             input_file=current_input_path,
+            source_column=source_column,
             target_column=target_column,
             sheet=sheet,
             start_row=start_row,

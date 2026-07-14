@@ -66,17 +66,30 @@ class LineBreakExcelTests(unittest.TestCase):
             problem_sheet = workbook[PROBLEM_SHEET_NAME]
             self.assertEqual(problem_sheet.max_row, 3)
             self.assertEqual(
-                [problem_sheet.cell(1, column).value for column in range(1, 7)],
-                ["行号", "source换行数", "target换行数", "数量差", "source文本", "target文本"],
+                [problem_sheet.cell(1, column).value for column in range(1, 8)],
+                [
+                    "行号",
+                    "source原文",
+                    "target原文",
+                    "问题描述",
+                    "source换行数",
+                    "target换行数",
+                    "数量差",
+                ],
             )
             self.assertEqual(problem_sheet["A2"].value, 3)
-            self.assertEqual(problem_sheet["B2"].value, 2)
-            self.assertEqual(problem_sheet["C2"].value, 1)
-            self.assertEqual(problem_sheet["D2"].value, -1)
+            self.assertEqual(problem_sheet["B2"].value, "第一行\n第二行\n第三行")
+            self.assertEqual(problem_sheet["C2"].value, "First\nSecond")
+            self.assertIn("换行数量不一致", problem_sheet["D2"].value)
+            self.assertEqual(problem_sheet["E2"].value, 2)
+            self.assertEqual(problem_sheet["F2"].value, 1)
+            self.assertEqual(problem_sheet["G2"].value, -1)
             self.assertEqual(problem_sheet["A3"].value, 4)
-            self.assertEqual(problem_sheet["B3"].value, 1)
-            self.assertEqual(problem_sheet["C3"].value, 0)
-            self.assertIsNone(problem_sheet["F3"].value)
+            self.assertEqual(problem_sheet["E3"].value, 1)
+            self.assertEqual(problem_sheet["F3"].value, 0)
+            self.assertIsNone(problem_sheet["C3"].value)
+            self.assertEqual(problem_sheet.freeze_panes, "A2")
+            self.assertEqual(problem_sheet.auto_filter.ref, "A1:G3")
             self.assertFalse(input_path.with_name("input.xlsx").resolve() == summary.output_path)
             self.assertNotIn(PROBLEM_SHEET_NAME, load_workbook(input_path).sheetnames)
 

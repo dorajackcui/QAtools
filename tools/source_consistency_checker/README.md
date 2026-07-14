@@ -35,7 +35,6 @@ python3 tools/source_consistency_checker/check_source_consistency_gui.py
 
 结果工作簿保留原工作表，并新增 `同源译文不一致` 工作表。不一致组中的每个原始行都会单独列出，并包含：
 
-- source 文本
+- `行号 / source原文 / target原文 / 问题描述`
 - target 版本数
-- 原始行号和 target 文本
 - 同组全部行号

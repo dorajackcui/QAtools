@@ -65,20 +65,30 @@ class SourceConsistencyExcelTests(unittest.TestCase):
             workbook = load_workbook(summary.output_path)
             problem_sheet = workbook[PROBLEM_SHEET_NAME]
             self.assertEqual(
-                [problem_sheet.cell(1, column).value for column in range(1, 6)],
-                ["source文本", "target版本数", "行号", "target文本", "同组行号"],
+                [problem_sheet.cell(1, column).value for column in range(1, 7)],
+                [
+                    "行号",
+                    "source原文",
+                    "target原文",
+                    "问题描述",
+                    "target版本数",
+                    "同组行号",
+                ],
             )
             self.assertEqual(problem_sheet.max_row, 5)
             self.assertEqual(
-                [problem_sheet[f"C{row}"].value for row in range(2, 6)],
+                [problem_sheet[f"A{row}"].value for row in range(2, 6)],
                 [2, 3, 9, 10],
             )
-            self.assertEqual(problem_sheet["A2"].value, "Hello")
-            self.assertEqual(problem_sheet["B2"].value, 2)
-            self.assertEqual(problem_sheet["E2"].value, "2、3")
-            self.assertEqual(problem_sheet["A4"].value, "Empty target")
-            self.assertIsNone(problem_sheet["D4"].value)
-            self.assertEqual(problem_sheet["E4"].value, "9、10")
+            self.assertEqual(problem_sheet["B2"].value, "Hello")
+            self.assertEqual(problem_sheet["C2"].value, "Bonjour")
+            self.assertIn("2 个不同 target", problem_sheet["D2"].value)
+            self.assertEqual(problem_sheet["E2"].value, 2)
+            self.assertEqual(problem_sheet["F2"].value, "2、3")
+            self.assertEqual(problem_sheet["B4"].value, "Empty target")
+            self.assertIsNone(problem_sheet["C4"].value)
+            self.assertEqual(problem_sheet["F4"].value, "9、10")
+            self.assertEqual(problem_sheet.freeze_panes, "A2")
             self.assertNotIn(PROBLEM_SHEET_NAME, load_workbook(input_path).sheetnames)
 
     def test_process_excel_rebuilds_stale_problem_sheet(self) -> None:
@@ -93,7 +103,7 @@ class SourceConsistencyExcelTests(unittest.TestCase):
             summary = process_excel(input_path, "A", "B", sheet="Data")
 
             problem_sheet = load_workbook(summary.output_path)[PROBLEM_SHEET_NAME]
-            self.assertEqual(problem_sheet["A1"].value, "source文本")
+            self.assertEqual(problem_sheet["A1"].value, "行号")
 
     def test_process_excel_rejects_invalid_start_row(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

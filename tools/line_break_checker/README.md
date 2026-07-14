@@ -35,7 +35,5 @@ python3 tools/line_break_checker/check_line_breaks_gui.py
 
 结果工作簿保留原工作表，并新增 `换行数量问题` 工作表，包含：
 
-- 原始行号
-- source / target 换行数
-- 数量差（target 减 source）
-- source / target 原文
+- `行号 / source原文 / target原文 / 问题描述`
+- source / target 换行数及数量差（target 减 source）

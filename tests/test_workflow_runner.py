@@ -6,6 +6,9 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
+from tools.chinese_target_checker.check_chinese_target import (
+    PROBLEM_SHEET_NAME as CHINESE_PROBLEM_SHEET_NAME,
+)
 from tools.workflow.workflow_runner import (
     WORKFLOW_SUMMARY_SHEET_NAME,
     WORKFLOW_TERM_PROBLEM_SHEET_NAME,
@@ -78,6 +81,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                     "标签占位问题",
                     "换行数量问题",
                     "同源译文不一致",
+                    CHINESE_PROBLEM_SHEET_NAME,
                     WORKFLOW_SUMMARY_SHEET_NAME,
                 ],
             )
@@ -86,9 +90,23 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(workbook[WORKFLOW_TERM_PROBLEM_SHEET_NAME]["A2"].value, 3)
             self.assertEqual(workbook["标签占位问题"]["A2"].value, 3)
             self.assertEqual(workbook["换行数量问题"]["A2"].value, 3)
-            self.assertEqual(workbook["同源译文不一致"]["C2"].value, 4)
-            self.assertEqual(workbook["同源译文不一致"]["C3"].value, 5)
-            self.assertEqual(workbook["Data"]["C1"].value, "中文检查")
+            self.assertEqual(workbook["同源译文不一致"]["A2"].value, 4)
+            self.assertEqual(workbook["同源译文不一致"]["A3"].value, 5)
+            self.assertEqual(workbook[CHINESE_PROBLEM_SHEET_NAME]["A2"].value, 2)
+            self.assertEqual(workbook["Data"]["C1"].value, "术语QA问题")
+            for problem_sheet_name in (
+                WORKFLOW_TERM_PROBLEM_SHEET_NAME,
+                "标签占位问题",
+                "换行数量问题",
+                "同源译文不一致",
+                CHINESE_PROBLEM_SHEET_NAME,
+            ):
+                problem_sheet = workbook[problem_sheet_name]
+                self.assertEqual(
+                    [problem_sheet.cell(1, column).value for column in range(1, 5)],
+                    ["行号", "source原文", "target原文", "问题描述"],
+                )
+                self.assertEqual(problem_sheet.freeze_panes, "A2")
             summary_sheet = workbook[WORKFLOW_SUMMARY_SHEET_NAME]
             self.assertEqual(
                 list(summary_sheet.values),

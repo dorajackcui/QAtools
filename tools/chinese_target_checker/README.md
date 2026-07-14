@@ -1,35 +1,23 @@
 # Target 中文检查
 
-检查 Excel `target` 列是否包含中文字符或中文/全角标点，并在原数据表写入检查结果。
+检查 Excel `target` 列是否包含中文字符或中文/全角标点，并输出独立问题表。
 
 ## 功能
 
-- 扫描指定工作表的 `target` 列
-- 默认在 `target` 右侧新增一列写入检查结果，原右侧列会后移；如果右侧已经是 `中文检查` 列，则直接复用
-- 含中文字符或中文/全角标点的行标记为 `含中文`
-- 不含中文字符和中文/全角标点的行留空
-- 可通过 `-r/--result-column` 指定结果列
-- 不会额外生成问题工作表
-- 默认直接修改原文件；指定 `-o/--output` 时才另存为新文件
+- 扫描指定工作表的 `source` / `target` 列
+- 含中文字符或中文/全角标点的 target 行写入 `Target中文问题`
+- 原数据工作表不新增标记列，也不修改原文
+- 默认生成 `target_chinese_check_<原文件名>`；可通过 `-o/--output` 指定输出文件
 
 ## CLI
 
-默认在原文件的 target 右侧新增一列：
+推荐调用：
 
 ```bash
 python3 tools/chinese_target_checker/check_chinese_target.py input.xlsx \
   -s Sheet1 \
+  -c A \
   -t B \
-  --start-row 2
-```
-
-指定结果列并另存为新文件：
-
-```bash
-python3 tools/chinese_target_checker/check_chinese_target.py input.xlsx \
-  -s Sheet1 \
-  -t B \
-  -r C \
   --start-row 2 \
   -o output_chinese_target_checked.xlsx
 ```
@@ -48,12 +36,12 @@ python3 tools/chinese_target_checker/check_chinese_target_gui.py
 python3 toolshub_gui.py
 ```
 
-然后选择 `Target中文检查` 标签页。
+然后在“质量检查”分组选择 `Target 中文检查`。
 
 ## 输出
 
-- 原数据工作表会新增或覆盖结果列，表头为 `中文检查`
-- 命中行写入 `含中文`
+- 原数据工作表保持不变
+- `Target中文问题` 前四列为 `行号 / source原文 / target原文 / 问题描述`，第五列为 `命中字符`
 - 检查范围包含汉字、CJK 标点、全角标点和常见中文排版符号，例如 `【】（）`、`，。！？`、`《》“”‘’—…·`
 - 不把普通 ASCII 标点或全角英数单独算作中文
-- 不会额外生成问题工作表；如果工作簿里已有旧的 `中文检查问题` 工作表，运行时会移除
+- 已有的同名问题表会重建，旧版 `中文检查问题` 工作表会移除

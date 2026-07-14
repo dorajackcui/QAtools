@@ -30,8 +30,8 @@ class ChineseTargetCheckerApp(OutputPreviewMixin, ttk.Frame):
         super().__init__(master, padding=16)
         self.input_file_var = tk.StringVar()
         self.sheet_var = tk.StringVar()
+        self.source_column_var = tk.StringVar(value="A")
         self.target_column_var = tk.StringVar(value="B")
-        self.result_column_var = tk.StringVar()
         self.start_row_var = tk.StringVar(value="2")
         self.output_preview_var = tk.StringVar(
             value="输出文件：选择输入 Excel 后自动生成"
@@ -60,43 +60,40 @@ class ChineseTargetCheckerApp(OutputPreviewMixin, ttk.Frame):
         )
         self.sheet_combobox.grid(row=0, column=1, sticky="w", padx=(8, 18))
         self.sheet_combobox.bind("<<ComboboxSelected>>", self.handle_sheet_selected)
-        ttk.Label(scope_frame, text="Target 列").grid(row=0, column=2, sticky="w")
-        ttk.Entry(scope_frame, textvariable=self.target_column_var, width=7).grid(
+        ttk.Label(scope_frame, text="Source 列").grid(row=0, column=2, sticky="w")
+        ttk.Entry(scope_frame, textvariable=self.source_column_var, width=7).grid(
             row=0, column=3, sticky="w", padx=(8, 18)
         )
-        ttk.Label(scope_frame, text="开始行").grid(row=0, column=4, sticky="w")
+        ttk.Label(scope_frame, text="Target 列").grid(row=0, column=4, sticky="w")
+        ttk.Entry(scope_frame, textvariable=self.target_column_var, width=7).grid(
+            row=0, column=5, sticky="w", padx=(8, 18)
+        )
+        ttk.Label(scope_frame, text="开始行").grid(row=0, column=6, sticky="w")
         ttk.Spinbox(
             scope_frame,
             textvariable=self.start_row_var,
             width=7,
             from_=1,
             to=1_000_000,
-        ).grid(row=0, column=5, sticky="w", padx=(8, 0))
+        ).grid(row=0, column=7, sticky="w", padx=(8, 0))
 
-        settings_frame = create_section(self, title="输出设置", row=1)
-        ttk.Label(settings_frame, text="结果列（可选）").grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Entry(settings_frame, textvariable=self.result_column_var, width=10).grid(
-            row=0, column=1, sticky="w", padx=(12, 0)
-        )
         ttk.Label(
-            settings_frame,
-            text="留空时默认在 Target 右侧新增结果列；原文件不会被覆盖。",
+            input_frame,
+            text="命中的行会写入独立的 Target中文问题 工作表；原数据表保持不变。",
             style=MUTED_LABEL_STYLE,
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(12, 0))
+        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         ttk.Button(
             self,
             text="开始检查",
             command=self.run_check,
             style=PRIMARY_BUTTON_STYLE,
-        ).grid(row=2, column=0, sticky="ew")
+        ).grid(row=1, column=0, sticky="ew")
         ttk.Label(
             self,
             textvariable=self.output_preview_var,
             style=MUTED_LABEL_STYLE,
-        ).grid(row=3, column=0, sticky="w", pady=(8, 0))
+        ).grid(row=2, column=0, sticky="w", pady=(8, 0))
         self.columnconfigure(0, weight=1)
 
     def choose_input_file(self) -> None:
@@ -151,17 +148,19 @@ class ChineseTargetCheckerApp(OutputPreviewMixin, ttk.Frame):
             return
         if detected_columns.detected_target_column:
             self.target_column_var.set(detected_columns.detected_target_column)
+        if detected_columns.detected_source_column:
+            self.source_column_var.set(detected_columns.detected_source_column)
 
     def run_check(self) -> None:
         input_file = self.input_file_var.get().strip()
         sheet = self.sheet_var.get().strip() or None
+        source_column = self.source_column_var.get().strip()
         target_column = self.target_column_var.get().strip()
-        result_column = self.result_column_var.get().strip() or None
         if not input_file:
             messagebox.showerror("缺少文件", "请先选择输入 Excel 文件。")
             return
-        if not target_column:
-            messagebox.showerror("缺少列信息", "请填写 target 列。")
+        if not source_column or not target_column:
+            messagebox.showerror("缺少列信息", "请填写 source 列和 target 列。")
             return
 
         try:
@@ -170,8 +169,8 @@ class ChineseTargetCheckerApp(OutputPreviewMixin, ttk.Frame):
             )
             summary = process_excel(
                 input_file=input_file,
+                source_column=source_column,
                 target_column=target_column,
-                result_column=result_column,
                 sheet=sheet,
                 start_row=start_row,
                 output_file=None,

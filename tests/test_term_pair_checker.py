@@ -172,26 +172,21 @@ class ProcessExcelTests(unittest.TestCase):
 
             problem_sheet = workbook["问题列"]
             self.assertEqual(problem_sheet["A2"].value, 5)
-            self.assertEqual(problem_sheet["B2"].value, "Alpha、Gamma")
-            self.assertEqual(problem_sheet["C2"].value, "阿尔法、伽马")
-            self.assertEqual(problem_sheet["D2"].value, "本批次新增")
-            self.assertIn("source/target术语数量不一致", str(problem_sheet["E2"].value))
-            self.assertEqual(problem_sheet["F2"].value, "第四行 [Alpha] 加【Gamma】")
-            self.assertEqual(problem_sheet["G2"].value, "第四行只有 [阿尔法]")
+            self.assertEqual(problem_sheet["B2"].value, "第四行 [Alpha] 加【Gamma】")
+            self.assertEqual(problem_sheet["C2"].value, "第四行只有 [阿尔法]")
+            self.assertIn("source/target术语数量不一致", str(problem_sheet["D2"].value))
+            self.assertIn("target缺少预期术语", str(problem_sheet["D2"].value))
+            self.assertEqual(problem_sheet["E2"].value, "Alpha、Gamma；Gamma")
+            self.assertEqual(problem_sheet["F2"].value, "阿尔法、伽马；伽马")
+            self.assertEqual(problem_sheet["G2"].value, "本批次新增")
             self.assertEqual(problem_sheet["A3"].value, 4)
-            self.assertEqual(problem_sheet["B3"].value, "Beta")
-            self.assertEqual(problem_sheet["C3"].value, "贝塔")
-            self.assertEqual(problem_sheet["D3"].value, "本批次新增")
-            self.assertEqual(problem_sheet["E3"].value, "target术语不匹配：实际术语 - 错误贝塔")
-            self.assertEqual(problem_sheet["F3"].value, "第三行复用 【Beta】")
-            self.assertEqual(problem_sheet["G3"].value, "第三行复用 【错误贝塔】")
-            self.assertEqual(problem_sheet["A4"].value, 5)
-            self.assertEqual(problem_sheet["B4"].value, "Gamma")
-            self.assertEqual(problem_sheet["C4"].value, "伽马")
-            self.assertEqual(problem_sheet["D4"].value, "本批次新增")
-            self.assertEqual(problem_sheet["E4"].value, "target缺少预期术语")
-            self.assertEqual(problem_sheet["F4"].value, "第四行 [Alpha] 加【Gamma】")
-            self.assertEqual(problem_sheet["G4"].value, "第四行只有 [阿尔法]")
+            self.assertEqual(problem_sheet["B3"].value, "第三行复用 【Beta】")
+            self.assertEqual(problem_sheet["C3"].value, "第三行复用 【错误贝塔】")
+            self.assertIn("target术语不匹配：实际术语 - 错误贝塔", problem_sheet["D3"].value)
+            self.assertEqual(problem_sheet["E3"].value, "Beta")
+            self.assertEqual(problem_sheet["F3"].value, "贝塔")
+            self.assertEqual(problem_sheet["G3"].value, "本批次新增")
+            self.assertEqual(problem_sheet.max_row, 3)
 
     def test_process_excel_dedupes_same_plain_term_with_different_marks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -256,12 +251,12 @@ class ProcessExcelTests(unittest.TestCase):
             result_workbook = load_workbook(saved_path)
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet["A2"].value, 2)
-            self.assertEqual(problem_sheet["B2"].value, "苹果")
-            self.assertEqual(problem_sheet["C2"].value, "apple")
-            self.assertEqual(problem_sheet["D2"].value, "本批次新增")
-            self.assertEqual(problem_sheet["E2"].value, "target缺少预期术语")
-            self.assertEqual(problem_sheet["F2"].value, "第三行先出现苹果")
-            self.assertEqual(problem_sheet["G2"].value, "第三行先出现banana")
+            self.assertEqual(problem_sheet["B2"].value, "第三行先出现苹果")
+            self.assertEqual(problem_sheet["C2"].value, "第三行先出现banana")
+            self.assertIn("target缺少预期术语", problem_sheet["D2"].value)
+            self.assertEqual(problem_sheet["E2"].value, "苹果")
+            self.assertEqual(problem_sheet["F2"].value, "apple")
+            self.assertEqual(problem_sheet["G2"].value, "本批次新增")
 
     def test_process_excel_records_count_mismatch_and_missing_target_separately(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -308,12 +303,12 @@ class ProcessExcelTests(unittest.TestCase):
 
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet["A2"].value, 4)
-            self.assertEqual(problem_sheet["B2"].value, "Alpha、Beta")
-            self.assertIn("source/target术语数量不一致", str(problem_sheet["E2"].value))
-            self.assertEqual(problem_sheet["A3"].value, 4)
-            self.assertEqual(problem_sheet["B3"].value, "Beta")
-            self.assertEqual(problem_sheet["C3"].value, "BETA_OK")
-            self.assertEqual(problem_sheet["E3"].value, "target缺少预期术语")
+            self.assertEqual(problem_sheet.max_row, 2)
+            self.assertEqual(problem_sheet["B2"].value, "复用 [Alpha] and [Beta]")
+            self.assertIn("source/target术语数量不一致", str(problem_sheet["D2"].value))
+            self.assertIn("target缺少预期术语", str(problem_sheet["D2"].value))
+            self.assertEqual(problem_sheet["E2"].value, "Alpha、Beta；Beta")
+            self.assertEqual(problem_sheet["F2"].value, "ALPHA_OK、BETA_OK；BETA_OK")
 
     def test_process_excel_resolves_count_mismatch_for_marked_term_when_other_row_term_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -351,9 +346,9 @@ class ProcessExcelTests(unittest.TestCase):
             problem_sheet = result_workbook[term_pair_module.PROBLEM_SHEET_NAME]
             self.assertEqual(problem_sheet.max_row, 2)
             self.assertEqual(problem_sheet["A2"].value, 4)
-            self.assertEqual(problem_sheet["B2"].value, "Attack")
-            self.assertEqual(problem_sheet["C2"].value, "ATK")
-            self.assertIn("target", problem_sheet["E2"].value)
+            self.assertEqual(problem_sheet["E2"].value, "Attack")
+            self.assertEqual(problem_sheet["F2"].value, "ATK")
+            self.assertIn("target", problem_sheet["D2"].value)
 
     def test_process_excel_preserves_mark_boundaries_next_to_digits(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -416,13 +411,11 @@ class ProcessExcelTests(unittest.TestCase):
             result_workbook = load_workbook(saved_path)
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet["A2"].value, 4)
-            self.assertEqual(problem_sheet["B2"].value, "Alpha")
-            self.assertEqual(problem_sheet["C2"].value, "ALPHA_OK")
-            self.assertEqual(problem_sheet["E2"].value, "target术语不匹配：实际术语 - WRONG")
-            self.assertEqual(problem_sheet["A3"].value, 4)
-            self.assertEqual(problem_sheet["B3"].value, "Beta")
-            self.assertEqual(problem_sheet["C3"].value, "BETA_OK")
-            self.assertEqual(problem_sheet["E3"].value, "target缺少预期术语")
+            self.assertEqual(problem_sheet.max_row, 2)
+            self.assertIn("target术语不匹配：实际术语 - WRONG", problem_sheet["D2"].value)
+            self.assertIn("target缺少预期术语", problem_sheet["D2"].value)
+            self.assertEqual(problem_sheet["E2"].value, "Alpha；Beta")
+            self.assertEqual(problem_sheet["F2"].value, "ALPHA_OK；BETA_OK")
 
     def test_process_excel_dedupes_repeated_same_row_term_problem(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -460,9 +453,9 @@ class ProcessExcelTests(unittest.TestCase):
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet.max_row, 2)
             self.assertEqual(problem_sheet["A2"].value, 3)
-            self.assertEqual(problem_sheet["B2"].value, "Sunlight")
-            self.assertEqual(problem_sheet["C2"].value, "Rayon Soleil")
-            self.assertEqual(problem_sheet["E2"].value, "target术语不匹配：实际术语 - Lumiere solaire")
+            self.assertEqual(problem_sheet["E2"].value, "Sunlight")
+            self.assertEqual(problem_sheet["F2"].value, "Rayon Soleil")
+            self.assertIn("target术语不匹配：实际术语 - Lumiere solaire", problem_sheet["D2"].value)
 
     def test_process_excel_treats_marked_target_as_aligned_for_unmarked_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -554,8 +547,8 @@ class ProcessExcelTests(unittest.TestCase):
             result_workbook = load_workbook(saved_path)
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet["A2"].value, 4)
-            self.assertEqual(problem_sheet["B2"].value, "Poison")
-            self.assertEqual(problem_sheet["E2"].value, "target缺少预期术语")
+            self.assertEqual(problem_sheet["E2"].value, "Poison")
+            self.assertIn("target缺少预期术语", problem_sheet["D2"].value)
 
     def test_process_excel_treats_simple_s_plural_source_and_target_as_aligned(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -857,14 +850,14 @@ class ProcessExcelTests(unittest.TestCase):
 
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet["A2"].value, 2)
-            self.assertEqual(problem_sheet["B2"].value, "Apple")
-            self.assertEqual(problem_sheet["C2"].value, "历史苹果")
-            self.assertEqual(problem_sheet["D2"].value, "历史TB")
-            self.assertEqual(problem_sheet["E2"].value, "target缺少预期术语")
+            self.assertEqual(problem_sheet["E2"].value, "Apple")
+            self.assertEqual(problem_sheet["F2"].value, "历史苹果")
+            self.assertEqual(problem_sheet["G2"].value, "历史TB")
+            self.assertIn("target缺少预期术语", problem_sheet["D2"].value)
             self.assertEqual(problem_sheet["A3"].value, 4)
-            self.assertEqual(problem_sheet["B3"].value, "Apple")
-            self.assertEqual(problem_sheet["C3"].value, "历史苹果")
-            self.assertEqual(problem_sheet["D3"].value, "历史TB")
+            self.assertEqual(problem_sheet["E3"].value, "Apple")
+            self.assertEqual(problem_sheet["F3"].value, "历史苹果")
+            self.assertEqual(problem_sheet["G3"].value, "历史TB")
 
     def test_process_excel_checks_full_history_tb_plus_new_batch_terms(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -917,8 +910,8 @@ class ProcessExcelTests(unittest.TestCase):
 
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet["A2"].value, 3)
-            self.assertEqual(problem_sheet["B2"].value, "Apple")
-            self.assertEqual(problem_sheet["C2"].value, "Pomme")
+            self.assertEqual(problem_sheet["E2"].value, "Apple")
+            self.assertEqual(problem_sheet["F2"].value, "Pomme")
 
     def test_process_excel_can_check_history_tb_without_term_marks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -970,8 +963,8 @@ class ProcessExcelTests(unittest.TestCase):
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet.max_row, 2)
             self.assertEqual(problem_sheet["A2"].value, 3)
-            self.assertEqual(problem_sheet["B2"].value, "Banana")
-            self.assertEqual(problem_sheet["C2"].value, "Banane")
+            self.assertEqual(problem_sheet["E2"].value, "Banana")
+            self.assertEqual(problem_sheet["F2"].value, "Banane")
 
     def test_problem_sheet_includes_term_source_and_sorts_history_first(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -1015,17 +1008,17 @@ class ProcessExcelTests(unittest.TestCase):
 
             result_workbook = load_workbook(saved_path)
             problem_sheet = result_workbook["问题列"]
-            self.assertEqual(problem_sheet["C1"].value, "预期target术语")
-            self.assertEqual(problem_sheet["D1"].value, "术语来源")
-            self.assertEqual(problem_sheet["E1"].value, "问题简述")
-            self.assertEqual(problem_sheet["F1"].value, "source原文")
-            self.assertEqual(problem_sheet["G1"].value, "target原文")
-            self.assertEqual(problem_sheet["B2"].value, "Zebra")
-            self.assertEqual(problem_sheet["C2"].value, "Zebre")
-            self.assertEqual(problem_sheet["D2"].value, "历史TB")
-            self.assertEqual(problem_sheet["B3"].value, "Apple")
-            self.assertEqual(problem_sheet["C3"].value, "Pomme")
-            self.assertEqual(problem_sheet["D3"].value, "本批次新增")
+            self.assertEqual(
+                [problem_sheet.cell(1, column).value for column in range(1, 8)],
+                ["行号", "source原文", "target原文", "问题描述", "source术语", "预期target术语", "术语来源"],
+            )
+            self.assertEqual(problem_sheet.freeze_panes, "A2")
+            self.assertEqual(problem_sheet["E2"].value, "Zebra")
+            self.assertEqual(problem_sheet["F2"].value, "Zebre")
+            self.assertEqual(problem_sheet["G2"].value, "历史TB")
+            self.assertEqual(problem_sheet["E3"].value, "Apple")
+            self.assertEqual(problem_sheet["F3"].value, "Pomme")
+            self.assertEqual(problem_sheet["G3"].value, "本批次新增")
 
     def test_history_tb_loading_stops_after_consecutive_empty_tail_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

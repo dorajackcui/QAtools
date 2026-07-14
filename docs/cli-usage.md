@@ -28,8 +28,8 @@
   - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
   - 常用可选：`-s/--sheet`、`--start-row`、`-o/--output`
 - `tools/chinese_target_checker/check_chinese_target.py`
-  - 必填：`input_file`、`-t/--target-column`
-  - 常用可选：`-s/--sheet`、`-r/--result-column`、`--start-row`、`-o/--output`
+  - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
+  - 常用可选：`-s/--sheet`、`--start-row`、`-o/--output`
 - `tools/excel_line_splitter/split_excel_lines.py`
   - 必填：`input_file`、`-c/--source-column`、`-r/--result-column`
   - 常用可选：`-s/--sheet`、`--start-row`、`-o/--output`
@@ -232,40 +232,30 @@ python3 tools/source_consistency_checker/check_source_consistency.py ./input.xls
 
 ### 6. Target 中文检查
 
-默认直接修改原文件，在 target 右侧新增一列：
+生成新的检查结果文件：
 
 ```bash
 python3 tools/chinese_target_checker/check_chinese_target.py ./input.xlsx \
   -s Sheet1 \
+  -c A \
   -t B \
-  --start-row 2
-```
-
-如果希望指定结果列，并另存为新文件：
-
-```bash
-python3 tools/chinese_target_checker/check_chinese_target.py ./input.xlsx \
-  -s Sheet1 \
-  -t B \
-  -r C \
   --start-row 2 \
   -o ./artifacts/input_chinese_target_checked.xlsx
 ```
 
 说明：
 
-- 结果列表头为 `中文检查`，默认插入到 target 右侧，原右侧列会后移；如果 target 右侧已经是 `中文检查` 列，则直接复用。
-- 含中文字符或中文/全角标点的 target 行会写入 `含中文`。
+- 原数据工作表保持不变，命中行写入独立的 `Target中文问题` 工作表。
+- 问题表列为 `行号 / source原文 / target原文 / 问题描述 / 命中字符`。
 - 检查范围包含汉字、CJK 标点、全角标点和常见中文排版符号，例如 `【】（）`、`，。！？`、`《》“”‘’—…·`。
 - 普通 ASCII 标点和全角英数不会单独触发标记。
-- 未命中的行留空。
-- 不额外生成问题工作表；如果工作簿里已有旧的 `中文检查问题` 工作表，运行时会移除。
-- 不传 `-o/--output` 时会直接保存回原文件；需要保留原文件时请显式传 `-o`。
+- 已有的 `Target中文问题` 或旧版 `中文检查问题` 工作表会在运行时重建或移除，避免残留。
+- 不传 `-o/--output` 时，默认生成 `target_chinese_check_<原文件名>`。
 
 标准输出会打印：
 
 - 工作表名
-- target 列 / 结果列
+- source / target 列
 - 开始行
 - 处理行数
 - 含中文行数
@@ -349,7 +339,7 @@ python3 tools/xbench_report_transformer/transform_xbench_report.py ./Xbench_QA_R
 - 如果只需要默认输出命名，也可以省略 `-o`；默认命名分别是：
   - `term_pair_check_<原文件名>`
   - `tag_check_<原文件名>`
-- Target 中文检查默认直接修改原文件；显式传 `-o` 时由调用方指定输出名
+  - `target_chinese_check_<原文件名>`
   - `<原文件名>_split_lines.xlsx`
   - `<原文件名>_french_nbsp_restored.xlsx`
   - `xbench_transform_<原文件名>`

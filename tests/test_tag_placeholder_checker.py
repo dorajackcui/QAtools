@@ -118,27 +118,32 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertIn("检查汇总", workbook.sheetnames)
 
             problem_sheet = workbook["标签占位问题"]
+            self.assertEqual(
+                [problem_sheet.cell(1, column).value for column in range(1, 6)],
+                ["行号", "source原文", "target原文", "问题描述", "问题类型"],
+            )
             self.assertEqual(problem_sheet["A2"].value, 3)
-            self.assertEqual(problem_sheet["B2"].value, "花括号placeholder不一致")
-            self.assertIn("target缺少={name}", str(problem_sheet["C2"].value))
-            self.assertEqual(problem_sheet["D2"].value, "缺少占位 {name}")
-            self.assertEqual(problem_sheet["E2"].value, "缺少占位")
+            self.assertEqual(problem_sheet["B2"].value, "缺少占位 {name}")
+            self.assertEqual(problem_sheet["C2"].value, "缺少占位")
+            self.assertIn("target缺少={name}", str(problem_sheet["D2"].value))
+            self.assertEqual(problem_sheet["E2"].value, "花括号placeholder不一致")
 
             self.assertEqual(problem_sheet["A3"].value, 4)
-            self.assertEqual(problem_sheet["B3"].value, "尖括号tag不一致")
-            self.assertIn("target多出=</text>", str(problem_sheet["C3"].value))
+            self.assertEqual(problem_sheet["E3"].value, "尖括号tag不一致")
+            self.assertIn("target多出=</text>", str(problem_sheet["D3"].value))
 
             self.assertEqual(problem_sheet["A4"].value, 5)
-            self.assertEqual(problem_sheet["B4"].value, "花括号placeholder不一致")
-            self.assertIn("target缺少={count}", str(problem_sheet["C4"].value))
+            self.assertEqual(problem_sheet["E4"].value, "花括号placeholder不一致")
+            self.assertIn("target缺少={count}", str(problem_sheet["D4"].value))
 
             self.assertEqual(problem_sheet["A5"].value, 6)
-            self.assertEqual(problem_sheet["B5"].value, r"\n mark不一致")
-            self.assertIn(r"target缺少=\n", str(problem_sheet["C5"].value))
+            self.assertEqual(problem_sheet["E5"].value, r"\n mark不一致")
+            self.assertIn(r"target缺少=\n", str(problem_sheet["D5"].value))
 
             self.assertEqual(problem_sheet["A6"].value, 7)
-            self.assertEqual(problem_sheet["B6"].value, "尖括号tag不一致")
-            self.assertIn("target缺少=<apple>", str(problem_sheet["C6"].value))
+            self.assertEqual(problem_sheet["E6"].value, "尖括号tag不一致")
+            self.assertIn("target缺少=<apple>", str(problem_sheet["D6"].value))
+            self.assertEqual(problem_sheet.freeze_panes, "A2")
 
             summary_sheet = workbook["检查汇总"]
             summary_values = {
@@ -185,7 +190,7 @@ class ProcessExcelTests(unittest.TestCase):
             workbook = load_workbook(summary.output_path)
             problem_sheet = workbook["标签占位问题"]
             self.assertEqual(problem_sheet.max_row, 3)
-            self.assertEqual(problem_sheet["B2"].value, "尖括号tag不一致")
+            self.assertEqual(problem_sheet["E2"].value, "尖括号tag不一致")
 
     def test_process_excel_supports_newline_selected_type(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -212,7 +217,7 @@ class ProcessExcelTests(unittest.TestCase):
             workbook = load_workbook(summary.output_path)
             problem_sheet = workbook["标签占位问题"]
             self.assertEqual(problem_sheet.max_row, 2)
-            self.assertEqual(problem_sheet["B2"].value, r"\n mark不一致")
+            self.assertEqual(problem_sheet["E2"].value, r"\n mark不一致")
 
     def test_process_excel_reports_memoq_tag_mismatches_separately(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -243,9 +248,9 @@ class ProcessExcelTests(unittest.TestCase):
 
             workbook = load_workbook(summary.output_path)
             problem_sheet = workbook["标签占位问题"]
-            self.assertEqual(problem_sheet["B2"].value, "memoQ tag不一致")
-            self.assertIn("target缺少=<3}", str(problem_sheet["C2"].value))
-            self.assertIn("target多出=<4}", str(problem_sheet["C2"].value))
+            self.assertEqual(problem_sheet["E2"].value, "memoQ tag不一致")
+            self.assertIn("target缺少=<3}", str(problem_sheet["D2"].value))
+            self.assertIn("target多出=<4}", str(problem_sheet["D2"].value))
 
     def test_process_excel_reports_square_color_tag_mismatches(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -274,8 +279,36 @@ class ProcessExcelTests(unittest.TestCase):
 
             workbook = load_workbook(summary.output_path)
             problem_sheet = workbook["标签占位问题"]
-            self.assertEqual(problem_sheet["B2"].value, "方括号color tag不一致")
-            self.assertIn("target缺少=[/color]", str(problem_sheet["C2"].value))
+            self.assertEqual(problem_sheet["E2"].value, "方括号color tag不一致")
+            self.assertIn("target缺少=[/color]", str(problem_sheet["D2"].value))
+
+    def test_problem_sheet_merges_multiple_issue_types_from_the_same_row(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "<b>{name}"
+            worksheet["B2"] = ""
+            workbook.save(input_path)
+
+            summary = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                token_types=("angle", "brace"),
+            )
+
+            self.assertEqual(summary.problem_rows, 1)
+            self.assertEqual(summary.problem_count, 2)
+            problem_sheet = load_workbook(summary.output_path)["标签占位问题"]
+            self.assertEqual(problem_sheet.max_row, 2)
+            self.assertIn("尖括号tag不一致", problem_sheet["E2"].value)
+            self.assertIn("花括号placeholder不一致", problem_sheet["E2"].value)
+            self.assertIn("<b>", problem_sheet["D2"].value)
+            self.assertIn("{name}", problem_sheet["D2"].value)
 
 
 if __name__ == "__main__":
