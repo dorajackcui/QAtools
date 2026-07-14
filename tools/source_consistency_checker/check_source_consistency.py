@@ -14,7 +14,11 @@ if __package__ in {None, ""}:
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
-from tools.excel_output import build_prefixed_output_path, rebuild_output_sheet
+from tools.excel_output import (
+    PROBLEM_BASE_HEADERS,
+    build_prefixed_output_path,
+    write_output_table,
+)
 
 
 PROBLEM_SHEET_NAME = "同源译文不一致"
@@ -57,16 +61,15 @@ def build_default_output_path(input_file: str | Path) -> Path:
 def write_problem_sheet(
     workbook,
     worksheet_title: str,
-    problem_entries: list[tuple[str, int, int, str, str]],
+    problem_entries: list[tuple[int, str, str, str, int, str]],
 ) -> None:
-    problem_sheet = rebuild_output_sheet(workbook, worksheet_title, PROBLEM_SHEET_NAME)
-    headers = ["source文本", "target版本数", "行号", "target文本", "同组行号"]
-    for column_index, header in enumerate(headers, start=1):
-        problem_sheet.cell(1, column_index, header)
-
-    for row_index, entry in enumerate(problem_entries, start=2):
-        for column_index, value in enumerate(entry, start=1):
-            problem_sheet.cell(row_index, column_index, value)
+    write_output_table(
+        workbook,
+        current_sheet_name=worksheet_title,
+        sheet_name=PROBLEM_SHEET_NAME,
+        headers=PROBLEM_BASE_HEADERS + ("target版本数", "同组行号"),
+        rows=problem_entries,
+    )
 
 
 def process_excel(
@@ -107,7 +110,7 @@ def process_excel(
 
     repeated_source_count = 0
     inconsistent_source_count = 0
-    problem_entries: list[tuple[str, int, int, str, str]] = []
+    problem_entries: list[tuple[int, str, str, str, int, str]] = []
     for source_text, occurrences in occurrences_by_source.items():
         if len(occurrences) < 2:
             continue
@@ -121,10 +124,11 @@ def process_excel(
         for occurrence in occurrences:
             problem_entries.append(
                 (
-                    source_text,
-                    len(target_variants),
                     occurrence.row_index,
+                    source_text,
                     occurrence.target_text,
+                    f"同一 source 对应 {len(target_variants)} 个不同 target",
+                    len(target_variants),
                     grouped_rows,
                 )
             )

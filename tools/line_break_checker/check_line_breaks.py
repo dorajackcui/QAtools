@@ -14,7 +14,11 @@ if __package__ in {None, ""}:
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
-from tools.excel_output import build_prefixed_output_path, rebuild_output_sheet
+from tools.excel_output import (
+    PROBLEM_BASE_HEADERS,
+    build_prefixed_output_path,
+    write_output_table,
+)
 
 
 PROBLEM_SHEET_NAME = "换行数量问题"
@@ -56,23 +60,16 @@ def build_default_output_path(input_file: str | Path) -> Path:
 def write_problem_sheet(
     workbook,
     worksheet_title: str,
-    problem_entries: list[tuple[int, int, int, int, str, str]],
+    problem_entries: list[tuple[int, str, str, str, int, int, int]],
 ) -> None:
-    problem_sheet = rebuild_output_sheet(workbook, worksheet_title, PROBLEM_SHEET_NAME)
-    headers = [
-        "行号",
-        "source换行数",
-        "target换行数",
-        "数量差",
-        "source文本",
-        "target文本",
-    ]
-    for column_index, header in enumerate(headers, start=1):
-        problem_sheet.cell(1, column_index, header)
-
-    for row_index, entry in enumerate(problem_entries, start=2):
-        for column_index, value in enumerate(entry, start=1):
-            problem_sheet.cell(row_index, column_index, value)
+    write_output_table(
+        workbook,
+        current_sheet_name=worksheet_title,
+        sheet_name=PROBLEM_SHEET_NAME,
+        headers=PROBLEM_BASE_HEADERS
+        + ("source换行数", "target换行数", "数量差"),
+        rows=problem_entries,
+    )
 
 
 def process_excel(
@@ -100,7 +97,7 @@ def process_excel(
 
     workbook = load_workbook(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
-    problem_entries: list[tuple[int, int, int, int, str, str]] = []
+    problem_entries: list[tuple[int, str, str, str, int, int, int]] = []
 
     for row_index in range(start_row, worksheet.max_row + 1):
         source_value = worksheet[f"{source_column}{row_index}"].value
@@ -112,11 +109,12 @@ def process_excel(
         problem_entries.append(
             (
                 row_index,
+                cell_text(source_value),
+                cell_text(target_value),
+                "source / target 换行数量不一致",
                 source_count,
                 target_count,
                 target_count - source_count,
-                cell_text(source_value),
-                cell_text(target_value),
             )
         )
 

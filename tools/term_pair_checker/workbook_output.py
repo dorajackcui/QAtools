@@ -7,10 +7,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tools.excel_output import (
+    PROBLEM_BASE_HEADERS,
     ROW_PROBLEM_SEPARATOR,
     build_prefixed_output_path,
     format_row_problem_text,
+    join_unique_text,
     rebuild_output_sheet,
+    write_output_table,
 )
 
 if TYPE_CHECKING:
@@ -61,22 +64,41 @@ def write_term_sheet(workbook, worksheet_title: str, term_pairs: Iterable["Recor
 
 
 def write_problem_sheet(workbook, worksheet_title: str, problem_entries: Iterable["ProblemEntry"]) -> None:
-    problem_sheet = rebuild_output_sheet(workbook, worksheet_title, PROBLEM_SHEET_NAME)
-    problem_sheet["A1"] = "问题行号"
-    problem_sheet["B1"] = "问题source术语"
-    problem_sheet["C1"] = "预期target术语"
-    problem_sheet["D1"] = "术语来源"
-    problem_sheet["E1"] = "问题简述"
-    problem_sheet["F1"] = "source原文"
-    problem_sheet["G1"] = "target原文"
-    for row_index, problem_entry in enumerate(problem_entries, start=2):
-        problem_sheet[f"A{row_index}"] = problem_entry.row_index
-        problem_sheet[f"B{row_index}"] = problem_entry.problem_source_term
-        problem_sheet[f"C{row_index}"] = problem_entry.expected_target_term
-        problem_sheet[f"D{row_index}"] = problem_entry.term_source
-        problem_sheet[f"E{row_index}"] = problem_entry.description
-        problem_sheet[f"F{row_index}"] = problem_entry.source_snapshot
-        problem_sheet[f"G{row_index}"] = problem_entry.target_snapshot
+    entries_by_row: dict[int, list["ProblemEntry"]] = {}
+    for problem_entry in problem_entries:
+        entries_by_row.setdefault(problem_entry.row_index, []).append(problem_entry)
+
+    rows = []
+    for source_row, row_entries in entries_by_row.items():
+        first_entry = row_entries[0]
+        descriptions = (
+            format_row_problem_text(
+                entry.problem_source_term,
+                entry.expected_target_term,
+                entry.description,
+            )
+            for entry in row_entries
+        )
+        rows.append(
+            (
+                source_row,
+                first_entry.source_snapshot,
+                first_entry.target_snapshot,
+                join_unique_text(descriptions),
+                join_unique_text(entry.problem_source_term for entry in row_entries),
+                join_unique_text(entry.expected_target_term for entry in row_entries),
+                join_unique_text(entry.term_source for entry in row_entries),
+            )
+        )
+
+    write_output_table(
+        workbook,
+        current_sheet_name=worksheet_title,
+        sheet_name=PROBLEM_SHEET_NAME,
+        headers=PROBLEM_BASE_HEADERS
+        + ("source术语", "预期target术语", "术语来源"),
+        rows=rows,
+    )
 
 
 def delete_legacy_term_sheets(workbook) -> None:

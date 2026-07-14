@@ -17,7 +17,13 @@ if __package__ in {None, ""}:
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
-from tools.excel_output import build_prefixed_output_path
+from tools.excel_output import (
+    PROBLEM_BASE_HEADERS,
+    build_prefixed_output_path,
+    join_unique_text,
+    rebuild_output_sheet,
+    write_output_table,
+)
 
 
 PROBLEM_SHEET_NAME = "标签占位问题"
@@ -257,27 +263,37 @@ def build_problem_description(
     return "；".join(description_lines)
 
 
-def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):
-    if current_sheet_name == sheet_name:
-        raise ValueError(f"数据工作表名称不能为 {sheet_name}")
-    if sheet_name in workbook.sheetnames:
-        del workbook[sheet_name]
-    return workbook.create_sheet(title=sheet_name)
-
-
 def write_problem_sheet(
     workbook,
     worksheet_title: str,
     problem_entries: list[tuple[int, str, str, str, str]],
 ) -> None:
-    problem_sheet = rebuild_output_sheet(workbook, worksheet_title, PROBLEM_SHEET_NAME)
-    headers = ["行号", "问题类型", "描述", "source文本", "target文本"]
-    for column_index, header in enumerate(headers, start=1):
-        problem_sheet.cell(1, column_index, header)
+    entries_by_row: dict[int, list[tuple[int, str, str, str, str]]] = {}
+    for entry in problem_entries:
+        entries_by_row.setdefault(entry[0], []).append(entry)
 
-    for row_index, entry in enumerate(problem_entries, start=2):
-        for column_index, value in enumerate(entry, start=1):
-            problem_sheet.cell(row_index, column_index, value)
+    rows = []
+    for source_row, row_entries in entries_by_row.items():
+        first_entry = row_entries[0]
+        rows.append(
+            (
+                source_row,
+                first_entry[3],
+                first_entry[4],
+                join_unique_text(
+                    f"{entry[1]}：{entry[2]}" for entry in row_entries
+                ),
+                join_unique_text(entry[1] for entry in row_entries),
+            )
+        )
+
+    write_output_table(
+        workbook,
+        current_sheet_name=worksheet_title,
+        sheet_name=PROBLEM_SHEET_NAME,
+        headers=PROBLEM_BASE_HEADERS + ("问题类型",),
+        rows=rows,
+    )
 
 
 def write_summary_sheet(
