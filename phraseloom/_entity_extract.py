@@ -171,6 +171,7 @@ def _build_entity_split(
     for structure_index, cluster in enumerate(clusters, start=1):
         structure_id = f"ES{structure_index:04d}"
         structure_rows: list[UnitRow] = []
+        structure_occurrences: list[tuple[UnitRow, dict[str, str]]] = []
         for cluster_row_number in cluster.row_numbers:
             row_index = cluster_row_number - 2
             if row_index < 0 or row_index >= len(rows):
@@ -182,6 +183,12 @@ def _build_entity_split(
             if entities is None:
                 continue
             assigned_indexes.add(unit_row.original_index)
+            structure_occurrences.append((unit_row, entities))
+
+        for unit_row, entities in sorted(
+            structure_occurrences,
+            key=lambda item: item[0].original_index,
+        ):
             entity_rows.append(unit_row)
             structure_rows.append(unit_row)
             for source_entity in entities.values():
@@ -246,7 +253,6 @@ def _build_entity_split(
                 schema.WARNING_COLUMN: None,
             }
         )
-    entity_rows.sort(key=lambda row: row.original_index)
     source_map.sort(key=lambda row: int(row[schema.ORIGINAL_INDEX_COLUMN]))
     return entity_rows, structures, terms, source_map
 

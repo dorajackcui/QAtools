@@ -535,36 +535,15 @@ def _write_to_translate_workbook(
     for unit in _units_in_source_order(units):
         if unit.target_unit:
             continue
-        todo.append(
-            [
-                unit.unit_id,
-                unit.unit_type,
-                unit.source_unit,
-                None,
-                _sample_sources(unit, 1),
-                _context_value(unit, context_index),
-                _first_row_number(unit),
-                unit.coverage_count,
-                _variables_summary(unit),
-                unit.warning or None,
-                None,
-            ]
-        )
+        todo.append(_to_translate_row(unit, context_index, target_unit=None))
 
     prefilled = wb.create_sheet(schema.PREFILLED_UNITS_SHEET)
-    prefilled.append(_display_unit_headers(schema.PREFILLED_UNIT_COLUMNS))
+    prefilled.append(_display_unit_headers(schema.TO_TRANSLATE_COLUMNS))
     for unit in units:
         if not unit.target_unit:
             continue
         prefilled.append(
-            [
-                unit.unit_id,
-                unit.unit_type,
-                unit.source_unit,
-                unit.target_unit,
-                unit.coverage_count,
-                unit.target_unit_source or None,
-            ]
+            _to_translate_row(unit, context_index, target_unit=unit.target_unit)
         )
     _add_metadata_sheet(wb, tag_rules)
 
@@ -573,6 +552,27 @@ def _write_to_translate_workbook(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_path)
+
+
+def _to_translate_row(
+    unit: TranslationUnit,
+    context_index: int | None,
+    *,
+    target_unit: str | None,
+) -> list[object | None]:
+    return [
+        unit.unit_id,
+        unit.unit_type,
+        unit.source_unit,
+        target_unit,
+        _sample_sources(unit, 1),
+        _context_value(unit, context_index),
+        _first_row_number(unit),
+        unit.coverage_count,
+        _variables_summary(unit),
+        unit.warning or None,
+        None,
+    ]
 
 
 def _write_target_column_workbook(

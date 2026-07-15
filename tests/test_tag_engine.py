@@ -459,6 +459,17 @@ class TagEngineTests(unittest.TestCase):
         self.assertEqual(result.tags, tags)
         self.assertEqual(result.warnings, ())
 
+    def test_serialize_known_tags_does_not_cascade_raw_brace_replacements(self):
+        from phraseloom.tag_engine import extract_tags, serialize_known_tags
+
+        extraction = extract_tags("饱食度：{0}/{1}")
+
+        result = serialize_known_tags("Satiété : {0}/{1}", extraction.tags)
+
+        self.assertEqual(result.text, "Satiété : {1}/{2}")
+        self.assertEqual(result.tags, extraction.tags)
+        self.assertEqual(result.warnings, ())
+
     def test_serialize_known_tags_warns_when_source_span_not_found(self):
         from phraseloom.tag_engine import extract_tags, serialize_known_tags
 

@@ -20,17 +20,38 @@ def _write_todo_workbook(path: Path, rows: list[dict[str, object]]) -> None:
     wb.save(path)
 
 
+def _unit_header_index(headers: list[object], column: str) -> int:
+    aliases = {
+        schema.SOURCE_UNIT_COLUMN: (schema.SOURCE_UNIT_COLUMN, schema.SOURCE_COLUMN),
+        schema.TARGET_UNIT_COLUMN: (schema.TARGET_UNIT_COLUMN, schema.TARGET_COLUMN),
+    }
+    for candidate in aliases.get(column, (column,)):
+        if candidate in headers:
+            return headers.index(candidate)
+    raise ValueError(f"{column!r} is not in list")
+
+
+def _with_unit_aliases(row: dict[str, object]) -> dict[str, object]:
+    if schema.SOURCE_COLUMN in row and schema.SOURCE_UNIT_COLUMN not in row:
+        row[schema.SOURCE_UNIT_COLUMN] = row[schema.SOURCE_COLUMN]
+    if schema.TARGET_COLUMN in row and schema.TARGET_UNIT_COLUMN not in row:
+        row[schema.TARGET_UNIT_COLUMN] = row[schema.TARGET_COLUMN]
+    return row
+
+
 def _rows_by_header(path: Path, sheet_name: str) -> list[dict[str, object]]:
     wb = load_workbook(path, data_only=True)
     try:
         ws = wb[sheet_name]
         headers = [cell.value for cell in ws[1]]
         return [
-            {
-                str(headers[index]): value
-                for index, value in enumerate(row)
-                if headers[index] is not None
-            }
+            _with_unit_aliases(
+                {
+                    str(headers[index]): value
+                    for index, value in enumerate(row)
+                    if headers[index] is not None
+                }
+            )
             for row in ws.iter_rows(min_row=2, values_only=True)
         ]
     finally:
@@ -72,7 +93,7 @@ def _set_first_todo_target(path: Path, target: str) -> None:
         headers = [cell.value for cell in ws[1]]
         ws.cell(
             row=2,
-            column=headers.index(schema.TARGET_UNIT_COLUMN) + 1,
+            column=_unit_header_index(headers, schema.TARGET_UNIT_COLUMN) + 1,
         ).value = target
         wb.save(path)
     finally:
@@ -86,7 +107,7 @@ def _set_first_non_related_target(path: Path, target: str) -> None:
         headers = [cell.value for cell in ws[1]]
         ws.cell(
             row=2,
-            column=headers.index(schema.TARGET_UNIT_COLUMN) + 1,
+            column=_unit_header_index(headers, schema.TARGET_UNIT_COLUMN) + 1,
         ).value = target
         wb.save(path)
     finally:
@@ -1196,6 +1217,177 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                 [row[schema.FILL_STATUS_COLUMN] for row in map_rows],
                 ["filled", "filled"],
             )
+
+    def test_entity_pack_unit_sheets_use_translator_todo_headers(self):
+        from phraseloom.entity_workflow import prepare_entity_pack_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "legacy_source_translator_todo.xlsx"
+            pack_path = tmp_path / "source_entity_pack.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = schema.TO_TRANSLATE_SHEET
+            legacy_headers = [
+                schema.UNIT_ID_COLUMN,
+                schema.UNIT_TYPE_COLUMN,
+                schema.SOURCE_UNIT_COLUMN,
+                schema.TARGET_UNIT_COLUMN,
+                schema.COVERAGE_COUNT_COLUMN,
+                schema.TARGET_UNIT_SOURCE_COLUMN,
+            ]
+            ws.append(legacy_headers)
+            for row in [
+                {
+                    schema.UNIT_ID_COLUMN: "U0001",
+                    schema.UNIT_TYPE_COLUMN: "segment",
+                    schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack and dealt damage.",
+                    schema.TARGET_UNIT_COLUMN: None,
+                    schema.COVERAGE_COUNT_COLUMN: 1,
+                },
+                {
+                    schema.UNIT_ID_COLUMN: "U0002",
+                    schema.UNIT_TYPE_COLUMN: "segment",
+                    schema.SOURCE_UNIT_COLUMN: "Login failed.",
+                    schema.TARGET_UNIT_COLUMN: None,
+                    schema.COVERAGE_COUNT_COLUMN: 1,
+                },
+                {
+                    schema.UNIT_ID_COLUMN: "U0003",
+                    schema.UNIT_TYPE_COLUMN: "segment",
+                    schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack and dealt damage.",
+                    schema.TARGET_UNIT_COLUMN: None,
+                    schema.COVERAGE_COUNT_COLUMN: 1,
+                },
+            ]:
+                ws.append([row.get(column) for column in legacy_headers])
+            wb.save(todo_path)
+
+            prepare_entity_pack_workbook(
+                todo_path,
+                pack_path,
+                min_group_size=2,
+            )
+
+            expected_headers = [
+                schema.ORIGINAL_INDEX_COLUMN,
+                schema.UNIT_ID_COLUMN,
+                schema.UNIT_TYPE_COLUMN,
+                schema.SOURCE_COLUMN,
+                schema.TARGET_COLUMN,
+                schema.SAMPLE_SOURCES_COLUMN,
+                schema.CONTEXT_COLUMN,
+                schema.ROW_NUMBER_COLUMN,
+                schema.COVERAGE_COUNT_COLUMN,
+                schema.VARIABLES_COLUMN,
+                schema.WARNING_COLUMN,
+                schema.TRANSLATOR_NOTE_COLUMN,
+            ]
+            for sheet_name in [
+                schema.RELATED_UNITS_SHEET,
+                schema.NON_RELATED_UNITS_SHEET,
+            ]:
+                self.assertEqual(_headers(pack_path, sheet_name), expected_headers)
+                self.assertTrue(
+                    _is_column_hidden(
+                        pack_path,
+                        sheet_name,
+                        schema.ORIGINAL_INDEX_COLUMN,
+                    )
+                )
+
+    def test_entity_pack_related_units_groups_same_structure_segments(self):
+        from phraseloom.entity_workflow import prepare_entity_pack_workbook
+        from phraseloom.models import EntityCluster
+
+        class InterleavedStrategy:
+            name = "interleaved"
+
+            def find_clusters(self, rows):
+                return [
+                    EntityCluster(
+                        source_pattern="{entity1} launched an attack.",
+                        coverage_count=2,
+                        unique_source_count=2,
+                        unique_entity_count=2,
+                        entity_values=("Pikachu", "Squirtle"),
+                        confidence=0.95,
+                        risk="",
+                        sample_sources=(),
+                        sample_targets=(),
+                        row_numbers=(2, 4),
+                    ),
+                    EntityCluster(
+                        source_pattern="{entity1} prepares a potion.",
+                        coverage_count=2,
+                        unique_source_count=2,
+                        unique_entity_count=2,
+                        entity_values=("Bulbasaur", "Charmander"),
+                        confidence=0.95,
+                        risk="",
+                        sample_sources=(),
+                        sample_targets=(),
+                        row_numbers=(3, 5),
+                    ),
+                ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            todo_path = tmp_path / "source_translator_todo.xlsx"
+            pack_path = tmp_path / "source_entity_pack.xlsx"
+            _write_todo_workbook(
+                todo_path,
+                [
+                    {
+                        schema.UNIT_ID_COLUMN: "U0001",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Squirtle launched an attack.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0002",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Bulbasaur prepares a potion.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0003",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Pikachu launched an attack.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                    {
+                        schema.UNIT_ID_COLUMN: "U0004",
+                        schema.UNIT_TYPE_COLUMN: "segment",
+                        schema.SOURCE_UNIT_COLUMN: "Charmander prepares a potion.",
+                        schema.TARGET_UNIT_COLUMN: None,
+                    },
+                ],
+            )
+
+            prepare_entity_pack_workbook(
+                todo_path,
+                pack_path,
+                min_group_size=2,
+                strategy=InterleavedStrategy(),
+            )
+
+            related_rows = _rows_by_header(pack_path, schema.RELATED_UNITS_SHEET)
+            self.assertEqual(
+                [row[schema.UNIT_ID_COLUMN] for row in related_rows],
+                ["U0001", "U0003", "U0002", "U0004"],
+            )
+
+            structure_by_index = {
+                row[schema.ORIGINAL_INDEX_COLUMN]: row[schema.STRUCTURE_ID_COLUMN]
+                for row in _rows_by_header(pack_path, schema.ENTITY_MAP_SHEET)
+            }
+            related_structures = [
+                structure_by_index[row[schema.ORIGINAL_INDEX_COLUMN]]
+                for row in related_rows
+            ]
+            self.assertEqual(related_structures, ["ES0001", "ES0001", "ES0002", "ES0002"])
 
     def test_entity_merge_pack_cli_restores_full_todo_order(self):
         from phraseloom.entity_workflow import (

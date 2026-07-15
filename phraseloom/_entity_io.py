@@ -16,7 +16,7 @@ from ._entity_types import (
     UnitRow,
 )
 from .errors import WorkflowError
-from .excel_io import _header_values, _style_sheet
+from .excel_io import _display_unit_headers, _header_values, _style_sheet
 
 
 def _read_unit_rows(path: Path, sheet_name: str) -> tuple[list[UnitRow], list[str]]:
@@ -179,14 +179,20 @@ def _build_entity_pack_workbook(
     source_map: list[dict[str, object]],
 ):
     wb = Workbook()
+    unit_headers = _display_unit_headers(schema.TO_TRANSLATE_COLUMNS)
     related_ws = wb.active
     related_ws.title = schema.RELATED_UNITS_SHEET
-    _append_unit_rows(related_ws, headers, entity_rows, include_original_index=True)
+    _append_unit_rows(
+        related_ws,
+        unit_headers,
+        entity_rows,
+        include_original_index=True,
+    )
     _hide_original_index_column(related_ws)
     non_related_ws = wb.create_sheet(schema.NON_RELATED_UNITS_SHEET)
     _append_unit_rows(
         non_related_ws,
-        headers,
+        unit_headers,
         non_entity_rows,
         include_original_index=True,
     )

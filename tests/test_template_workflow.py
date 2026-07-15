@@ -343,6 +343,82 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(output_rows[1][1], "Inflige {0} degats")
             self.assertEqual(output_rows[2][1], "Inflige {value} degats")
 
+    def test_existing_target_raw_braces_keep_placeholder_order(self):
+        from phraseloom.workflow import generate_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "source.xlsx"
+            output_path = Path(tmp) / "pack.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["饱食度：{0}/{1}", "Satiété : {0}/{1}"])
+            wb.save(input_path)
+
+            generate_workbook(
+                input_path,
+                output_path,
+                source_col="source",
+                target_col="target",
+                use_existing_targets=True,
+            )
+
+            pack = load_workbook(output_path, data_only=True)
+            try:
+                units = pack["translation_units"]
+                unit_headers = [cell.value for cell in units[1]]
+                unit = dict(zip(unit_headers, next(units.iter_rows(min_row=2, values_only=True))))
+                self.assertEqual(_unit_row_value(unit, "source_unit"), "饱食度：{1}/{2}")
+                self.assertEqual(_unit_row_value(unit, "target_unit"), "Satiété : {1}/{2}")
+
+                filled = pack["filled_workbook"]
+                filled_headers = [cell.value for cell in filled[1]]
+                filled_row = dict(
+                    zip(filled_headers, next(filled.iter_rows(min_row=2, values_only=True)))
+                )
+                self.assertEqual(filled_row["auto_target"], "Satiété : {0}/{1}")
+            finally:
+                pack.close()
+
+    def test_existing_target_template_with_adjacent_color_digits_writes_workbook(self):
+        from phraseloom.workflow import generate_workbook
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "source.xlsx"
+            output_path = Path(tmp) / "pack.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Difficulty: [63E7A4]1[-]", "難易度：[63E7A4]1[-]"])
+            ws.append(["Difficulty: [63E7A4]2[-]", "難易度：[63E7A4]2[-]"])
+            ws.append(["Difficulty: [63E7A4]3[-]", "難易度：[63E7A4]3[-]"])
+            wb.save(input_path)
+
+            generate_workbook(
+                input_path,
+                output_path,
+                source_col="source",
+                target_col="target",
+                use_existing_targets=True,
+            )
+
+            pack = load_workbook(output_path, data_only=True)
+            try:
+                units = pack["translation_units"]
+                unit_headers = [cell.value for cell in units[1]]
+                unit = dict(zip(unit_headers, next(units.iter_rows(min_row=2, values_only=True))))
+                target_unit = _unit_row_value(unit, "target_unit")
+
+                self.assertNotIn("\x00", target_unit)
+                self.assertEqual(
+                    target_unit,
+                    "難易度：[{num1}E{num2}A{num3}]{num4}[-]",
+                )
+            finally:
+                pack.close()
+
     def test_row_item_carries_optional_tag_metadata(self):
         from phraseloom.models import RowFillResult, RowItem
         from phraseloom.template_engine import parse_template
@@ -876,6 +952,7 @@ class TemplateDemoTests(unittest.TestCase):
                 prefilled_headers = [
                     cell.value for cell in todo_book["prefilled_units"][1]
                 ]
+                self.assertEqual(prefilled_headers, todo_headers)
                 self.assertIn("source", prefilled_headers)
                 self.assertIn("target", prefilled_headers)
                 self.assertNotIn("source_unit", prefilled_headers)

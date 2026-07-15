@@ -224,18 +224,56 @@ def serialize_known_tags(text: str, tags: tuple[TagToken, ...]) -> TagExtraction
     if source == "":
         return TagExtraction("", ())
 
-    result = source
+    replacements: list[tuple[int, int, str]] = []
+    used_spans: list[tuple[int, int]] = []
     found_tags: list[TagToken] = []
     warnings: list[str] = []
 
     for tag in tags:
-        if tag.raw in result:
-            result = result.replace(tag.raw, tag.placeholder, 1)
+        span = _find_available_span(source, tag.raw, used_spans)
+        if span is not None:
+            start, end = span
+            replacements.append((start, end, tag.placeholder))
+            used_spans.append(span)
             found_tags.append(tag)
         else:
             warnings.append(f"source_protected_span_not_found: {tag.raw}")
 
+    result = _apply_replacements(source, replacements)
     return TagExtraction(result, tuple(found_tags), tuple(warnings))
+
+
+def _find_available_span(
+    source: str,
+    raw: str,
+    used_spans: list[tuple[int, int]],
+) -> tuple[int, int] | None:
+    start = source.find(raw)
+    while start != -1:
+        end = start + len(raw)
+        if not any(
+            start < used_end and used_start < end
+            for used_start, used_end in used_spans
+        ):
+            return start, end
+        start = source.find(raw, start + 1)
+    return None
+
+
+def _apply_replacements(
+    source: str,
+    replacements: list[tuple[int, int, str]],
+) -> str:
+    if not replacements:
+        return source
+    chunks: list[str] = []
+    position = 0
+    for start, end, replacement in sorted(replacements, key=lambda item: item[0]):
+        chunks.append(source[position:start])
+        chunks.append(replacement)
+        position = end
+    chunks.append(source[position:])
+    return "".join(chunks)
 
 
 def _classify_raw_tag(raw: str) -> tuple[str, str | None]:

@@ -8,6 +8,8 @@ from .tag_engine import PROTECTED_TOKEN_RE
 
 VAR_RE = re.compile(r"#[0-9A-Fa-f]{6}|\d+(?:[./:-]\d+)+|\d+(?:\.\d+)?")
 PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
+_TEMPORARY_TOKEN_START = 0xE000
+_TEMPORARY_TOKEN_END = 0xF8FF
 
 
 def _iter_protected_aware_spans(source: str):
@@ -75,17 +77,19 @@ def infer_target_template(values: dict[str, str], target_text: object) -> str | 
     target_template = "" if target_text is None else str(target_text)
     matched = False
     tokens: dict[str, str] = {}
+    used_tokens: set[str] = set()
 
     for index, (key, value) in enumerate(
         sorted(values.items(), key=lambda item: len(item[1]), reverse=True)
     ):
         if not value:
             continue
-        token = "\x00" + _letters_token(index) + "\x00"
+        token = _temporary_token(index, target_template, used_tokens)
         target_template, changed = _replace_outside_protected_tokens(
             target_template, value, token
         )
         if changed:
+            used_tokens.add(token)
             tokens[token] = "{" + key + "}"
             matched = True
 
@@ -95,14 +99,18 @@ def infer_target_template(values: dict[str, str], target_text: object) -> str | 
     return target_template if matched else None
 
 
-def _letters_token(index: int) -> str:
-    letters = []
-    value = index
-    while True:
-        letters.append(chr(ord("A") + (value % 26)))
-        value = value // 26 - 1
-        if value < 0:
-            return "".join(reversed(letters))
+def _temporary_token(
+    index: int,
+    target_template: str,
+    used_tokens: set[str],
+) -> str:
+    # Private-use characters are not matched by variable values and avoid
+    # cross-boundary replacements between adjacent temporary markers.
+    for codepoint in range(_TEMPORARY_TOKEN_START + index, _TEMPORARY_TOKEN_END + 1):
+        token = chr(codepoint)
+        if token not in target_template and token not in used_tokens:
+            return token
+    raise ValueError("too many template variables to infer target template")
 
 
 def apply_target_template(target_template: str, values: dict[str, str]) -> str:
