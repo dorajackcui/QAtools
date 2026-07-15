@@ -125,6 +125,13 @@ class LineBreakExcelTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "开始行必须大于等于 1"):
                 process_excel(input_path, "A", "B", start_row=0)
 
+    def test_process_excel_rejects_same_source_and_target_column(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            self.create_workbook(input_path)
+            with self.assertRaisesRegex(ValueError, "不能相同"):
+                process_excel(input_path, "A", "a")
+
 
 if __name__ == "__main__":
     unittest.main()

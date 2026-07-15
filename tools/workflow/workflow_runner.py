@@ -7,14 +7,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
 from tools.chinese_target_checker.check_chinese_target import (
     PROBLEM_SHEET_NAME as CHINESE_PROBLEM_SHEET_NAME,
     process_excel as run_chinese_target_check_excel,
 )
-from tools.excel_output import ROW_PROBLEM_COLUMN_HEADER, build_prefixed_output_path
+from tools.excel_output import (
+    ROW_PROBLEM_COLUMN_HEADER,
+    build_prefixed_output_path,
+    load_workbook_for_editing,
+    validate_distinct_source_target_columns,
+)
 from tools.line_break_checker.check_line_breaks import (
     PROBLEM_SHEET_NAME as LINE_BREAK_PROBLEM_SHEET_NAME,
     process_excel as run_line_break_check_excel,
@@ -104,7 +108,7 @@ def finalize_workflow_output(
     start_row: int,
 ) -> int:
     """Normalize workflow-only sheets and write the compact quality summary."""
-    workbook = load_workbook(output_path)
+    workbook = load_workbook_for_editing(output_path)
     term_problem_rows = 0
 
     if run_term_pair_check and TERM_PROBLEM_SHEET_NAME in workbook.sheetnames:
@@ -222,6 +226,19 @@ def run_workflow(
         raise ValueError("请至少选择一个质量检查项目。")
 
     input_path = Path(input_file).expanduser().resolve()
+    if not input_path.exists():
+        raise FileNotFoundError(f"输入文件不存在: {input_path}")
+    if start_row < 1:
+        raise ValueError("开始行必须大于等于 1。")
+
+    normalized_source_column = source_column.strip().upper()
+    normalized_target_column = target_column.strip().upper()
+    column_index_from_string(normalized_source_column)
+    column_index_from_string(normalized_target_column)
+    validate_distinct_source_target_columns(
+        normalized_source_column,
+        normalized_target_column,
+    )
     output_path = (
         Path(output_file).expanduser().resolve()
         if output_file
@@ -230,8 +247,6 @@ def run_workflow(
 
     current_input_path = input_path
     worksheet_title = sheet or ""
-    normalized_source_column = source_column.strip().upper()
-    normalized_target_column = target_column.strip().upper()
     term_count = 0
     term_problem_count = 0
     term_problem_rows = 0
@@ -252,8 +267,8 @@ def run_workflow(
             term_problem_count,
         ) = run_term_pair_check_excel(
             input_file=current_input_path,
-            source_column=source_column,
-            target_column=target_column,
+            source_column=normalized_source_column,
+            target_column=normalized_target_column,
             sheet=sheet,
             start_row=start_row,
             mark_styles=term_mark_styles,
@@ -263,14 +278,15 @@ def run_workflow(
             history_target_column=term_history_target_column,
             history_start_row=term_history_start_row,
             output_file=output_path,
+            include_row_problem_column=False,
         )
         current_input_path = saved_path
 
     if run_tag_check:
         tag_summary = run_tag_check_excel(
             input_file=current_input_path,
-            source_column=source_column,
-            target_column=target_column,
+            source_column=normalized_source_column,
+            target_column=normalized_target_column,
             sheet=sheet,
             start_row=start_row,
             token_types=tag_token_types,
@@ -284,8 +300,8 @@ def run_workflow(
     if run_line_break_check:
         line_break_summary = run_line_break_check_excel(
             input_file=current_input_path,
-            source_column=source_column,
-            target_column=target_column,
+            source_column=normalized_source_column,
+            target_column=normalized_target_column,
             sheet=sheet,
             start_row=start_row,
             output_file=output_path,
@@ -297,8 +313,8 @@ def run_workflow(
     if run_source_consistency_check:
         source_consistency_summary = run_source_consistency_check_excel(
             input_file=current_input_path,
-            source_column=source_column,
-            target_column=target_column,
+            source_column=normalized_source_column,
+            target_column=normalized_target_column,
             sheet=sheet,
             start_row=start_row,
             output_file=output_path,
@@ -313,8 +329,8 @@ def run_workflow(
     if run_chinese_target_check:
         chinese_target_summary = run_chinese_target_check_excel(
             input_file=current_input_path,
-            source_column=source_column,
-            target_column=target_column,
+            source_column=normalized_source_column,
+            target_column=normalized_target_column,
             sheet=sheet,
             start_row=start_row,
             output_file=output_path,

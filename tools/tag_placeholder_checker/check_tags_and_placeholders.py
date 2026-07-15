@@ -14,14 +14,15 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
     join_unique_text,
+    load_workbook_for_editing,
     rebuild_output_sheet,
+    validate_distinct_source_target_columns,
     write_output_table,
 )
 
@@ -182,9 +183,20 @@ def extract_token_details(
     if text is None:
         return []
 
-    text_value = str(text)
     normalized_token_types = normalize_token_types(token_types)
     angle_regexes = compile_angle_patterns(angle_patterns, angle_config_file)
+    return _extract_token_details(text, normalized_token_types, angle_regexes)
+
+
+def _extract_token_details(
+    text: object,
+    normalized_token_types: tuple[str, ...],
+    angle_regexes: tuple[re.Pattern[str], ...],
+) -> list[ExtractedToken]:
+    if text is None:
+        return []
+
+    text_value = str(text)
     matches: list[ExtractedToken] = []
 
     for token_type in normalized_token_types:
@@ -408,6 +420,8 @@ def process_excel(
     normalized_token_types = normalize_token_types(token_types)
     source_column = normalize_column(source_column)
     target_column = normalize_column(target_column)
+    validate_distinct_source_target_columns(source_column, target_column)
+    angle_regexes = compile_angle_patterns(angle_patterns, angle_config_file)
 
     input_path = Path(input_file).expanduser().resolve()
     if not input_path.exists():
@@ -419,7 +433,7 @@ def process_excel(
         else build_default_output_path(input_path)
     )
 
-    workbook = load_workbook(input_path)
+    workbook = load_workbook_for_editing(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
 
     total_rows_checked = max(0, worksheet.max_row - start_row + 1)
@@ -435,17 +449,15 @@ def process_excel(
     for row_index in range(start_row, worksheet.max_row + 1):
         source_text = worksheet[f"{source_column}{row_index}"].value
         target_text = worksheet[f"{target_column}{row_index}"].value
-        source_tokens = extract_token_details(
+        source_tokens = _extract_token_details(
             source_text,
-            token_types=normalized_token_types,
-            angle_patterns=angle_patterns,
-            angle_config_file=angle_config_file,
+            normalized_token_types,
+            angle_regexes,
         )
-        target_tokens = extract_token_details(
+        target_tokens = _extract_token_details(
             target_text,
-            token_types=normalized_token_types,
-            angle_patterns=angle_patterns,
-            angle_config_file=angle_config_file,
+            normalized_token_types,
+            angle_regexes,
         )
 
         row_source_snapshot = "" if source_text is None else str(source_text)

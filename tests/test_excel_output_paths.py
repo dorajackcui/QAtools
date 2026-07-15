@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from tools.excel_output import load_workbook_for_editing
 
 from tools.chinese_target_checker.check_chinese_target import (
     build_default_output_path as build_chinese_target_output_path,
@@ -47,6 +50,21 @@ class ExcelOutputPathTests(unittest.TestCase):
             build_tag_check_output_path(input_path),
             input_path.with_name("tag_check_source.xlsm"),
         )
+
+    def test_editable_workbook_loader_preserves_vba_for_xlsm_only(self) -> None:
+        with patch("tools.excel_output.load_workbook") as load_workbook_mock:
+            load_workbook_for_editing(Path("macro.xlsm"))
+            load_workbook_mock.assert_called_once_with(
+                Path("macro.xlsm"),
+                keep_vba=True,
+            )
+
+        with patch("tools.excel_output.load_workbook") as load_workbook_mock:
+            load_workbook_for_editing(Path("plain.xlsx"))
+            load_workbook_mock.assert_called_once_with(
+                Path("plain.xlsx"),
+                keep_vba=False,
+            )
 
 
 if __name__ == "__main__":

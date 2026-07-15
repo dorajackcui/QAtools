@@ -12,7 +12,6 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
 from tools.term_matching import (
@@ -28,7 +27,11 @@ from tools.history_tb import (
     detect_history_tb_columns as shared_detect_history_tb_columns,
     iter_history_rows,
 )
-from tools.excel_output import insert_row_problem_column
+from tools.excel_output import (
+    insert_row_problem_column,
+    load_workbook_for_editing,
+    validate_distinct_source_target_columns,
+)
 from tools.term_pair_checker.term_marks import (
     DEFAULT_MARK_STYLES,
     SUPPORTED_MARKS,
@@ -219,6 +222,10 @@ def normalize_history_source_key(source_term: str) -> str:
     return normalize_text(source_term, case_sensitive=PAIR_CHECK_CASE_SENSITIVE)
 
 
+def normalize_term_key(term: str) -> str:
+    return normalize_text(term, case_sensitive=PAIR_CHECK_CASE_SENSITIVE)
+
+
 def load_history_tb_mapping(
     history_tb_file: str | Path,
     source_column: str | None = None,
@@ -294,13 +301,14 @@ def merge_term_pair(
     term_mapping: dict[str, RecordedTermPair],
     term_pair: RecordedTermPair,
 ) -> tuple[bool, RecordedTermPair | None]:
-    existing_term_pair = term_mapping.get(term_pair.source_plain_text)
+    mapping_key = normalize_term_key(term_pair.source_plain_text)
+    existing_term_pair = term_mapping.get(mapping_key)
     if existing_term_pair is None:
-        term_mapping[term_pair.source_plain_text] = term_pair
+        term_mapping[mapping_key] = term_pair
         return True, None
 
     if not existing_term_pair.target_plain_text and term_pair.target_plain_text:
-        term_mapping[term_pair.source_plain_text] = term_pair
+        term_mapping[mapping_key] = term_pair
         return True, None
 
     if (
@@ -370,7 +378,7 @@ def format_expected_target_terms(
     expected_targets: list[str] = []
     seen_targets: set[str] = set()
     for source_term in source_terms:
-        mapped_term = term_mapping.get(source_term.plain_text)
+        mapped_term = term_mapping.get(normalize_term_key(source_term.plain_text))
         if mapped_term is None or not mapped_term.target_plain_text:
             continue
         if mapped_term.target_plain_text in seen_targets:
@@ -387,7 +395,7 @@ def format_expected_term_sources(
     term_sources: list[str] = []
     seen_sources: set[str] = set()
     for source_term in source_terms:
-        mapped_term = term_mapping.get(source_term.plain_text)
+        mapped_term = term_mapping.get(normalize_term_key(source_term.plain_text))
         if mapped_term is None or not mapped_term.term_source:
             continue
         if mapped_term.term_source in seen_sources:
@@ -398,7 +406,7 @@ def format_expected_term_sources(
 
 
 def lookup_term_source(source_term: str, term_mapping: dict[str, RecordedTermPair]) -> str:
-    term_pair = term_mapping.get(source_term)
+    term_pair = term_mapping.get(normalize_term_key(source_term))
     return term_pair.term_source if term_pair else ""
 
 
@@ -429,10 +437,14 @@ def count_mismatch_is_resolved(
         return False
 
     if source_terms:
-        matched_entries_by_source = {entry.source_term: entry for entry in matched_entries}
+        matched_entries_by_source = {
+            normalize_term_key(entry.source_term): entry for entry in matched_entries
+        }
         required_entries: list[TermMappingEntry] = []
         for source_term in source_terms:
-            matched_entry = matched_entries_by_source.get(source_term.plain_text)
+            matched_entry = matched_entries_by_source.get(
+                normalize_term_key(source_term.plain_text)
+            )
             if matched_entry is None:
                 return False
             required_entries.append(matched_entry)
@@ -448,10 +460,14 @@ def count_mismatch_is_resolved(
 
     # Preserve target-only recovery when the corresponding source phrase is unmarked
     # but can be proven through an already-known source -> target mapping.
-    matched_entries_by_target = {entry.target_term: entry for entry in matched_entries}
+    matched_entries_by_target = {
+        normalize_term_key(entry.target_term): entry for entry in matched_entries
+    }
     required_entries = []
     for target_term in target_terms:
-        matched_entry = matched_entries_by_target.get(target_term.plain_text)
+        matched_entry = matched_entries_by_target.get(
+            normalize_term_key(target_term.plain_text)
+        )
         if matched_entry is None:
             return False
         required_entries.append(matched_entry)
@@ -488,7 +504,7 @@ def build_recorded_term_pair(
 
 def build_initial_term_mapping(history_mapping: dict[str, RecordedTermPair]) -> dict[str, RecordedTermPair]:
     return {
-        term_pair.source_plain_text: term_pair
+        normalize_term_key(term_pair.source_plain_text): term_pair
         for term_pair in history_mapping.values()
     }
 
@@ -499,10 +515,11 @@ def add_matched_terms_to_output(
     matched_entries: Iterable[TermMappingEntry],
 ) -> None:
     for entry in matched_entries:
-        term_pair = term_mapping.get(entry.source_term)
+        mapping_key = normalize_term_key(entry.source_term)
+        term_pair = term_mapping.get(mapping_key)
         if term_pair is None:
             continue
-        output_term_mapping.setdefault(term_pair.source_plain_text, term_pair)
+        output_term_mapping.setdefault(mapping_key, term_pair)
 
 
 def term_source_priority(term_source: str) -> int:
@@ -538,13 +555,18 @@ def process_excel(
     history_target_column: str | None = None,
     history_start_row: int = 2,
     output_file: str | Path | None = None,
+    include_row_problem_column: bool = True,
 ) -> tuple[str, str, str, Path, int, int]:
+    if start_row < 1:
+        raise ValueError("开始行必须大于等于 1。")
+
     input_path = Path(input_file).expanduser().resolve()
     if not input_path.exists():
         raise FileNotFoundError(f"输入文件不存在: {input_path}")
 
     source_column = normalize_column(source_column)
     target_column = normalize_column(target_column)
+    validate_distinct_source_target_columns(source_column, target_column)
     if mark_styles is None:
         normalized_mark_styles = normalize_mark_styles(mark_style=mark_style)
     else:
@@ -581,7 +603,7 @@ def process_excel(
         else build_default_output_path(input_path)
     )
 
-    workbook = load_workbook(input_path)
+    workbook = load_workbook_for_editing(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
 
     term_mapping = build_initial_term_mapping(history_mapping)
@@ -631,7 +653,9 @@ def process_excel(
                 )
                 if not merged:
                     row_has_problem = True
-                    conflict_source_terms_by_row.setdefault(row_index, set()).add(source_term.plain_text)
+                    conflict_source_terms_by_row.setdefault(row_index, set()).add(
+                        normalize_term_key(source_term.plain_text)
+                    )
                     append_problem(
                         problem_entries,
                         row_index,
@@ -730,7 +754,7 @@ def process_excel(
 
         conflict_source_terms = conflict_source_terms_by_row.get(row_index, set())
         for entry in matched_entries:
-            if entry.source_term in conflict_source_terms:
+            if normalize_term_key(entry.source_term) in conflict_source_terms:
                 continue
             if term_has_expected_target(
                 normalized_source_text,
@@ -761,11 +785,12 @@ def process_excel(
 
     problem_entries = dedupe_problem_entries(problem_entries)
 
-    insert_row_problem_column(
-        worksheet,
-        target_column,
-        build_row_problem_summaries(problem_entries),
-    )
+    if include_row_problem_column:
+        insert_row_problem_column(
+            worksheet,
+            target_column,
+            build_row_problem_summaries(problem_entries),
+        )
 
     write_term_sheet(
         workbook,

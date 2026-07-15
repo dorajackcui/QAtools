@@ -8,7 +8,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
-from tools.excel_output import ROW_PROBLEM_COLUMN_HEADER
+from tools.excel_output import ROW_PROBLEM_COLUMN_HEADER, load_workbook_for_editing
 from tools.workflow.review_sheet import (
     WORKFLOW_REVIEW_SHEET_NAME,
     WORKFLOW_SCHEMA_VERSION,
@@ -86,7 +86,7 @@ def apply_workflow_revisions(
     if output_path == report_path:
         raise ValueError("修订稿输出路径不能与检查报告相同。")
 
-    workbook = load_workbook(report_path)
+    workbook = load_workbook_for_editing(report_path)
     if WORKFLOW_REVIEW_SHEET_NAME not in workbook.sheetnames:
         raise ValueError("未找到“问题处理”工作表，请选择 workflow 检查报告。")
     review_sheet = workbook[WORKFLOW_REVIEW_SHEET_NAME]

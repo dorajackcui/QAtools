@@ -12,12 +12,13 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
+    load_workbook_for_editing,
+    validate_distinct_source_target_columns,
     write_output_table,
 )
 
@@ -26,6 +27,7 @@ PROBLEM_SHEET_NAME = "Target中文问题"
 LEGACY_PROBLEM_SHEET_NAMES = ("中文检查问题",)
 CHINESE_PATTERN = re.compile(
     r"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF"
+    r"\U00020000-\U0002FA1F\U00030000-\U000323AF"
     r"\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65"
     r"\u00B7\u2018\u2019\u201C\u201D]"
 )
@@ -82,13 +84,14 @@ def process_excel(
 
     source_column = normalize_column(source_column)
     target_column = normalize_column(target_column)
+    validate_distinct_source_target_columns(source_column, target_column)
     output_path = (
         Path(output_file).expanduser().resolve()
         if output_file
         else build_default_output_path(input_path)
     )
 
-    workbook = load_workbook(input_path)
+    workbook = load_workbook_for_editing(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
     for legacy_sheet_name in LEGACY_PROBLEM_SHEET_NAMES:
         if (

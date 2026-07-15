@@ -1090,6 +1090,44 @@ class ProcessExcelTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "缺少 source/target 列"):
                 term_pair_module.load_history_tb_mapping(history_path)
 
+    def test_process_excel_rejects_invalid_start_row(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            self.create_workbook(input_path)
+            with self.assertRaisesRegex(ValueError, "开始行必须大于等于 1"):
+                process_excel(input_path, "A", "B", start_row=0)
+
+    def test_process_excel_rejects_same_source_and_target_column(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            self.create_workbook(input_path)
+            with self.assertRaisesRegex(ValueError, "不能相同"):
+                process_excel(input_path, "A", "a", mark_styles=("[]",))
+
+    def test_process_excel_uses_case_insensitive_keys_for_marked_conflicts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(["Define [Apple]", "Définir [Pomme]"])
+            worksheet.append(["Reuse [apple]", "Réutiliser [Wrong]"])
+            workbook.save(input_path)
+
+            _, _, _, output_path, term_count, problem_count = process_excel(
+                input_path,
+                "A",
+                "B",
+                mark_styles=("[]",),
+            )
+
+            self.assertEqual(term_count, 1)
+            self.assertEqual(problem_count, 1)
+            problem_sheet = load_workbook(output_path)["问题列"]
+            self.assertIn("target术语不匹配", problem_sheet["D2"].value)
+            self.assertIn("Wrong", problem_sheet["D2"].value)
+
 
 if __name__ == "__main__":
     unittest.main()

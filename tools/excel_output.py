@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
+from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.worksheet.hyperlink import Hyperlink
@@ -15,6 +16,24 @@ ROW_PROBLEM_COLUMN_HEADER = "术语QA问题"
 ROW_PROBLEM_SEPARATOR = "；"
 PROBLEM_BASE_HEADERS = ("行号", "source原文", "target原文", "问题描述")
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="D9EAF7")
+
+
+def load_workbook_for_editing(input_file: str | Path):
+    """Load an editable workbook without dropping VBA from .xlsm files."""
+    input_path = Path(input_file)
+    return load_workbook(
+        input_path,
+        keep_vba=input_path.suffix.casefold() == ".xlsm",
+    )
+
+
+def validate_distinct_source_target_columns(
+    source_column: str,
+    target_column: str,
+) -> None:
+    """Reject a configuration that would compare one column with itself."""
+    if source_column.strip().upper() == target_column.strip().upper():
+        raise ValueError("source 列和 target 列不能相同。")
 
 
 def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):

@@ -11,12 +11,13 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
+    load_workbook_for_editing,
+    validate_distinct_source_target_columns,
     write_output_table,
 )
 
@@ -91,13 +92,14 @@ def process_excel(
 
     source_column = normalize_column(source_column)
     target_column = normalize_column(target_column)
+    validate_distinct_source_target_columns(source_column, target_column)
     output_path = (
         Path(output_file).expanduser().resolve()
         if output_file
         else build_default_output_path(input_path)
     )
 
-    workbook = load_workbook(input_path)
+    workbook = load_workbook_for_editing(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
     occurrences_by_source: dict[str, list[SourceOccurrence]] = {}
 

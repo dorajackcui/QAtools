@@ -33,6 +33,14 @@ class ChineseTargetTextTests(unittest.TestCase):
         self.assertEqual(extract_chinese_characters("—…"), "")
         self.assertEqual(extract_chinese_characters("No Chinese"), "")
 
+    def test_detects_cjk_extension_characters_outside_the_bmp(self) -> None:
+        self.assertTrue(contains_chinese("Extension B: \U00020000"))
+        self.assertTrue(contains_chinese("Extension G: \U00030000"))
+        self.assertEqual(
+            extract_chinese_characters("A\U00020000B\U00030000C"),
+            "\U00020000\U00030000",
+        )
+
 
 class ChineseTargetExcelTests(unittest.TestCase):
     def create_workbook(self, path: Path) -> None:
@@ -139,6 +147,17 @@ class ChineseTargetExcelTests(unittest.TestCase):
                     source_column="A",
                     target_column="B",
                     start_row=0,
+                )
+
+    def test_process_excel_rejects_same_source_and_target_column(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            self.create_workbook(input_path)
+            with self.assertRaisesRegex(ValueError, "不能相同"):
+                process_excel(
+                    input_file=input_path,
+                    source_column="A",
+                    target_column="a",
                 )
 
 

@@ -423,5 +423,38 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(summary.term_problem_count, 1)
             self.assertEqual(summary.term_problem_rows, 1)
 
+    def test_term_check_does_not_shift_a_source_column_right_of_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet["B1"] = "target"
+            worksheet["D1"] = "source"
+            worksheet["B2"] = "[One]"
+            worksheet["D2"] = "[Term]"
+            worksheet["B3"] = "Two"
+            worksheet["D3"] = "Same"
+            worksheet["B4"] = "Three"
+            worksheet["D4"] = "Same"
+            workbook.save(input_path)
+
+            summary = run_workflow(
+                input_file=input_path,
+                source_column="D",
+                target_column="B",
+                sheet="Data",
+                term_mark_styles=("[]",),
+                run_tag_check=False,
+                run_line_break_check=False,
+                run_source_consistency_check=True,
+                run_chinese_target_check=False,
+            )
+
+            self.assertEqual(summary.source_consistency_problem_count, 1)
+            self.assertEqual(summary.source_consistency_problem_rows, 2)
+            output_workbook = load_workbook(summary.output_path)
+            self.assertEqual(output_workbook["Data"]["D1"].value, "source")
+
 if __name__ == "__main__":
     unittest.main()
