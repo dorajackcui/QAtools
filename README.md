@@ -83,10 +83,10 @@ python3 tools/excel_line_splitter/split_excel_lines_gui.py
 ### 3. Tag / Placeholder 检查
 
 - 目录：`tools/tag_placeholder_checker`
-- 用途：逐行检查双语 Excel 中 `source` / `target` 的 `<...>`、`[color=...]` / `[/color]`、`{...}`、`\n` 和 memoQ tag 是否一致
-- 检查类型：支持 `<...>` tag、`[color=...]` / `[/color]` tag、`{...}` placeholder、`\n` mark 与 `{n}` / `{n>` / `<n}` memoQ tag；GUI 中 memoQ 与其他类型互斥，CLI 可按需显式组合
-- `<...>` 识别：默认所有 `<...>` 都按普通 tag 检查；memoQ 数字 protected marker 独立为 `memoq` 类型
-- GUI 增强：自动读取工作表列表，并尝试自动识别 `source` / `target` 列
+- 用途：逐行检查双语 Excel 中 `source` / `target` 的 `<...>`、`[color=...]` / `[/color]`、`{...}` / `{{...}}`、`\n` 和 memoQ tag 是否一致
+- 检查类型：支持 `<...>` tag、`[color=...]` / `[/color]` tag、单/双花括号 placeholder、`\n` mark 与 `{n}` / `{n>` / `<n}` memoQ tag；GUI 中 memoQ 与其他类型互斥，CLI 可按需显式组合
+- `<...>` 识别：支持引号属性内的 `>`，并校验成对 tag 的闭合和父子层级；带空白的普通大小比较表达式不作为 tag
+- GUI 增强：自动读取工作表列表，尝试自动识别 `source` / `target` 列，并支持选择尖括号 tag 过滤 JSON
 - 输出方式：生成新的结果 Excel，不覆盖原文件
 - CLI：
 

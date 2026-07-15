@@ -168,6 +168,66 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(metadata["target_column"], "B")
             self.assertEqual(metadata["remove_term_helper"], "0")
 
+    def test_run_workflow_surfaces_angle_tag_structure_mismatches(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(["<b>A</b><i>B</i>", "<b>A<i>B</i></b>"])
+            workbook.save(input_path)
+
+            summary = run_workflow(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                run_term_pair_check=False,
+                run_tag_check=True,
+                tag_token_types=("angle",),
+                run_line_break_check=False,
+                run_source_consistency_check=False,
+                run_chinese_target_check=False,
+            )
+
+            self.assertEqual(summary.tag_problem_count, 1)
+            self.assertEqual(summary.tag_problem_rows, 1)
+            output_workbook = load_workbook(summary.output_path)
+            review_sheet = output_workbook[WORKFLOW_REVIEW_SHEET_NAME]
+            self.assertEqual(review_sheet["A2"].value, 2)
+            self.assertIn("尖括号tag结构不一致", review_sheet["E2"].value)
+            self.assertEqual(review_sheet["F2"].value, "Tag 检查")
+
+    def test_run_workflow_passes_the_angle_filter_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            config_path = Path(tmp_dir) / "angle-tags.json"
+            config_path.write_text('{"patterns": ["^/?b$"]}', encoding="utf-8")
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(["<i>Italic</i>", "斜体"])
+            workbook.save(input_path)
+
+            summary = run_workflow(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                run_term_pair_check=False,
+                run_tag_check=True,
+                tag_token_types=("angle",),
+                tag_angle_config_file=config_path,
+                run_line_break_check=False,
+                run_source_consistency_check=False,
+                run_chinese_target_check=False,
+            )
+
+            self.assertEqual(summary.tag_problem_count, 0)
+            self.assertEqual(summary.tag_problem_rows, 0)
+
     def test_apply_workflow_revisions_writes_targets_and_removes_qa_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"

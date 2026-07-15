@@ -38,6 +38,7 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
         self.brace_var = tk.BooleanVar(value=True)
         self.newline_var = tk.BooleanVar(value=True)
         self.tag_mode_var = tk.StringVar(value="standard")
+        self.angle_config_file_var = tk.StringVar()
         self.output_preview_var = tk.StringVar(
             value="输出文件：选择输入 Excel 后自动生成"
         )
@@ -133,12 +134,36 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
             )
             self.standard_tag_checkbuttons.append(checkbutton)
 
+        ttk.Label(settings_frame, text="尖括号过滤配置").grid(
+            row=2, column=0, sticky="w", pady=(12, 0)
+        )
+        self.angle_config_entry = ttk.Entry(
+            settings_frame,
+            textvariable=self.angle_config_file_var,
+            width=56,
+        )
+        self.angle_config_entry.grid(
+            row=2,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            padx=(12, 8),
+            pady=(12, 0),
+        )
+        self.angle_config_button = ttk.Button(
+            settings_frame,
+            text="选择",
+            command=self.choose_angle_config_file,
+        )
+        self.angle_config_button.grid(row=2, column=4, sticky="ew", pady=(12, 0))
+        settings_frame.columnconfigure(3, weight=1)
+
         ttk.Label(
             settings_frame,
-            text="逐行比较 source / target；memoQ Tag 与常规类型互斥。",
+            text="逐行比较 source / target；尖括号过滤配置为可选 JSON；memoQ Tag 与常规类型互斥。",
             style=MUTED_LABEL_STYLE,
             wraplength=760,
-        ).grid(row=2, column=0, columnspan=5, sticky="w", pady=(12, 0))
+        ).grid(row=3, column=0, columnspan=5, sticky="w", pady=(12, 0))
 
         ttk.Button(
             self,
@@ -157,6 +182,18 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
         state = "normal" if self.tag_mode_var.get() == "standard" else "disabled"
         for checkbutton in self.standard_tag_checkbuttons:
             checkbutton.configure(state=state)
+        for widget_name in ("angle_config_entry", "angle_config_button"):
+            widget = getattr(self, widget_name, None)
+            if widget is not None:
+                widget.configure(state=state)
+
+    def choose_angle_config_file(self) -> None:
+        file_path = filedialog.askopenfilename(
+            title="选择尖括号 Tag 过滤配置",
+            filetypes=[("JSON 文件", "*.json"), ("所有文件", "*.*")],
+        )
+        if file_path:
+            self.angle_config_file_var.set(file_path)
 
     def choose_input_file(self) -> None:
         file_path = filedialog.askopenfilename(
@@ -254,6 +291,11 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
                 target_column=target_column,
                 start_row=start_row,
                 token_types=token_types,
+                angle_config_file=(
+                    self.angle_config_file_var.get().strip()
+                    if "angle" in token_types
+                    else None
+                ),
                 output_file=None,
             )
         except Exception as exc:

@@ -210,6 +210,7 @@ def run_workflow(
     term_history_start_row: int = 2,
     run_tag_check: bool = True,
     tag_token_types: tuple[str, ...] | list[str] | None = None,
+    tag_angle_config_file: str | Path | None = None,
     run_line_break_check: bool = True,
     run_source_consistency_check: bool = True,
     run_chinese_target_check: bool = True,
@@ -290,6 +291,7 @@ def run_workflow(
             sheet=sheet,
             start_row=start_row,
             token_types=tag_token_types,
+            angle_config_file=tag_angle_config_file,
             output_file=output_path,
         )
         worksheet_title = tag_summary.worksheet_title

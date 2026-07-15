@@ -49,6 +49,7 @@ class WorkflowRunnerApp(ttk.Frame):
         self.term_settings_button_text_var = tk.StringVar(value="展开设置")
         self.tag_settings_button_text_var = tk.StringVar(value="展开设置")
         self.tag_mode_var = tk.StringVar(value="standard")
+        self.tag_angle_config_file_var = tk.StringVar()
         self.term_settings_expanded = False
         self.tag_settings_expanded = False
         self.last_workflow_output_path = ""
@@ -344,6 +345,30 @@ class WorkflowRunnerApp(ttk.Frame):
             )
             checkbutton.grid(row=0, column=column, sticky="w", padx=(0 if column == 0 else 16, 0))
             self.standard_tag_checkbuttons.append(checkbutton)
+
+        ttk.Label(self.tag_settings_frame, text="尖括号过滤配置").grid(
+            row=2, column=0, sticky="w", pady=(12, 0)
+        )
+        self.tag_angle_config_entry = ttk.Entry(
+            self.tag_settings_frame,
+            textvariable=self.tag_angle_config_file_var,
+            width=56,
+        )
+        self.tag_angle_config_entry.grid(
+            row=2,
+            column=1,
+            columnspan=2,
+            sticky="ew",
+            padx=(12, 8),
+            pady=(12, 0),
+        )
+        self.tag_angle_config_button = ttk.Button(
+            self.tag_settings_frame,
+            text="选择",
+            command=self.choose_tag_angle_config_file,
+        )
+        self.tag_angle_config_button.grid(row=2, column=3, sticky="ew", pady=(12, 0))
+        self.tag_settings_frame.columnconfigure(2, weight=1)
         self.tag_settings_frame.grid_remove()
 
         action_frame = ttk.Frame(self)
@@ -477,8 +502,13 @@ class WorkflowRunnerApp(ttk.Frame):
         standard_enabled = (
             self.run_tag_check_var.get() and self.tag_mode_var.get() == "standard"
         )
+        state = "normal" if standard_enabled else "disabled"
         for checkbutton in getattr(self, "standard_tag_checkbuttons", ()):
-            checkbutton.configure(state="normal" if standard_enabled else "disabled")
+            checkbutton.configure(state=state)
+        for widget_name in ("tag_angle_config_entry", "tag_angle_config_button"):
+            widget = getattr(self, widget_name, None)
+            if widget is not None:
+                widget.configure(state=state)
 
     def update_output_preview(self) -> None:
         input_file = self.input_file_var.get().strip()
@@ -511,6 +541,14 @@ class WorkflowRunnerApp(ttk.Frame):
             return
         self.term_history_tb_file_var.set(file_path)
         self.refresh_term_history_sheet_choices()
+
+    def choose_tag_angle_config_file(self) -> None:
+        file_path = filedialog.askopenfilename(
+            title="选择尖括号 Tag 过滤配置",
+            filetypes=[("JSON 文件", "*.json"), ("所有文件", "*.*")],
+        )
+        if file_path:
+            self.tag_angle_config_file_var.set(file_path)
 
     def clear_term_history_tb_file(self) -> None:
         self.term_history_tb_file_var.set("")
@@ -697,6 +735,12 @@ class WorkflowRunnerApp(ttk.Frame):
         run_chinese_target_check = self.run_chinese_target_check_var.get()
         term_mark_styles = self.get_selected_term_mark_styles()
         tag_token_types = self.get_selected_tag_token_types()
+        tag_angle_config_var = getattr(self, "tag_angle_config_file_var", None)
+        tag_angle_config_file = (
+            tag_angle_config_var.get().strip()
+            if "angle" in tag_token_types and tag_angle_config_var is not None
+            else ""
+        )
         term_history_start_row = 2
 
         if not input_file:
@@ -763,6 +807,7 @@ class WorkflowRunnerApp(ttk.Frame):
                 term_history_start_row=term_history_start_row,
                 run_tag_check=run_tag_check,
                 tag_token_types=tag_token_types,
+                tag_angle_config_file=tag_angle_config_file or None,
                 run_line_break_check=run_line_break_check,
                 run_source_consistency_check=run_source_consistency_check,
                 run_chinese_target_check=run_chinese_target_check,

@@ -9,6 +9,7 @@ from openpyxl import Workbook, load_workbook
 
 from tools.tag_placeholder_checker.check_tags_and_placeholders import (
     extract_tokens,
+    load_angle_patterns_from_file,
     process_excel,
 )
 
@@ -60,6 +61,39 @@ class ExtractTokensTests(unittest.TestCase):
             extract_tokens(text, token_types=("square_color",)),
             ["[color=red]", "[color = #fff]", "[/color]"],
         )
+
+    def test_extract_tokens_ignores_spaced_comparison_expressions(self) -> None:
+        self.assertEqual(
+            extract_tokens("Value < 10 and count > 0", token_types=("angle",)),
+            [],
+        )
+
+    def test_extract_tokens_respects_quotes_inside_angle_tags(self) -> None:
+        self.assertEqual(
+            extract_tokens(
+                '<a title="1 > 0">text</a>',
+                token_types=("angle",),
+            ),
+            ['<a title="1 > 0">', "</a>"],
+        )
+
+    def test_extract_tokens_preserves_double_brace_placeholders(self) -> None:
+        self.assertEqual(
+            extract_tokens("{{name}} and {count}", token_types=("brace",)),
+            ["{{name}}", "{count}"],
+        )
+        self.assertEqual(
+            extract_tokens("{{1}}", token_types=("brace", "memoq")),
+            ["{{1}}"],
+        )
+
+    def test_angle_config_requires_a_json_object(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "angle-tags.json"
+            config_path.write_text('["tag"]', encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "需要 JSON 对象"):
+                load_angle_patterns_from_file(config_path)
 
 
 class ProcessExcelTests(unittest.TestCase):
@@ -286,6 +320,90 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["E2"].value, "方括号color tag不一致")
             self.assertIn("target缺少=[/color]", str(problem_sheet["D2"].value))
 
+    def test_process_excel_ignores_comparisons_and_checks_full_quoted_tags(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(
+                ["Value < 10 and count > 0", "Valeur < 10 et nombre > 0"]
+            )
+            worksheet.append(
+                [
+                    '<a title="1 > 0">text</a>',
+                    '<a title="1 > 999">texte</a>',
+                ]
+            )
+            workbook.save(input_path)
+
+            summary = process_excel(
+                input_path,
+                "A",
+                "B",
+                token_types=("angle",),
+            )
+
+            self.assertEqual(summary.problem_rows, 1)
+            self.assertEqual(summary.problem_count, 1)
+            problem_sheet = load_workbook(summary.output_path)["标签占位问题"]
+            self.assertEqual(problem_sheet["A2"].value, 3)
+            self.assertIn('<a title="1 > 0">', problem_sheet["D2"].value)
+            self.assertIn('<a title="1 > 999">', problem_sheet["D2"].value)
+
+    def test_process_excel_reports_changed_angle_tag_hierarchy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(
+                ["<b>A</b><i>B</i>", "<b>A<i>B</i></b>"]
+            )
+            worksheet.append(
+                ["<b>Bold</b><i>Italic</i>", "<i>斜体</i><b>粗体</b>"]
+            )
+            workbook.save(input_path)
+
+            summary = process_excel(
+                input_path,
+                "A",
+                "B",
+                token_types=("angle",),
+            )
+
+            self.assertEqual(summary.problem_rows, 1)
+            self.assertEqual(summary.problem_count, 1)
+            problem_sheet = load_workbook(summary.output_path)["标签占位问题"]
+            self.assertEqual(problem_sheet["A2"].value, 2)
+            self.assertEqual(problem_sheet["E2"].value, "尖括号tag结构不一致")
+            self.assertIn("嵌套或闭合结构不同", problem_sheet["D2"].value)
+
+    def test_process_excel_reports_single_vs_double_brace_placeholder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(["Hello {{name}}", "Bonjour {name}"])
+            workbook.save(input_path)
+
+            summary = process_excel(
+                input_path,
+                "A",
+                "B",
+                token_types=("brace",),
+            )
+
+            self.assertEqual(summary.problem_rows, 1)
+            self.assertEqual(summary.problem_count, 1)
+            problem_sheet = load_workbook(summary.output_path)["标签占位问题"]
+            self.assertIn("target缺少={{name}}", problem_sheet["D2"].value)
+            self.assertIn("target多出={name}", problem_sheet["D2"].value)
+
     def test_problem_sheet_merges_multiple_issue_types_from_the_same_row(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
@@ -332,6 +450,28 @@ class ProcessExcelTests(unittest.TestCase):
                 process_excel(input_path, "A", "B", token_types=("angle",))
 
             compile_mock.assert_called_once_with(None, None)
+
+    def test_process_excel_rebuilds_reserved_output_sheets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            workbook.create_sheet("标签占位问题")["A1"] = "旧问题"
+            workbook.create_sheet("检查汇总")["A1"] = "旧汇总"
+            workbook.save(input_path)
+
+            summary = process_excel(
+                input_path,
+                "A",
+                "B",
+                token_types=("angle",),
+            )
+
+            output_workbook = load_workbook(summary.output_path)
+            self.assertEqual(output_workbook["标签占位问题"]["A1"].value, "行号")
+            self.assertEqual(output_workbook["检查汇总"]["A1"].value, "统计项")
 
 
 if __name__ == "__main__":

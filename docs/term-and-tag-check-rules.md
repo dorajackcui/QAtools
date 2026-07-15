@@ -53,7 +53,7 @@ GUI 可以取消全部 mark，但此时必须提供历史 TB。CLI 使用 `--no-
 
 ## Tag 检查
 
-Tag 检查用于逐行比较 source / target 中 tag、placeholder 和 mark token 是否一致。它只检查 token 计数和文本是否一致，不建立术语对。
+Tag 检查用于逐行比较 source / target 中 tag、placeholder 和 mark token 是否一致。它检查 token 计数和文本，并校验成对尖括号 tag 的父子结构，不建立术语对。
 
 ### 支持的检查类型
 
@@ -61,7 +61,7 @@ Tag 检查用于逐行比较 source / target 中 tag、placeholder 和 mark toke
 | --- | --- | --- |
 | `angle` | `<...> tag` | `<...>` |
 | `square_color` | `[color=...] tag` | `[color=...]`、`[/color]` |
-| `brace` | `{...} placeholder` | `{name}`、`{count}` 等普通花括号 placeholder |
+| `brace` | `{...} placeholder` | `{name}`、`{{name}}`、`{count}` 等花括号 placeholder |
 | `newline` | `\n mark` | 字面量 `\n` |
 | `memoq` | memoQ tag | `{1}`、`{2>`、`<3}` |
 
@@ -73,11 +73,11 @@ Tag 检查用于逐行比较 source / target 中 tag、placeholder 和 mark toke
 | Tag 检查 GUI | `angle`、`square_color`、`brace`、`newline` |
 | Workflow GUI | `angle`、`square_color`、`brace`、`newline` |
 
-GUI 中 memoQ tag 与其他检查类型互斥：勾选 memoQ 会取消普通 tag 组，勾选普通 tag 组会取消 memoQ。CLI / `process_excel()` 保持可显式组合，方便脚本按需调用。
+GUI 中 memoQ tag 与其他检查类型互斥：勾选 memoQ 会取消普通 tag 组，勾选普通 tag 组会取消 memoQ。Tag 独立 GUI 和 Workflow GUI 都可选择尖括号过滤 JSON；CLI / `process_excel()` 保持可显式组合，方便脚本按需调用。
 
 ### Tag token 过滤
 
-- `angle` 默认检查所有 `<...>`。
+- `angle` 默认检查 `<...>`，能跳过引号属性中的 `>`；尖括号内侧首尾带空白的普通比较表达式不作为 tag。
 - `square_color` 只检查 `[color=...]` 和 `[/color]`，不会把普通 `[stage1]` 或术语 mark `[]` 都当成 tag。
 - `{1}`、`{2>...<3}` 这类 memoQ protected marker 不会作为普通 `{...}` placeholder 检查，会交给 `memoq` 类型处理。
 - 普通文本里的 `<apple>` 也会作为 `<...>` tag 检查。
@@ -86,8 +86,10 @@ GUI 中 memoQ tag 与其他检查类型互斥：勾选 memoQ 会取消普通 tag
 
 - 每一行分别提取 source 和 target 的 token。
 - 按检查类型分别计数，要求 source / target 的 token 文本和数量完全一致。
+- 成对尖括号 tag 还会比较闭合和父子层级；允许彼此独立的兄弟 tag 随翻译语序换序。
 - 不一致时写入 `标签占位问题` sheet，并说明 target 缺少或多出了哪些 token。
 - 统计信息写入 `检查汇总` sheet。
+- `标签占位问题` 和 `检查汇总` 是保留结果表名，结果文件中的同名工作表会被重建。
 
 ## Workflow 中的关系
 
