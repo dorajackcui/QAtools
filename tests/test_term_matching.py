@@ -119,6 +119,29 @@ class TermMatchingTests(unittest.TestCase):
             )
         )
 
+    def test_source_plural_still_requires_the_expected_target(self) -> None:
+        entry = make_entry("shard", "碎片")
+        plural_source = normalize_text("Collect shards.", case_sensitive=False)
+
+        self.assertTrue(
+            term_has_expected_target(
+                plural_source,
+                normalize_text("收集碎片。", case_sensitive=False),
+                entry,
+                match_mode="hybrid-boundary",
+                allow_target_plural_variants=True,
+            )
+        )
+        self.assertFalse(
+            term_has_expected_target(
+                plural_source,
+                normalize_text("收集金币。", case_sensitive=False),
+                entry,
+                match_mode="hybrid-boundary",
+                allow_target_plural_variants=True,
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

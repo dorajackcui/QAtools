@@ -609,7 +609,7 @@ class ProcessExcelTests(unittest.TestCase):
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet.max_row, 1)
 
-    def test_process_excel_skips_source_only_simple_s_plural_variant(self) -> None:
+    def test_process_excel_reports_wrong_target_for_source_plural_variant(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
 
@@ -633,11 +633,14 @@ class ProcessExcelTests(unittest.TestCase):
             )
 
             self.assertEqual(term_count, 1)
-            self.assertEqual(problem_count, 0)
+            self.assertEqual(problem_count, 1)
 
             result_workbook = load_workbook(saved_path)
             problem_sheet = result_workbook["问题列"]
-            self.assertEqual(problem_sheet.max_row, 1)
+            self.assertEqual(problem_sheet.max_row, 2)
+            self.assertEqual(problem_sheet["A2"].value, 3)
+            self.assertEqual(problem_sheet["F2"].value, "éclat")
+            self.assertIn("target缺少预期术语", problem_sheet["D2"].value)
 
     def test_process_excel_skips_plural_signature_variants(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -1127,6 +1130,30 @@ class ProcessExcelTests(unittest.TestCase):
             problem_sheet = load_workbook(output_path)["问题列"]
             self.assertIn("target术语不匹配", problem_sheet["D2"].value)
             self.assertIn("Wrong", problem_sheet["D2"].value)
+
+    def test_process_excel_ignores_target_case_for_marked_pairs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(["Define [Apple]", "Définir [Pomme]"])
+            worksheet.append(["Reuse [apple]", "Réutiliser [pomme]"])
+            workbook.save(input_path)
+
+            _, _, _, output_path, term_count, problem_count = process_excel(
+                input_path,
+                "A",
+                "B",
+                mark_styles=("[]",),
+            )
+
+            self.assertEqual(term_count, 1)
+            self.assertEqual(problem_count, 0)
+            output_workbook = load_workbook(output_path)
+            self.assertEqual(output_workbook["问题列"].max_row, 1)
+            self.assertEqual(output_workbook["术语表"]["D2"].value, "Pomme")
 
 
 if __name__ == "__main__":

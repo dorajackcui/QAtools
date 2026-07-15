@@ -112,22 +112,6 @@ def simple_plural_token_variant(token: str) -> str:
     return f"{token}{SIMPLE_PLURAL_SUFFIX}"
 
 
-def plural_signature_token(token: str) -> str:
-    if len(token) > 3 and token.endswith("ies"):
-        return f"{token[:-3]}y"
-    if len(token) > 1 and token.endswith(SIMPLE_PLURAL_SUFFIX):
-        return token[:-1]
-    return token
-
-
-def term_tokens(term: str) -> tuple[str, ...]:
-    return tuple(match.group(0) for match in WORD_PATTERN.finditer(term))
-
-
-def plural_signature_tokens(term: str) -> tuple[str, ...]:
-    return tuple(plural_signature_token(token) for token in term_tokens(term))
-
-
 def iter_simple_s_variants(term: str) -> tuple[str, ...]:
     plural_term = simple_s_plural_variant(term)
     if not plural_term:
@@ -159,34 +143,6 @@ def iter_source_match_variants(term: str) -> tuple[str, ...]:
 
 def iter_source_match_variant_pairs(term: str) -> tuple[tuple[str, bool], ...]:
     return tuple((variant, variant != term) for variant in iter_source_match_variants(term))
-
-
-def text_contains_simple_s_plural(text: str, term: str, match_mode: str) -> bool:
-    plural_term = simple_s_plural_variant(term)
-    return bool(plural_term) and text_contains_term(text, plural_term, match_mode=match_mode)
-
-
-def text_contains_plural_signature_variant(text: str, term: str) -> bool:
-    expected_signature = plural_signature_tokens(term)
-    if not expected_signature:
-        return False
-
-    expected_tokens = term_tokens(term)
-    text_matches = list(WORD_PATTERN.finditer(text))
-    token_count = len(expected_signature)
-    if len(text_matches) < token_count:
-        return False
-
-    for start_index in range(0, len(text_matches) - token_count + 1):
-        window = text_matches[start_index : start_index + token_count]
-        window_tokens = tuple(match.group(0) for match in window)
-        window_signature = tuple(plural_signature_token(token) for token in window_tokens)
-        if window_signature != expected_signature:
-            continue
-        if window_tokens == expected_tokens:
-            continue
-        return True
-    return False
 
 
 def s_plural_token_variants(token: str) -> tuple[str, ...]:
@@ -256,6 +212,13 @@ def text_contains_target_s_plural_variant(text: str, term: str, match_mode: str)
     )
 
 
+def text_contains_source_match_variant(text: str, term: str, match_mode: str) -> bool:
+    return any(
+        text_contains_term(text, variant, match_mode=match_mode)
+        for variant in iter_source_match_variants(term)
+    )
+
+
 def term_has_expected_target(
     source_text: str,
     target_text: str,
@@ -263,44 +226,21 @@ def term_has_expected_target(
     match_mode: str,
     allow_target_plural_variants: bool = False,
 ) -> bool:
-    source_has_canonical = text_contains_term(source_text, entry.normalized_source, match_mode=match_mode)
-    source_has_plural = text_contains_simple_s_plural(source_text, entry.normalized_source, match_mode)
-    target_has_plural = text_contains_simple_s_plural(target_text, entry.normalized_target, match_mode)
-    if source_has_plural and target_has_plural:
+    if not text_contains_source_match_variant(
+        source_text,
+        entry.normalized_source,
+        match_mode=match_mode,
+    ):
+        return False
+
+    if text_contains_term(target_text, entry.normalized_target, match_mode=match_mode):
         return True
-    if source_has_plural:
-        return False
-    if not source_has_canonical:
-        return False
     if not allow_target_plural_variants:
-        return text_contains_term(target_text, entry.normalized_target, match_mode=match_mode)
+        return False
     return text_contains_target_s_plural_variant(
         target_text,
         entry.normalized_target,
         match_mode=match_mode,
-    )
-
-
-def term_has_simple_s_plural_variant(
-    source_text: str,
-    target_text: str,
-    entry: TermMappingEntry,
-    match_mode: str,
-) -> bool:
-    return text_contains_simple_s_plural(
-        source_text,
-        entry.normalized_source,
-        match_mode,
-    ) or text_contains_simple_s_plural(
-        target_text,
-        entry.normalized_target,
-        match_mode,
-    ) or text_contains_plural_signature_variant(
-        source_text,
-        entry.normalized_source,
-    ) or text_contains_plural_signature_variant(
-        target_text,
-        entry.normalized_target,
     )
 
 

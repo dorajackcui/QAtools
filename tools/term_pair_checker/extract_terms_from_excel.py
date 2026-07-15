@@ -20,7 +20,6 @@ from tools.term_matching import (
     find_row_terms,
     normalize_text,
     term_has_expected_target,
-    term_has_simple_s_plural_variant,
 )
 from tools.history_tb import (
     HistoryTbColumns,
@@ -314,7 +313,8 @@ def merge_term_pair(
     if (
         existing_term_pair.target_plain_text
         and term_pair.target_plain_text
-        and existing_term_pair.target_plain_text != term_pair.target_plain_text
+        and normalize_term_key(existing_term_pair.target_plain_text)
+        != normalize_term_key(term_pair.target_plain_text)
     ):
         return False, existing_term_pair
 
@@ -421,6 +421,7 @@ def row_terms_are_aligned(
             normalized_target_text,
             entry,
             match_mode=PAIR_CHECK_MATCH_MODE,
+            allow_target_plural_variants=True,
         ):
             return False
     return True
@@ -761,14 +762,7 @@ def process_excel(
                 normalized_target_text,
                 entry,
                 match_mode=PAIR_CHECK_MATCH_MODE,
-            ):
-                continue
-
-            if term_has_simple_s_plural_variant(
-                normalized_source_text,
-                normalized_target_text,
-                entry,
-                match_mode=PAIR_CHECK_MATCH_MODE,
+                allow_target_plural_variants=True,
             ):
                 continue
 
