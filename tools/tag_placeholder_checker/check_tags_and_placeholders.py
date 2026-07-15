@@ -151,7 +151,7 @@ def resolve_angle_patterns(
 ) -> tuple[str, ...]:
     if angle_patterns is not None:
         return normalize_angle_patterns(angle_patterns)
-    if angle_config_file is not None:
+    if angle_config_file is not None and str(angle_config_file).strip():
         return load_angle_patterns_from_file(angle_config_file)
     return ()
 

@@ -95,6 +95,16 @@ class ExtractTokensTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "需要 JSON 对象"):
                 load_angle_patterns_from_file(config_path)
 
+    def test_empty_angle_config_uses_default_angle_matching(self) -> None:
+        self.assertEqual(
+            extract_tokens(
+                "保留 <b> 和 </b>",
+                token_types=("angle",),
+                angle_config_file="",
+            ),
+            ["<b>", "</b>"],
+        )
+
 
 class ProcessExcelTests(unittest.TestCase):
     def create_workbook(self, path: Path) -> None:

@@ -95,6 +95,15 @@ class TermMatchingTests(unittest.TestCase):
         self.assertIn("policies", s_plural_token_variants("policy"))
         self.assertIn("policy", s_plural_token_variants("policies"))
 
+    def test_source_plural_uses_s_after_vowel_y(self) -> None:
+        self.assertEqual(
+            self.find_sources(
+                "Keys to success matter.",
+                [("key to success", "成功的关键")],
+            ),
+            ["key to success"],
+        )
+
     def test_optional_target_plural_matching_is_explicit(self) -> None:
         entry = make_entry("源", "company policy")
         source_text = normalize_text("源", case_sensitive=False)

@@ -35,6 +35,7 @@ class MatchSpan:
 
 
 SIMPLE_PLURAL_SUFFIX = "s"
+ASCII_VOWELS = frozenset("aeiou")
 WORD_PATTERN = re.compile(r"\w+", re.UNICODE)
 LITERAL_WHITESPACE_ESCAPES = (
     ("\\r\\n", " "),
@@ -107,7 +108,12 @@ def simple_plural_token_variant(token: str) -> str:
         return ""
     if not (token[-1].isascii() and token[-1].isalpha()):
         return ""
-    if len(token) > 1 and token.endswith("y"):
+    if (
+        len(token) > 1
+        and token.endswith("y")
+        and token[-2].isascii()
+        and token[-2] not in ASCII_VOWELS
+    ):
         return f"{token[:-1]}ies"
     return f"{token}{SIMPLE_PLURAL_SUFFIX}"
 

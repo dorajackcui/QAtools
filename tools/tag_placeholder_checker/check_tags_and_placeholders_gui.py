@@ -292,7 +292,7 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
                 start_row=start_row,
                 token_types=token_types,
                 angle_config_file=(
-                    self.angle_config_file_var.get().strip()
+                    self.angle_config_file_var.get().strip() or None
                     if "angle" in token_types
                     else None
                 ),
