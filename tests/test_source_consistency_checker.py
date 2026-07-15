@@ -37,6 +37,8 @@ class SourceConsistencyExcelTests(unittest.TestCase):
         worksheet["B9"] = None
         worksheet["A10"] = "Empty target"
         worksheet["B10"] = "Translation"
+        worksheet["Z1000"] = "unrelated tail"
+        worksheet["A1001"].number_format = "@"
         workbook.save(path)
 
     def test_process_excel_lists_every_row_in_inconsistent_source_groups(self) -> None:

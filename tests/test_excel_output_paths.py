@@ -4,7 +4,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tools.excel_output import load_workbook_for_editing
+from openpyxl import Workbook
+
+from tools.excel_output import find_last_value_row, load_workbook_for_editing
 
 from tools.chinese_target_checker.check_chinese_target import (
     build_default_output_path as build_chinese_target_output_path,
@@ -27,6 +29,23 @@ from tools.workflow.workflow_runner import (
 
 
 class ExcelOutputPathTests(unittest.TestCase):
+    def test_find_last_value_row_uses_only_selected_columns_with_values(self) -> None:
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet["A2"] = "source"
+        worksheet["B5"] = False
+        worksheet["Z1000"] = "unrelated tail"
+        worksheet["A1001"].number_format = "@"
+
+        self.assertEqual(
+            find_last_value_row(worksheet, ("A", "B"), start_row=2),
+            5,
+        )
+        self.assertEqual(
+            find_last_value_row(worksheet, ("C", "D"), start_row=2),
+            1,
+        )
+
     def test_default_output_paths_put_tool_prefix_before_original_name(self) -> None:
         input_path = Path("/tmp/project/source.xlsx")
 

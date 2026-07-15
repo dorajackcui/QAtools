@@ -38,6 +38,8 @@ class LineBreakExcelTests(unittest.TestCase):
         worksheet["B4"] = None
         worksheet["A5"] = r"literal\nmark"
         worksheet["B5"] = "no real break"
+        worksheet["Z1000"] = "unrelated tail"
+        worksheet["A1001"].number_format = "@"
         workbook.save(path)
 
     def test_process_excel_writes_only_mismatched_rows_to_problem_sheet(self) -> None:

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -34,6 +34,37 @@ def validate_distinct_source_target_columns(
     """Reject a configuration that would compare one column with itself."""
     if source_column.strip().upper() == target_column.strip().upper():
         raise ValueError("source 列和 target 列不能相同。")
+
+
+def find_last_value_row(
+    worksheet,
+    columns: Iterable[str],
+    *,
+    start_row: int = 1,
+) -> int:
+    """Return the last row containing a value in the selected columns."""
+    if start_row < 1:
+        raise ValueError("开始行必须大于等于 1。")
+
+    column_indexes = {
+        column_index_from_string(column.strip().upper()) for column in columns
+    }
+    if not column_indexes:
+        return start_row - 1
+
+    # Editable openpyxl worksheets keep instantiated cells in a sparse mapping.
+    # Reading that mapping avoids walking to max_row when only an unrelated column
+    # or a styled blank cell extends the worksheet's reported dimensions.
+    return max(
+        (
+            row_index
+            for (row_index, column_index), cell in worksheet._cells.items()
+            if row_index >= start_row
+            and column_index in column_indexes
+            and cell.value is not None
+        ),
+        default=start_row - 1,
+    )
 
 
 def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):

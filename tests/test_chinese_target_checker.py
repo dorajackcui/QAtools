@@ -58,6 +58,8 @@ class ChineseTargetExcelTests(unittest.TestCase):
         worksheet["C3"] = "keep too"
         worksheet["A4"] = "empty target"
         worksheet["B4"] = None
+        worksheet["Z1000"] = "unrelated tail"
+        worksheet["A1001"].number_format = "@"
         workbook.save(path)
 
     def test_process_excel_writes_unified_problem_sheet_without_changing_data(self) -> None:

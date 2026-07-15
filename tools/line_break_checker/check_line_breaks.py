@@ -16,6 +16,7 @@ from openpyxl.utils import column_index_from_string
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
+    find_last_value_row,
     load_workbook_for_editing,
     validate_distinct_source_target_columns,
     write_output_table,
@@ -102,8 +103,13 @@ def process_excel(
     workbook = load_workbook_for_editing(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
     problem_entries: list[tuple[int, str, str, str, int, int, int]] = []
+    last_row = find_last_value_row(
+        worksheet,
+        (source_column, target_column),
+        start_row=start_row,
+    )
 
-    for row_index in range(start_row, worksheet.max_row + 1):
+    for row_index in range(start_row, last_row + 1):
         source_value = worksheet[f"{source_column}{row_index}"].value
         target_value = worksheet[f"{target_column}{row_index}"].value
         source_count = count_line_breaks(source_value)
@@ -130,7 +136,7 @@ def process_excel(
         source_column=source_column,
         target_column=target_column,
         start_row=start_row,
-        total_rows_checked=max(0, worksheet.max_row - start_row + 1),
+        total_rows_checked=max(0, last_row - start_row + 1),
         problem_rows=len(problem_entries),
     )
 
