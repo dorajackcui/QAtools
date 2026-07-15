@@ -15,7 +15,7 @@ if __package__ in {None, ""}:
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
-from tools.excel_output import build_prefixed_output_path
+from tools.excel_output import build_prefixed_output_path, find_last_value_row
 
 
 NBSP = "\u00a0"
@@ -135,10 +135,15 @@ def process_excel(
 
     workbook = load_workbook(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
+    last_row = find_last_value_row(
+        worksheet,
+        (target_column, destination_column),
+        start_row=start_row,
+    )
 
     processed_count = 0
     changed_count = 0
-    for row_index in range(start_row, worksheet.max_row + 1):
+    for row_index in range(start_row, last_row + 1):
         original_value = worksheet[f"{target_column}{row_index}"].value
         restored_value = restore_french_nbsp(original_value)
         worksheet[f"{destination_column}{row_index}"] = restored_value

@@ -27,6 +27,7 @@ from tools.history_tb import (
     iter_history_rows,
 )
 from tools.excel_output import (
+    find_last_value_row,
     insert_row_problem_column,
     load_workbook_for_editing,
     validate_distinct_source_target_columns,
@@ -606,6 +607,11 @@ def process_excel(
 
     workbook = load_workbook_for_editing(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
+    last_row = find_last_value_row(
+        worksheet,
+        (source_column, target_column),
+        start_row=start_row,
+    )
 
     term_mapping = build_initial_term_mapping(history_mapping)
     output_term_mapping: dict[str, RecordedTermPair] = {}
@@ -613,7 +619,7 @@ def process_excel(
     conflict_source_terms_by_row: dict[int, set[str]] = {}
     problem_entries: list[ProblemEntry] = []
 
-    for row_index in range(start_row, worksheet.max_row + 1):
+    for row_index in range(start_row, last_row + 1):
         raw_source_value = worksheet[f"{source_column}{row_index}"].value
         raw_target_value = worksheet[f"{target_column}{row_index}"].value
         source_snapshot = build_text_snapshot(raw_source_value)
@@ -675,7 +681,7 @@ def process_excel(
     if term_mapping:
         matcher = build_matcher(build_term_mapping_entries(term_mapping.values()))
 
-    for row_index in range(start_row, worksheet.max_row + 1):
+    for row_index in range(start_row, last_row + 1):
         if matcher is None:
             if row_index in count_mismatch_rows:
                 source_terms, target_terms = count_mismatch_rows[row_index]

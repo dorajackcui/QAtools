@@ -43,6 +43,8 @@ class WorkflowRunnerTests(unittest.TestCase):
         worksheet["B5"] = "译文二"
         worksheet["C1"] = "note"
         worksheet["C3"] = "keep me"
+        worksheet["Z1000"] = "unrelated tail"
+        worksheet["A1001"].number_format = "@"
         workbook.save(path)
 
     def test_run_workflow_writes_all_quality_check_results_into_same_output_file(self) -> None:
@@ -249,6 +251,8 @@ class WorkflowRunnerTests(unittest.TestCase):
             review_sheet = report_workbook[WORKFLOW_REVIEW_SHEET_NAME]
             review_sheet["D2"] = "第一行修订"
             review_sheet["D3"] = "第二行修订"
+            review_sheet["Z1000"] = "unrelated tail"
+            review_sheet["A1001"].number_format = "@"
             report_workbook.save(report_path)
 
             summary = apply_workflow_revisions(report_path, output_file=revised_path)

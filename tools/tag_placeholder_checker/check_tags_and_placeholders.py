@@ -20,6 +20,7 @@ from openpyxl.utils import column_index_from_string
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
+    find_last_value_row,
     join_unique_text,
     load_workbook_for_editing,
     rebuild_output_sheet,
@@ -612,7 +613,12 @@ def process_excel(
     workbook = load_workbook_for_editing(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
 
-    total_rows_checked = max(0, worksheet.max_row - start_row + 1)
+    last_row = find_last_value_row(
+        worksheet,
+        (source_column, target_column),
+        start_row=start_row,
+    )
+    total_rows_checked = max(0, last_row - start_row + 1)
     rows_with_selected_tokens = 0
     angle_rows = 0
     square_color_rows = 0
@@ -622,7 +628,7 @@ def process_excel(
     problem_rows_set: set[int] = set()
     problem_entries: list[tuple[int, str, str, str, str]] = []
 
-    for row_index in range(start_row, worksheet.max_row + 1):
+    for row_index in range(start_row, last_row + 1):
         source_text = worksheet[f"{source_column}{row_index}"].value
         target_text = worksheet[f"{target_column}{row_index}"].value
         source_tokens = _extract_token_details(

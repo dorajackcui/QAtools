@@ -128,6 +128,8 @@ class ProcessExcelTests(unittest.TestCase):
         worksheet["B4"] = "第三行复用 【错误贝塔】"
         worksheet["A5"] = "第四行 [Alpha] 加【Gamma】"
         worksheet["B5"] = "第四行只有 [阿尔法]"
+        worksheet["Z1000"] = "unrelated tail"
+        worksheet["A1001"].number_format = "@"
         workbook.save(path)
 
     def test_process_excel_supports_multiple_term_mark_types(self) -> None:

@@ -13,6 +13,7 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 
 
 DEFAULT_HISTORY_SHEET_NAME = "术语表"
+DEFAULT_EMPTY_ROW_STOP_THRESHOLD = 1000
 HISTORY_SOURCE_EXACT_HEADERS = {"source"}
 HISTORY_TARGET_EXACT_HEADERS = {"target"}
 HISTORY_SOURCE_NO_MARK_HEADERS = {
@@ -247,13 +248,15 @@ def iter_history_rows(
     header_row: int | None = None,
     preferred_sheet: str = DEFAULT_HISTORY_SHEET_NAME,
     prefer_no_mark: bool = True,
-    empty_row_stop_threshold: int | None = None,
+    empty_row_stop_threshold: int | None = DEFAULT_EMPTY_ROW_STOP_THRESHOLD,
     require_unique_header_matches: bool = False,
 ) -> tuple[str, str, str, tuple[HistoryTbRow, ...]]:
     if start_row < 1:
         raise ValueError("历史 TB 开始行必须大于等于 1。")
     if header_row is not None and header_row < 1:
         raise ValueError("历史 TB 表头行必须大于等于 1。")
+    if empty_row_stop_threshold is not None and empty_row_stop_threshold < 1:
+        raise ValueError("连续空行停止阈值必须大于等于 1。")
 
     workbook = load_workbook(resolve_history_path(history_tb_file), read_only=True, data_only=True)
     try:
@@ -268,12 +271,24 @@ def iter_history_rows(
         )
         assert detected_source_column is not None
         assert detected_target_column is not None
+        source_column_index = column_index_from_string(detected_source_column)
+        target_column_index = column_index_from_string(detected_target_column)
+        first_column_index = min(source_column_index, target_column_index)
+        last_column_index = max(source_column_index, target_column_index)
+        source_offset = source_column_index - first_column_index
+        target_offset = target_column_index - first_column_index
 
         rows: list[HistoryTbRow] = []
         consecutive_empty_rows = 0
-        for row_index in range(start_row, worksheet.max_row + 1):
-            source_text = cell_text(worksheet[f"{detected_source_column}{row_index}"].value)
-            target_text = cell_text(worksheet[f"{detected_target_column}{row_index}"].value)
+        row_values = worksheet.iter_rows(
+            min_row=start_row,
+            min_col=first_column_index,
+            max_col=last_column_index,
+            values_only=True,
+        )
+        for row_index, values in enumerate(row_values, start=start_row):
+            source_text = cell_text(values[source_offset])
+            target_text = cell_text(values[target_offset])
             if not source_text and not target_text:
                 consecutive_empty_rows += 1
                 if (

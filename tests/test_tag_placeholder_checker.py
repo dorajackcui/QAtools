@@ -115,6 +115,8 @@ class ProcessExcelTests(unittest.TestCase):
         worksheet["B6"] = "缺少换行 mark"
         worksheet["A7"] = "普通尖括号 <apple>"
         worksheet["B7"] = "普通尖括号"
+        worksheet["Z1000"] = "unrelated tail"
+        worksheet["A1001"].number_format = "@"
         workbook.save(path)
 
     def test_process_excel_writes_problem_and_summary_sheets(self) -> None:

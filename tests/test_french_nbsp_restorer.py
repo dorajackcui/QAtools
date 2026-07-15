@@ -68,6 +68,8 @@ class RestoreFrenchNbspExcelTests(unittest.TestCase):
         worksheet["C2"] = "old fixed"
         worksheet["C3"] = "old passthrough"
         worksheet["C4"] = "old none"
+        worksheet["Z1000"] = "unrelated tail"
+        worksheet["B1001"].number_format = "@"
         workbook.save(path)
 
     def test_process_excel_overwrites_target_column_in_output_file(self) -> None:
@@ -88,7 +90,7 @@ class RestoreFrenchNbspExcelTests(unittest.TestCase):
             self.assertEqual(summary.worksheet_title, "Data")
             self.assertEqual(summary.target_column, "B")
             self.assertIsNone(summary.result_column)
-            self.assertEqual(summary.processed_count, 3)
+            self.assertEqual(summary.processed_count, 2)
             self.assertEqual(summary.changed_count, 1)
 
             original_workbook = load_workbook(input_path)

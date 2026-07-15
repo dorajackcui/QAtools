@@ -121,6 +121,8 @@ class RowExtractionAndGroupingTests(unittest.TestCase):
         worksheet["C10"] = "“斑鸠”&“诗人”"
         worksheet["D10"] = '"Colombe" & "Poète"'
         worksheet["F10"] = "Key_2\n磐城【配音】.xlsx"
+        worksheet["Z1000"] = "unrelated tail"
+        worksheet["A1001"].number_format = "@"
         return workbook
 
     def test_find_header_columns_detects_table_header_after_intro_rows(self) -> None:
@@ -132,6 +134,7 @@ class RowExtractionAndGroupingTests(unittest.TestCase):
         self.assertEqual(columns["target"], 4)
         self.assertEqual(columns["comments"], 5)
         self.assertEqual(columns["metadata"], 6)
+        self.assertNotIn((1, 26), worksheet._cells)
 
     def test_collect_detail_rows_attaches_current_qa_issue(self) -> None:
         workbook = self.build_xbench_workbook()
@@ -144,6 +147,7 @@ class RowExtractionAndGroupingTests(unittest.TestCase):
         self.assertEqual(detail_rows[0].target, "Sans blague !")
         self.assertEqual(detail_rows[0].qa_issue, "提示 -> Avis：Key Term Mismatch")
         self.assertEqual(detail_rows[0].group_key, "key:Key_1")
+        self.assertNotIn((999, 3), worksheet._cells)
 
     def test_collect_detail_rows_uses_comments_column_for_qa_issue_when_a_cell_is_empty(self) -> None:
         workbook = Workbook()
@@ -265,6 +269,8 @@ class ProcessExcelTests(unittest.TestCase):
         worksheet["D8"] = '"Colombe" & "Poète"'
         worksheet["E8"] = "terms.xlsx"
         worksheet["F8"] = "Key_2\n磐城【配音】.xlsx"
+        worksheet["Z1000"] = "unrelated tail"
+        worksheet["A1001"].number_format = "@"
         workbook.save(path)
 
     def test_process_excel_writes_flat_output_workbook_and_preserves_input(self) -> None:

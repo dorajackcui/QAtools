@@ -8,7 +8,11 @@ from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
-from tools.excel_output import ROW_PROBLEM_COLUMN_HEADER, load_workbook_for_editing
+from tools.excel_output import (
+    ROW_PROBLEM_COLUMN_HEADER,
+    find_last_value_row,
+    load_workbook_for_editing,
+)
 from tools.workflow.review_sheet import (
     WORKFLOW_REVIEW_SHEET_NAME,
     WORKFLOW_SCHEMA_VERSION,
@@ -101,8 +105,13 @@ def apply_workflow_revisions(
     ignored_count = 0
     unchanged_count = 0
     conflict_rows: list[int] = []
+    last_review_row = find_last_value_row(
+        review_sheet,
+        ("A",),
+        start_row=2,
+    )
 
-    for review_row in range(2, review_sheet.max_row + 1):
+    for review_row in range(2, last_review_row + 1):
         raw_row_number = review_sheet.cell(review_row, 1).value
         if raw_row_number is None:
             continue

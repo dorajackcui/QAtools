@@ -39,6 +39,9 @@ class ProcessExcelTests(unittest.TestCase):
         worksheet["B2"] = "old1"
         worksheet["B3"] = "old2"
         worksheet["B4"] = "old3"
+        worksheet["B10"] = "stale tail"
+        worksheet["Z1000"] = "unrelated tail"
+        worksheet["A1001"].number_format = "@"
         workbook.save(path)
 
     def test_result_column_is_stacked_and_cleared_in_output_file(self) -> None:
@@ -74,6 +77,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(output_sheet["B3"].value, "c")
             self.assertEqual(output_sheet["B4"].value, "x")
             self.assertEqual(output_sheet["B5"].value, "z")
+            self.assertIsNone(output_sheet["B10"].value)
 
     def test_reject_same_source_and_result_column(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

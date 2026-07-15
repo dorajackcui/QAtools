@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -52,19 +52,24 @@ def find_last_value_row(
     if not column_indexes:
         return start_row - 1
 
-    # Editable openpyxl worksheets keep instantiated cells in a sparse mapping.
-    # Reading that mapping avoids walking to max_row when only an unrelated column
-    # or a styled blank cell extends the worksheet's reported dimensions.
     return max(
         (
-            row_index
-            for (row_index, column_index), cell in worksheet._cells.items()
-            if row_index >= start_row
-            and column_index in column_indexes
-            and cell.value is not None
+            cell.row
+            for cell in iter_value_cells(worksheet)
+            if cell.row >= start_row and cell.column in column_indexes
         ),
         default=start_row - 1,
     )
+
+
+def iter_value_cells(worksheet) -> Iterator[object]:
+    """Yield stored cells with values without expanding worksheet dimensions."""
+    # Editable openpyxl worksheets keep instantiated cells in a sparse mapping.
+    # Reading it avoids walking through blank dimensions reported by max_row or
+    # max_column. The project pins openpyxl to the compatible 3.x release line.
+    for cell in worksheet._cells.values():
+        if cell.value is not None:
+            yield cell
 
 
 def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):

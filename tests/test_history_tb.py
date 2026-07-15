@@ -53,6 +53,8 @@ class HistoryTbTests(unittest.TestCase):
         worksheet["B4"] = "Target Only"
         worksheet["A5"] = "宝库"
         worksheet["B5"] = "Vault"
+        worksheet["Z5000"] = "unrelated tail"
+        worksheet["A5001"].number_format = "@"
         workbook.save(path)
 
     def test_detects_nomark_columns_before_marked_columns(self) -> None:
@@ -99,6 +101,32 @@ class HistoryTbTests(unittest.TestCase):
                 (2, "花艺", "Art Floral"),
                 (5, "宝库", "Vault"),
             ])
+
+    def test_iter_history_rows_stops_after_default_empty_tail_threshold(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "history.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "术语表"
+            worksheet["A1"] = "source"
+            worksheet["B1"] = "target"
+            worksheet["A2"] = "Early"
+            worksheet["B2"] = "Précoce"
+            worksheet["A1005"] = "Late"
+            worksheet["B1005"] = "Tardif"
+            workbook.save(path)
+
+            *_metadata, default_rows = iter_history_rows(path)
+            *_metadata, unlimited_rows = iter_history_rows(
+                path,
+                empty_row_stop_threshold=None,
+            )
+
+            self.assertEqual([row.source_text for row in default_rows], ["Early"])
+            self.assertEqual(
+                [row.source_text for row in unlimited_rows],
+                ["Early", "Late"],
+            )
 
 
 if __name__ == "__main__":

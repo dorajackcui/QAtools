@@ -11,8 +11,13 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.utils import get_column_letter
 
-from tools.excel_output import build_prefixed_output_path
+from tools.excel_output import (
+    build_prefixed_output_path,
+    find_last_value_row,
+    iter_value_cells,
+)
 
 FILE_NAME_EXTENSIONS = (
     ".xlsx",
@@ -127,14 +132,15 @@ def format_issue_text(issue: XbenchIssue) -> str:
 
 
 def find_header_columns(worksheet) -> tuple[int, dict[str, int]]:
-    for row in worksheet.iter_rows():
-        columns: dict[str, int] = {}
-        for cell in row:
-            header = normalize_header(cell.value)
-            if header in REQUIRED_HEADERS:
-                columns[header] = cell.column
+    columns_by_row: dict[int, dict[str, int]] = {}
+    for cell in sorted(iter_value_cells(worksheet), key=lambda item: (item.row, item.column)):
+        header = normalize_header(cell.value)
+        if header in REQUIRED_HEADERS:
+            columns_by_row.setdefault(cell.row, {})[header] = cell.column
+
+    for row_index, columns in sorted(columns_by_row.items()):
         if all(header in columns for header in REQUIRED_HEADERS):
-            return row[0].row, columns
+            return row_index, columns
     raise ValueError("未找到 Xbench 明细表头，预期包含: comments, metadata, source, target")
 
 
@@ -159,12 +165,17 @@ def collect_detail_rows(worksheet) -> list[XbenchDetailRow]:
     header_row, columns = find_header_columns(worksheet)
     detail_rows: list[XbenchDetailRow] = []
     current_issue = XbenchIssue(issue_type="", source_term="", target_term="")
+    relevant_columns = (
+        "A",
+        *(get_column_letter(column_index) for column_index in columns.values()),
+    )
+    last_row = find_last_value_row(
+        worksheet,
+        relevant_columns,
+        start_row=header_row + 1,
+    )
 
-    for row_index in range(header_row + 1, worksheet.max_row + 1):
-        row_values = [value_to_text(cell.value) for cell in worksheet[row_index]]
-        if not any(row_values):
-            continue
-
+    for row_index in range(header_row + 1, last_row + 1):
         first_cell = worksheet.cell(row=row_index, column=1).value
         source = value_to_text(worksheet.cell(row=row_index, column=columns[HEADER_SOURCE]).value)
         target = value_to_text(worksheet.cell(row=row_index, column=columns[HEADER_TARGET]).value)

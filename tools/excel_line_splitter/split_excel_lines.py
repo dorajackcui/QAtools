@@ -14,7 +14,7 @@ if __package__ in {None, ""}:
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
-from tools.excel_output import build_prefixed_output_path
+from tools.excel_output import build_prefixed_output_path, find_last_value_row
 
 
 LINE_BREAK_PATTERN = re.compile(r"\r\n|\n|\r")
@@ -128,13 +128,23 @@ def process_excel(
 
     workbook = load_workbook(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
+    source_last_row = find_last_value_row(
+        worksheet,
+        (source_column,),
+        start_row=start_row,
+    )
+    result_last_row = find_last_value_row(
+        worksheet,
+        (result_column,),
+        start_row=start_row,
+    )
 
     stacked_values: list[str] = []
-    for row_index in range(start_row, worksheet.max_row + 1):
+    for row_index in range(start_row, source_last_row + 1):
         cell_value = worksheet[f"{source_column}{row_index}"].value
         stacked_values.extend(split_cell_lines(cell_value))
 
-    for row_index in range(start_row, worksheet.max_row + 1):
+    for row_index in range(start_row, result_last_row + 1):
         worksheet[f"{result_column}{row_index}"] = None
 
     for row_index, value in enumerate(stacked_values, start=start_row):
