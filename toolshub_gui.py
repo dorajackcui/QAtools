@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
+import argparse
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
+import sys
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 from tools.gui_common import configure_tool_page_style
 from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
@@ -16,6 +19,11 @@ from tools.line_break_checker.check_line_breaks_gui import LineBreakCheckerApp
 from tools.source_consistency_checker.check_source_consistency_gui import SourceConsistencyCheckerApp
 from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
+from tools.workflow.file_receiver import (
+    WorkflowFileReceiver,
+    normalize_workflow_input_file,
+    send_workflow_input_file,
+)
 from tools.workflow.workflow_gui import WorkflowRunnerApp
 from tools.xbench_report_transformer.transform_xbench_report_gui import XbenchReportTransformerApp
 
@@ -237,6 +245,28 @@ class ToolshubApp:
         self.current_tool_frame = frame
         frame.tkraise()
 
+    def open_qa_workflow_file(self, file_path: str) -> None:
+        """Select the workflow page and load an Excel file from Finder."""
+
+        normalized_path = normalize_workflow_input_file(file_path)
+        workflow_frame = self.tool_frames["workflow"]
+        if not isinstance(workflow_frame, WorkflowRunnerApp):
+            raise RuntimeError("一键质量检查页面未正确加载。")
+
+        self.select_tool("workflow")
+        workflow_frame.load_input_file(str(normalized_path))
+        self._bring_window_to_front()
+
+    def _bring_window_to_front(self) -> None:
+        self.root.deiconify()
+        self.root.lift()
+        try:
+            self.root.attributes("-topmost", True)
+            self.root.after(250, lambda: self.root.attributes("-topmost", False))
+            self.root.focus_force()
+        except tk.TclError:
+            pass
+
     def _fit_window_to_content(self) -> None:
         self.root.update_idletasks()
         screen_width = self.root.winfo_screenwidth()
@@ -250,11 +280,69 @@ class ToolshubApp:
         self.root.deiconify()
 
 
-def main() -> None:
+def build_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="打开 Toolshub Excel 工具箱。")
+    parser.add_argument(
+        "--qa-workflow",
+        metavar="EXCEL_FILE",
+        help="把 Excel 文件载入一键质量检查页面。",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_argument_parser().parse_args(argv)
+    initial_workflow_file: Path | None = None
+    if args.qa_workflow:
+        try:
+            initial_workflow_file = normalize_workflow_input_file(args.qa_workflow)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        if send_workflow_input_file(initial_workflow_file):
+            return 0
+
+    receiver = WorkflowFileReceiver()
+    receiver_started = receiver.start()
+    if initial_workflow_file and not receiver_started:
+        if send_workflow_input_file(initial_workflow_file):
+            return 0
+
     root = tk.Tk()
-    ToolshubApp(root)
-    root.mainloop()
+    app = ToolshubApp(root)
+
+    if initial_workflow_file:
+        try:
+            app.open_qa_workflow_file(str(initial_workflow_file))
+        except Exception as exc:
+            messagebox.showerror("无法载入 Excel", str(exc))
+
+    poll_job: str | None = None
+
+    def poll_forwarded_files() -> None:
+        nonlocal poll_job
+        for forwarded_path in receiver.pop_pending_paths():
+            try:
+                app.open_qa_workflow_file(forwarded_path)
+            except Exception as exc:
+                messagebox.showerror("无法载入 Excel", str(exc))
+        poll_job = root.after(150, poll_forwarded_files)
+
+    def close_app() -> None:
+        if poll_job is not None:
+            root.after_cancel(poll_job)
+        receiver.close()
+        root.destroy()
+
+    if receiver_started:
+        poll_forwarded_files()
+    root.protocol("WM_DELETE_WINDOW", close_app)
+    try:
+        root.mainloop()
+    finally:
+        receiver.close()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

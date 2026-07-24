@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -14,6 +15,8 @@ from tools.gui_common import (
     configure_tool_page_style,
     parse_positive_int,
 )
+from tools.tb_project_ui import TbProjectControls
+from tools.tb_projects import TbProject
 
 try:
     from .extract_terms_from_excel import (
@@ -155,18 +158,31 @@ class ExtractTermsApp(ttk.Frame):
             variable=self.mark_style_vars["[]"],
         ).grid(row=0, column=1, sticky="w", padx=(16, 0))
 
+        self.tb_project_controls = TbProjectControls(
+            source_frame,
+            capture_project=self.capture_tb_project,
+            apply_project=self.apply_tb_project,
+        )
+        self.tb_project_controls.grid(
+            row=1,
+            column=0,
+            columnspan=3,
+            sticky="ew",
+            pady=(12, 0),
+        )
+
         ttk.Label(source_frame, text="历史 TB（可选）").grid(
-            row=1, column=0, sticky="w", pady=(12, 0)
+            row=2, column=0, sticky="w", pady=(12, 0)
         )
         history_entry = ttk.Entry(
             source_frame,
             textvariable=self.history_tb_file_var,
             width=48,
         )
-        history_entry.grid(row=1, column=1, sticky="ew", padx=(12, 8), pady=(12, 0))
+        history_entry.grid(row=2, column=1, sticky="ew", padx=(12, 8), pady=(12, 0))
         history_entry.bind("<FocusOut>", self.handle_history_file_focus_out)
         history_buttons = ttk.Frame(source_frame)
-        history_buttons.grid(row=1, column=2, sticky="e", pady=(12, 0))
+        history_buttons.grid(row=2, column=2, sticky="e", pady=(12, 0))
         ttk.Button(
             history_buttons,
             text="选择",
@@ -193,7 +209,7 @@ class ExtractTermsApp(ttk.Frame):
             style=SECTION_FRAME_STYLE,
         )
         self.history_details_frame.grid(
-            row=2,
+            row=3,
             column=0,
             columnspan=3,
             sticky="ew",
@@ -248,7 +264,7 @@ class ExtractTermsApp(ttk.Frame):
                 "历史 TB 命中时优先使用历史 target。"
             ),
             style=MUTED_LABEL_STYLE,
-        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         ttk.Button(
             self,
@@ -326,6 +342,8 @@ class ExtractTermsApp(ttk.Frame):
         self.refresh_sheet_choices(show_error=False)
 
     def handle_history_file_focus_out(self, _event: object | None = None) -> None:
+        if hasattr(self, "tb_project_controls"):
+            self.tb_project_controls.mark_current_settings_modified()
         if not self.history_tb_file_var.get().strip():
             self.clear_history_tb_file()
             return
@@ -351,12 +369,16 @@ class ExtractTermsApp(ttk.Frame):
         )
         if not file_path:
             return
+        if hasattr(self, "tb_project_controls"):
+            self.tb_project_controls.mark_current_settings_modified()
         self.history_tb_file_var.set(file_path)
         self.history_details_button.configure(state="normal")
         self.refresh_history_sheet_choices()
         self.set_history_details_expanded(True)
 
     def clear_history_tb_file(self) -> None:
+        if hasattr(self, "tb_project_controls"):
+            self.tb_project_controls.clear_selection()
         self.history_tb_file_var.set("")
         self.history_source_column_var.set("")
         self.history_target_column_var.set("")
@@ -366,6 +388,44 @@ class ExtractTermsApp(ttk.Frame):
             self.history_details_button.configure(state="disabled")
         if hasattr(self, "history_details_frame"):
             self.set_history_details_expanded(False)
+
+    def capture_tb_project(self, project_name: str) -> TbProject:
+        file_path = self.history_tb_file_var.get().strip()
+        if not file_path:
+            raise ValueError("请先选择历史 TB 文件。")
+        if not Path(file_path).expanduser().is_file():
+            raise ValueError(f"历史 TB 文件不存在：{file_path}")
+        sheet = self.history_sheet_var.get().strip()
+        source_column = self.history_source_column_var.get().strip()
+        target_column = self.history_target_column_var.get().strip()
+        if not sheet or not source_column or not target_column:
+            raise ValueError("请先确认历史 TB 的工作表及 Source / Target 列。")
+        start_row = parse_positive_int(
+            self.history_start_row_var.get(),
+            default=2,
+            field_name="术语历史开始行",
+        )
+        return TbProject(
+            name=project_name,
+            file_path=str(Path(file_path).expanduser().absolute()),
+            sheet=sheet,
+            source_column=source_column,
+            target_column=target_column,
+            start_row=start_row,
+        )
+
+    def apply_tb_project(self, project: TbProject) -> None:
+        self.history_tb_file_var.set(project.file_path)
+        self.history_sheet_var.set(project.sheet)
+        self.refresh_history_sheet_choices(show_error=False)
+        self.history_sheet_var.set(project.sheet)
+        self.history_source_column_var.set(project.source_column)
+        self.history_target_column_var.set(project.target_column)
+        self.history_start_row_var.set(str(project.start_row))
+        if hasattr(self, "history_details_button"):
+            self.history_details_button.configure(state="normal")
+        if hasattr(self, "history_details_frame"):
+            self.set_history_details_expanded(True)
 
     def clear_sheet_choices(self) -> None:
         self.sheet_combobox["values"] = ()

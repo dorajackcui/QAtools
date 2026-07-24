@@ -3,7 +3,7 @@ from __future__ import annotations
 import tkinter as tk
 import unittest
 
-from toolshub_gui import TOOL_GROUPS, ToolshubApp
+from toolshub_gui import TOOL_GROUPS, ToolshubApp, build_argument_parser
 
 
 class ToolshubLayoutTests(unittest.TestCase):
@@ -73,6 +73,13 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertNotIn("另存为", widget_texts)
         finally:
             root.destroy()
+
+    def test_qa_workflow_argument_accepts_finder_excel_path(self) -> None:
+        args = build_argument_parser().parse_args(
+            ["--qa-workflow", "/tmp/QA input.xlsx"]
+        )
+
+        self.assertEqual(args.qa_workflow, "/tmp/QA input.xlsx")
 
     def collect_widget_texts(self, widget: tk.Misc) -> set[str]:
         texts: set[str] = set()

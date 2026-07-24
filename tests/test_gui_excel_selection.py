@@ -14,6 +14,7 @@ from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestore
 from tools.line_break_checker.check_line_breaks_gui import LineBreakCheckerApp
 from tools.source_consistency_checker.check_source_consistency_gui import SourceConsistencyCheckerApp
 from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
+from tools.tb_projects import TbProject
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
 from tools.workflow.workflow_gui import WorkflowRunnerApp
 from tools.xbench_report_transformer.transform_xbench_report_gui import XbenchReportTransformerApp
@@ -500,6 +501,18 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.source_column_var.get(), "D")
             self.assertEqual(app.target_column_var.get(), "F")
 
+    def test_workflow_can_load_input_file_from_finder(self) -> None:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        app.input_file_var = FakeVar("")
+        app.last_workflow_output_path = "/tmp/old-workflow-report.xlsx"
+
+        with patch.object(app, "refresh_sheet_choices") as refresh_mock:
+            app.load_input_file("/tmp/from-finder.xlsx")
+
+        self.assertEqual(app.input_file_var.get(), "/tmp/from-finder.xlsx")
+        self.assertEqual(app.last_workflow_output_path, "")
+        refresh_mock.assert_called_once_with(show_error=True)
+
     def test_workflow_history_tb_defaults_to_term_sheet_and_detects_source_target_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             history_path = Path(tmp_dir) / "history.xlsx"
@@ -512,6 +525,68 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.term_history_sheet_var.get(), "术语表")
             self.assertEqual(app.term_history_source_column_var.get(), "A")
             self.assertEqual(app.term_history_target_column_var.get(), "B")
+
+    def test_term_pair_applies_saved_tb_project(self) -> None:
+        app = ExtractTermsApp.__new__(ExtractTermsApp)
+        app.history_tb_file_var = FakeVar("")
+        app.history_sheet_var = FakeVar("")
+        app.history_source_column_var = FakeVar("")
+        app.history_target_column_var = FakeVar("")
+        app.history_start_row_var = FakeVar("2")
+        app.history_details_button = FakeWidget()
+        app.history_details_frame = FakeWidget()
+        app.history_details_expanded = False
+        app.history_details_button_text_var = FakeVar("展开详情")
+        project = TbProject(
+            name="游戏 A",
+            file_path="/tmp/game-a-tb.xlsx",
+            sheet="Glossary",
+            source_column="C",
+            target_column="D",
+            start_row=3,
+        )
+
+        with patch.object(app, "refresh_history_sheet_choices") as refresh_mock:
+            app.apply_tb_project(project)
+
+        self.assertEqual(app.history_tb_file_var.get(), "/tmp/game-a-tb.xlsx")
+        self.assertEqual(app.history_sheet_var.get(), "Glossary")
+        self.assertEqual(app.history_source_column_var.get(), "C")
+        self.assertEqual(app.history_target_column_var.get(), "D")
+        self.assertEqual(app.history_start_row_var.get(), "3")
+        refresh_mock.assert_called_once_with(show_error=False)
+
+    def test_workflow_applies_the_same_saved_tb_project_fields(self) -> None:
+        app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
+        app.term_history_tb_file_var = FakeVar("")
+        app.term_history_sheet_var = FakeVar("")
+        app.term_history_source_column_var = FakeVar("")
+        app.term_history_target_column_var = FakeVar("")
+        app.term_history_start_row_var = FakeVar("2")
+        project = TbProject(
+            name="游戏 A",
+            file_path="/tmp/game-a-tb.xlsx",
+            sheet="Glossary",
+            source_column="C",
+            target_column="D",
+            start_row=3,
+        )
+
+        with patch.object(
+            app,
+            "refresh_term_history_sheet_choices",
+        ) as refresh_mock:
+            app.apply_tb_project(project)
+
+        self.assertEqual(
+            app.term_history_tb_file_var.get(),
+            "/tmp/game-a-tb.xlsx",
+        )
+        self.assertEqual(app.term_history_sheet_var.get(), "Glossary")
+        self.assertEqual(app.term_history_source_column_var.get(), "C")
+        self.assertEqual(app.term_history_target_column_var.get(), "D")
+        self.assertEqual(app.term_history_start_row_var.get(), "3")
+        refresh_mock.assert_called_once_with(show_error=False)
 
     def test_xbench_report_transformer_refresh_populates_sheet_choices(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

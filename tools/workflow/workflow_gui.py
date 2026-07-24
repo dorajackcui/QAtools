@@ -15,6 +15,8 @@ from tools.gui_common import (
     configure_tool_page_style,
     parse_positive_int,
 )
+from tools.tb_project_ui import TbProjectControls
+from tools.tb_projects import TbProject
 from tools.term_pair_checker.extract_terms_from_excel import (
     TERM_SHEET_NAME,
     detect_history_tb_columns,
@@ -238,16 +240,29 @@ class WorkflowRunnerApp(ttk.Frame):
             variable=self.term_mark_style_vars["[]"],
         ).grid(row=0, column=1, sticky="w", padx=(16, 0))
 
+        self.tb_project_controls = TbProjectControls(
+            self.term_settings_frame,
+            capture_project=self.capture_tb_project,
+            apply_project=self.apply_tb_project,
+        )
+        self.tb_project_controls.grid(
+            row=1,
+            column=0,
+            columnspan=3,
+            sticky="ew",
+            pady=(12, 0),
+        )
+
         ttk.Label(self.term_settings_frame, text="历史 TB（可选）").grid(
-            row=1, column=0, sticky="w", pady=(12, 0)
+            row=2, column=0, sticky="w", pady=(12, 0)
         )
         ttk.Entry(
             self.term_settings_frame,
             textvariable=self.term_history_tb_file_var,
             width=48,
-        ).grid(row=1, column=1, sticky="ew", padx=(12, 8), pady=(12, 0))
+        ).grid(row=2, column=1, sticky="ew", padx=(12, 8), pady=(12, 0))
         history_buttons = ttk.Frame(self.term_settings_frame)
-        history_buttons.grid(row=1, column=2, sticky="e", pady=(12, 0))
+        history_buttons.grid(row=2, column=2, sticky="e", pady=(12, 0))
         ttk.Button(
             history_buttons,
             text="选择",
@@ -260,7 +275,7 @@ class WorkflowRunnerApp(ttk.Frame):
         ).grid(row=0, column=1, padx=(6, 0))
 
         history_scope = ttk.Frame(self.term_settings_frame)
-        history_scope.grid(row=2, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        history_scope.grid(row=3, column=0, columnspan=3, sticky="w", pady=(12, 0))
         ttk.Label(history_scope, text="工作表").grid(row=0, column=0, sticky="w")
         self.term_history_sheet_combobox = ttk.Combobox(
             history_scope,
@@ -296,7 +311,7 @@ class WorkflowRunnerApp(ttk.Frame):
         ttk.Label(
             self.term_settings_frame,
             text="未选择术语标记时，必须提供历史 TB。",
-        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(10, 0))
+        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 0))
         self.term_settings_frame.grid_remove()
 
         self.tag_settings_frame = ttk.LabelFrame(
@@ -529,8 +544,14 @@ class WorkflowRunnerApp(ttk.Frame):
         if not file_path:
             return
 
+        self.load_input_file(file_path)
+
+    def load_input_file(self, file_path: str, *, show_error: bool = True) -> None:
+        """Load an Excel path supplied by the picker or Finder quick action."""
+
         self.input_file_var.set(file_path)
-        self.refresh_sheet_choices()
+        self.last_workflow_output_path = ""
+        self.refresh_sheet_choices(show_error=show_error)
 
     def choose_term_history_tb_file(self) -> None:
         file_path = filedialog.askopenfilename(
@@ -539,6 +560,8 @@ class WorkflowRunnerApp(ttk.Frame):
         )
         if not file_path:
             return
+        if hasattr(self, "tb_project_controls"):
+            self.tb_project_controls.mark_current_settings_modified()
         self.term_history_tb_file_var.set(file_path)
         self.refresh_term_history_sheet_choices()
 
@@ -551,11 +574,47 @@ class WorkflowRunnerApp(ttk.Frame):
             self.tag_angle_config_file_var.set(file_path)
 
     def clear_term_history_tb_file(self) -> None:
+        if hasattr(self, "tb_project_controls"):
+            self.tb_project_controls.clear_selection()
         self.term_history_tb_file_var.set("")
         self.term_history_source_column_var.set("")
         self.term_history_target_column_var.set("")
         self.term_history_start_row_var.set("2")
         self.clear_term_history_sheet_choices()
+
+    def capture_tb_project(self, project_name: str) -> TbProject:
+        file_path = self.term_history_tb_file_var.get().strip()
+        if not file_path:
+            raise ValueError("请先选择历史 TB 文件。")
+        if not Path(file_path).expanduser().is_file():
+            raise ValueError(f"历史 TB 文件不存在：{file_path}")
+        sheet = self.term_history_sheet_var.get().strip()
+        source_column = self.term_history_source_column_var.get().strip()
+        target_column = self.term_history_target_column_var.get().strip()
+        if not sheet or not source_column or not target_column:
+            raise ValueError("请先确认历史 TB 的工作表及 Source / Target 列。")
+        start_row = parse_positive_int(
+            self.term_history_start_row_var.get(),
+            default=2,
+            field_name="术语历史开始行",
+        )
+        return TbProject(
+            name=project_name,
+            file_path=str(Path(file_path).expanduser().absolute()),
+            sheet=sheet,
+            source_column=source_column,
+            target_column=target_column,
+            start_row=start_row,
+        )
+
+    def apply_tb_project(self, project: TbProject) -> None:
+        self.term_history_tb_file_var.set(project.file_path)
+        self.term_history_sheet_var.set(project.sheet)
+        self.refresh_term_history_sheet_choices(show_error=False)
+        self.term_history_sheet_var.set(project.sheet)
+        self.term_history_source_column_var.set(project.source_column)
+        self.term_history_target_column_var.set(project.target_column)
+        self.term_history_start_row_var.set(str(project.start_row))
 
     def clear_term_history_sheet_choices(self) -> None:
         self.term_history_sheet_combobox["values"] = ()
