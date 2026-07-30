@@ -14,6 +14,8 @@ class ToolshubLayoutTests(unittest.TestCase):
         except tk.TclError as exc:
             self.skipTest(f"Tk display is unavailable: {exc}")
 
+        root.withdraw()
+        root.deiconify = lambda: None
         return root, ToolshubApp(root)
 
     def test_initial_window_is_not_smaller_than_requested_content(self) -> None:

@@ -24,13 +24,16 @@ else:
         default_strings_output_path,
     )
 
+from tools.gui_common import (
+    MUTED_LABEL_STYLE,
+    PRIMARY_BUTTON_STYLE,
+    configure_tool_page_style,
+    create_section,
+)
+
 
 EXCEL_FILE_TYPES = (("Excel 文件", "*.xlsx"), ("所有文件", "*.*"))
 TOML_FILE_TYPES = (("TOML 配置", "*.toml"), ("所有文件", "*.*"))
-
-PRIMARY_BUTTON_STYLE = "Tool.Primary.TButton"
-SECTION_FRAME_STYLE = "Tool.Section.TLabelframe"
-MUTED_LABEL_STYLE = "Tool.Muted.TLabel"
 
 
 @dataclass(frozen=True)
@@ -170,14 +173,18 @@ class PhraseLoomApp(ttk.Frame):
     """Reusable PhraseLoom page for Toolshub and the standalone window."""
 
     def __init__(self, parent: tk.Misc, *, standalone: bool = False) -> None:
-        super().__init__(parent)
+        super().__init__(parent, padding=16)
+        _ = standalone
         self.root = self.winfo_toplevel()
-        self.current_title = tk.StringVar()
-        self.current_description = tk.StringVar()
+        self.current_title = tk.StringVar(value=EXPORT_STRINGS_TASK.label)
+        self.current_description = tk.StringVar(
+            value=EXPORT_STRINGS_TASK.description
+        )
         self.output_preview_var = tk.StringVar(
             value="输出文件：选择输入 Excel 后自动生成"
         )
         self.status_var = tk.StringVar(value="请选择输入文件")
+        self.last_result_text = ""
         self.export_values = {
             field.key: field.default
             for field in EXPORT_STRINGS_TASK.fields
@@ -186,110 +193,78 @@ class PhraseLoomApp(ttk.Frame):
         self.result_queue: queue.Queue[tuple[int, str, str]] = queue.Queue()
         self.running_task_key: str | None = None
 
-        self._configure_styles()
-        if standalone:
-            self._build_standalone_layout()
-        else:
-            self._build_embedded_layout()
+        configure_tool_page_style(self)
+        self._build_layout()
         self._render_task()
 
-    def _configure_styles(self) -> None:
-        style = ttk.Style(self.root)
-        style.configure(
-            PRIMARY_BUTTON_STYLE,
-            font=("TkDefaultFont", 10, "bold"),
-            padding=(12, 8),
-        )
-        style.configure(
-            f"{SECTION_FRAME_STYLE}.Label",
-            font=("TkDefaultFont", 10, "bold"),
-        )
-        style.configure(MUTED_LABEL_STYLE, foreground="#555555")
-        style.configure(
-            "PhraseLoom.AppTitle.TLabel",
-            font=("TkDefaultFont", 15, "bold"),
-        )
-        style.configure(
-            "PhraseLoom.Category.TLabel",
-            font=("TkDefaultFont", 10, "bold"),
-        )
-        style.configure(
-            "PhraseLoom.Title.TLabel",
-            font=("TkDefaultFont", 16, "bold"),
-        )
-        style.configure("PhraseLoom.Description.TLabel", foreground="#555555")
-
-    def _build_standalone_layout(self) -> None:
+    def _build_layout(self) -> None:
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
 
-        shell = ttk.Frame(self, padding=16)
-        shell.grid(row=0, column=0, sticky="nsew")
-        shell.columnconfigure(1, weight=1)
-        shell.rowconfigure(0, weight=1)
-
-        sidebar = ttk.Frame(shell, padding=(0, 0, 16, 0))
-        sidebar.grid(row=0, column=0, sticky="nsw")
-        self._build_sidebar(sidebar)
-
-        workspace = ttk.Frame(shell)
-        workspace.grid(row=0, column=1, sticky="nsew")
-        workspace.columnconfigure(0, weight=1)
-        workspace.rowconfigure(3, weight=1)
-
-        ttk.Label(
-            workspace,
-            textvariable=self.current_title,
-            style="PhraseLoom.Title.TLabel",
-        ).grid(row=0, column=0, sticky="w")
-        ttk.Label(
-            workspace,
-            textvariable=self.current_description,
-            style="PhraseLoom.Description.TLabel",
-            wraplength=760,
-        ).grid(row=1, column=0, sticky="ew", pady=(4, 12))
-        ttk.Separator(workspace).grid(
-            row=2,
-            column=0,
-            sticky="ew",
-            pady=(0, 12),
+        style = ttk.Style(self)
+        canvas_background = style.lookup("TFrame", "background") or "#f0f0f0"
+        self.scroll_canvas = tk.Canvas(
+            self,
+            width=900,
+            height=480,
+            background=canvas_background,
+            borderwidth=0,
+            highlightthickness=0,
+            yscrollincrement=16,
         )
+        self.scroll_canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar = ttk.Scrollbar(
+            self,
+            orient="vertical",
+            command=self.scroll_canvas.yview,
+        )
+        scrollbar.grid(row=0, column=1, sticky="ns", padx=(8, 0))
+        self.scroll_canvas.configure(yscrollcommand=scrollbar.set)
 
-        self.content_frame = ttk.Frame(workspace)
-        self.content_frame.grid(row=3, column=0, sticky="nsew")
+        self.content_frame = ttk.Frame(self.scroll_canvas)
         self.content_frame.columnconfigure(0, weight=1)
+        self.scroll_content_window = self.scroll_canvas.create_window(
+            (0, 0),
+            window=self.content_frame,
+            anchor="nw",
+        )
+        self.content_frame.bind(
+            "<Configure>",
+            self._handle_scroll_content_configure,
+        )
+        self.scroll_canvas.bind(
+            "<Configure>",
+            self._handle_scroll_canvas_configure,
+        )
+        self.scroll_canvas.bind("<Enter>", self._bind_mousewheel)
+        self.scroll_canvas.bind("<Leave>", self._unbind_mousewheel)
 
-    def _build_embedded_layout(self) -> None:
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=1)
-        self.content_frame = ttk.Frame(self)
-        self.content_frame.grid(row=0, column=0, sticky="nsew")
-        self.content_frame.columnconfigure(0, weight=1)
+    def _handle_scroll_content_configure(self, _event=None) -> None:
+        self._refresh_scroll_region()
 
-    def _build_sidebar(self, parent: ttk.Frame) -> None:
-        ttk.Label(
-            parent,
-            text="PhraseLoom",
-            style="PhraseLoom.AppTitle.TLabel",
-        ).grid(row=0, column=0, sticky="w", pady=(0, 4))
-        ttk.Label(
-            parent,
-            text="Strings 工作流",
-            style=MUTED_LABEL_STYLE,
-        ).grid(row=1, column=0, sticky="w", pady=(0, 16))
-        ttk.Label(
-            parent,
-            text="常用流程",
-            style="PhraseLoom.Category.TLabel",
-        ).grid(row=2, column=0, sticky="w", pady=(0, 4))
+    def _handle_scroll_canvas_configure(self, event) -> None:
+        width = getattr(event, "width", self.scroll_canvas.winfo_width())
+        self.scroll_canvas.itemconfigure(
+            self.scroll_content_window,
+            width=width,
+        )
+        self._refresh_scroll_region()
 
-        ttk.Label(
-            parent,
-            text=EXPORT_STRINGS_TASK.label,
-            style="PhraseLoom.Category.TLabel",
-            padding=(10, 6),
-        ).grid(row=3, column=0, sticky="ew", pady=1)
-        parent.columnconfigure(0, minsize=170)
+    def _refresh_scroll_region(self) -> None:
+        content_bounds = self.scroll_canvas.bbox("all")
+        if content_bounds:
+            self.scroll_canvas.configure(scrollregion=content_bounds)
+
+    def _bind_mousewheel(self, _event=None) -> None:
+        self.bind_all("<MouseWheel>", self._handle_mousewheel)
+
+    def _unbind_mousewheel(self, _event=None) -> None:
+        self.unbind_all("<MouseWheel>")
+
+    def _handle_mousewheel(self, event) -> None:
+        delta = getattr(event, "delta", 0)
+        if delta:
+            self.scroll_canvas.yview_scroll(-1 if delta > 0 else 1, "units")
 
     def _capture_values(self) -> None:
         if not self.field_vars:
@@ -305,7 +280,11 @@ class PhraseLoomApp(ttk.Frame):
             child.destroy()
         self.field_vars = {}
 
-        input_section = self._create_section("输入文件", row=0)
+        input_section = create_section(
+            self.content_frame,
+            title="输入与范围",
+            row=0,
+        )
         input_spec = next(field for field in task.fields if field.key == "input")
         input_var = self._make_variable(input_spec)
         self._add_file_picker_row(
@@ -316,88 +295,97 @@ class PhraseLoomApp(ttk.Frame):
             row=0,
             focus_out_command=self._handle_input_focus_out,
         )
+        self._build_column_settings(input_section, task)
         ttk.Label(
             input_section,
-            text="已有 Target 会视为已完成并跳过；重复 Source 只导出一次。",
+            text=(
+                "已有 Target 会视为已完成并跳过；重复 Source 只导出一次；"
+                "Context 留空时自动识别同名列。"
+            ),
             style=MUTED_LABEL_STYLE,
             wraplength=760,
-        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(12, 0))
+        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
-        next_row = 1
-        settings = self._create_section("列与 Tag 设置", row=next_row)
-        self._build_export_settings(settings, task)
-        next_row += 1
-
-        self.run_button = ttk.Button(
+        options = create_section(
             self.content_frame,
+            title="导出选项",
+            row=1,
+        )
+        self._build_export_options(options, task)
+
+        action_frame = ttk.Frame(self)
+        action_frame.grid(
+            row=1,
+            column=0,
+            columnspan=2,
+            sticky="ew",
+            pady=(10, 0),
+        )
+        action_frame.columnconfigure(0, weight=3)
+        action_frame.columnconfigure(1, weight=1)
+        self.run_button = ttk.Button(
+            action_frame,
             text="导出 Strings",
             command=self._run_current_task,
             style=PRIMARY_BUTTON_STYLE,
         )
-        self.run_button.grid(row=next_row, column=0, sticky="ew")
-        next_row += 1
-
-        self._update_output_preview()
-        ttk.Label(
-            self.content_frame,
-            textvariable=self.output_preview_var,
-            style=MUTED_LABEL_STYLE,
-        ).grid(row=next_row, column=0, sticky="w", pady=(8, 0))
-        next_row += 1
-
-        status_frame = ttk.Frame(self.content_frame)
-        status_frame.grid(row=next_row, column=0, sticky="ew", pady=(14, 0))
-        status_frame.columnconfigure(1, weight=1)
-        self.progress = ttk.Progressbar(status_frame, mode="indeterminate", length=140)
-        self.progress.grid(row=0, column=0, sticky="w")
-        ttk.Label(
-            status_frame,
-            textvariable=self.status_var,
-            style=MUTED_LABEL_STYLE,
-        ).grid(row=0, column=1, sticky="w", padx=(12, 0))
-        next_row += 1
-
-        result_section = self._create_section(
-            "运行结果",
-            row=next_row,
-            pady=(14, 0),
-        )
-        self.output = tk.Text(
-            result_section,
-            height=7,
-            wrap="word",
-            borderwidth=0,
-            background="#F7F7F7",
-            foreground="#333333",
-            padx=10,
-            pady=8,
-        )
-        self.output.grid(row=0, column=0, sticky="nsew")
-        self.output.configure(state="disabled")
-        result_section.columnconfigure(0, weight=1)
-        result_section.rowconfigure(0, weight=1)
-
-        self.content_frame.rowconfigure(next_row, weight=1)
-        next_row += 1
-
-        footer = ttk.Frame(self.content_frame)
-        footer.grid(row=next_row, column=0, sticky="ew", pady=(12, 0))
-        footer.columnconfigure(0, weight=1)
+        self.run_button.grid(row=0, column=0, sticky="ew")
         self.restore_button = ttk.Button(
-            footer,
+            action_frame,
             text="回填译文…",
             command=self._choose_and_restore,
         )
-        self.restore_button.grid(row=0, column=1, sticky="e")
+        self.restore_button.grid(
+            row=0,
+            column=1,
+            sticky="ew",
+            padx=(8, 0),
+        )
 
-    def _build_export_settings(
+        self._update_output_preview()
+        ttk.Label(
+            self,
+            textvariable=self.output_preview_var,
+            style=MUTED_LABEL_STYLE,
+        ).grid(
+            row=2,
+            column=0,
+            columnspan=2,
+            sticky="w",
+            pady=(8, 0),
+        )
+
+        self.status_frame = ttk.Frame(self)
+        self.status_frame.grid(
+            row=3,
+            column=0,
+            columnspan=2,
+            sticky="ew",
+            pady=(8, 0),
+        )
+        self.status_frame.columnconfigure(1, weight=1)
+        self.progress = ttk.Progressbar(
+            self.status_frame,
+            mode="indeterminate",
+            length=140,
+        )
+        self.progress.grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            self.status_frame,
+            textvariable=self.status_var,
+            style=MUTED_LABEL_STYLE,
+        ).grid(row=0, column=1, sticky="w", padx=(12, 0))
+        self.status_frame.grid_remove()
+        self._refresh_scroll_region()
+
+    def _build_column_settings(
         self,
         parent: ttk.LabelFrame,
         task: TaskSpec,
     ) -> None:
         fields = {field.key: field for field in task.fields}
         compact = ttk.Frame(parent)
-        compact.grid(row=0, column=0, columnspan=3, sticky="w")
+        compact.grid(row=1, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         column_fields = (
             fields["source_col"],
@@ -422,6 +410,20 @@ class PhraseLoomApp(ttk.Frame):
                 padx=(8, 18 if index < 2 else 0),
             )
 
+    def _build_export_options(
+        self,
+        parent: ttk.LabelFrame,
+        task: TaskSpec,
+    ) -> None:
+        fields = {field.key: field for field in task.fields}
+        group_spec = fields["group_similar"]
+        group_var = self._make_variable(group_spec)
+        ttk.Checkbutton(
+            parent,
+            text=group_spec.label,
+            variable=group_var,
+        ).grid(row=0, column=0, columnspan=3, sticky="w")
+
         tag_spec = fields["tag_config"]
         tag_var = self._make_variable(tag_spec)
         self._add_file_picker_row(
@@ -430,35 +432,13 @@ class PhraseLoomApp(ttk.Frame):
             variable=tag_var,
             field_spec=tag_spec,
             row=1,
+            pady=(12, 0),
         )
-        group_spec = fields["group_similar"]
-        group_var = self._make_variable(group_spec)
-        ttk.Checkbutton(
-            parent,
-            text=group_spec.label,
-            variable=group_var,
-        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(12, 0))
         ttk.Label(
             parent,
-            text="默认自动识别名为 context 的列；Tag 配置留空时使用内置规则。",
+            text="相似句仅调整排列；Tag 配置留空时使用内置规则。",
             style=MUTED_LABEL_STYLE,
-        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
-
-    def _create_section(
-        self,
-        title: str,
-        *,
-        row: int,
-        pady: tuple[int, int] = (0, 10),
-    ) -> ttk.LabelFrame:
-        section = ttk.LabelFrame(
-            self.content_frame,
-            text=title,
-            padding=12,
-            style=SECTION_FRAME_STYLE,
-        )
-        section.grid(row=row, column=0, sticky="ew", pady=pady)
-        return section
+        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
     def _make_variable(self, field_spec: FieldSpec) -> tk.Variable:
         value = self.export_values.get(
@@ -486,17 +466,29 @@ class PhraseLoomApp(ttk.Frame):
         field_spec: FieldSpec,
         row: int,
         focus_out_command=None,
+        pady: tuple[int, int] = (0, 0),
     ) -> None:
-        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w")
+        ttk.Label(parent, text=label).grid(
+            row=row,
+            column=0,
+            sticky="w",
+            pady=pady,
+        )
         entry = ttk.Entry(parent, textvariable=variable, width=56)
-        entry.grid(row=row, column=1, sticky="ew", padx=(12, 8))
+        entry.grid(
+            row=row,
+            column=1,
+            sticky="ew",
+            padx=(12, 8),
+            pady=pady,
+        )
         if focus_out_command is not None:
             entry.bind("<FocusOut>", focus_out_command)
         ttk.Button(
             parent,
             text="选择",
             command=lambda: self._choose_path(field_spec, variable),
-        ).grid(row=row, column=2, sticky="ew")
+        ).grid(row=row, column=2, sticky="ew", pady=pady)
         parent.columnconfigure(1, weight=1)
 
     def _choose_path(self, field_spec: FieldSpec, variable: tk.StringVar) -> None:
@@ -565,6 +557,7 @@ class PhraseLoomApp(ttk.Frame):
         self.running_task_key = task.key
         self.run_button.configure(state="disabled")
         self.restore_button.configure(state="disabled")
+        self.status_frame.grid()
         self.progress.start(10)
         status = "正在导出…" if task.key == "export_strings" else "正在回填…"
         self.status_var.set(status)
@@ -605,6 +598,7 @@ class PhraseLoomApp(ttk.Frame):
 
     def _finish_run(self, exit_code: int, output: str, error: str) -> None:
         self.progress.stop()
+        self.status_frame.grid_remove()
         self.run_button.configure(state="normal")
         self.restore_button.configure(state="normal")
         finished_task_key = self.running_task_key
@@ -614,9 +608,16 @@ class PhraseLoomApp(ttk.Frame):
         if exit_code == 0:
             if finished_task_key == "restore_strings":
                 self.status_var.set("回填完成")
+                title = "回填完成"
             else:
                 self.status_var.set("导出完成")
                 self._update_output_preview()
+                title = "导出完成"
+            messagebox.showinfo(
+                title,
+                combined or title,
+                parent=self.root,
+            )
         else:
             self.status_var.set("未完成，请查看运行结果")
             messagebox.showerror(
@@ -626,37 +627,19 @@ class PhraseLoomApp(ttk.Frame):
             )
 
     def _set_output(self, text: str) -> None:
-        self.output.configure(state="normal")
-        self.output.delete("1.0", "end")
-        if text:
-            self.output.insert("1.0", text)
-        self.output.configure(state="disabled")
-
-    def _fit_window_to_content(self) -> None:
-        self.root.update_idletasks()
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
-        width = min(max(self.root.winfo_reqwidth(), 980), max(screen_width - 80, 900))
-        height = min(max(self.root.winfo_reqheight(), 680), max(screen_height - 80, 620))
-        x = max((screen_width - width) // 2, 0)
-        y = max((screen_height - height) // 2, 30)
-        self.root.geometry(f"{width}x{height}+{x}+{y}")
-        self.root.minsize(min(width, 900), min(height, 620))
-        self.root.deiconify()
+        self.last_result_text = text
 
 
 class PhraseLoomGUI(PhraseLoomApp):
     """Backward-compatible standalone PhraseLoom window."""
 
     def __init__(self, root: tk.Tk) -> None:
-        root.withdraw()
         root.title("PhraseLoom")
         root.resizable(True, True)
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
         super().__init__(root, standalone=True)
         self.grid(row=0, column=0, sticky="nsew")
-        self._fit_window_to_content()
 
 
 def main() -> int:

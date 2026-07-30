@@ -127,23 +127,27 @@ class GuiLayoutTests(unittest.TestCase):
             root = tk.Tk()
         except tk.TclError as exc:
             self.skipTest(f"Tk display is unavailable: {exc}")
+        root.withdraw()
         return root, PhraseLoomGUI(root)
 
-    def test_gui_uses_qatools_style_sidebar_and_sections(self) -> None:
-        root, _app = self.make_app()
+    def test_standalone_gui_matches_workflow_page_structure(self) -> None:
+        root, app = self.make_app()
         try:
             root.update()
             texts = self._collect_widget_texts(root)
-            self.assertIn("常用流程", texts)
             self.assertIn("导出 Strings", texts)
             self.assertIn("回填译文…", texts)
-            self.assertIn("输入文件", texts)
-            self.assertIn("列与 Tag 设置", texts)
+            self.assertIn("输入与范围", texts)
+            self.assertIn("导出选项", texts)
             self.assertIn(
                 "启用相似句分组（未聚类在前，聚类内容在后）",
                 texts,
             )
-            self.assertIn("运行结果", texts)
+            self.assertNotIn("常用流程", texts)
+            self.assertNotIn("运行结果", texts)
+            self.assertIsInstance(app.scroll_canvas, tk.Canvas)
+            self.assertEqual(app.run_button.grid_info()["column"], 0)
+            self.assertEqual(app.restore_button.grid_info()["column"], 1)
         finally:
             root.destroy()
 
@@ -152,6 +156,7 @@ class GuiLayoutTests(unittest.TestCase):
             root = tk.Tk()
         except tk.TclError as exc:
             self.skipTest(f"Tk display is unavailable: {exc}")
+        root.withdraw()
 
         try:
             host = tk.Frame(root)
@@ -164,16 +169,19 @@ class GuiLayoutTests(unittest.TestCase):
             self.assertIn("导出 Strings", texts)
             self.assertIn("回填译文…", texts)
             self.assertNotIn("常用流程", texts)
+            self.assertIn("输入与范围", texts)
+            self.assertIn("导出选项", texts)
+            self.assertNotIn("运行结果", texts)
         finally:
             root.destroy()
 
-    def test_restore_is_a_footer_action_not_a_separate_workspace(self) -> None:
+    def test_restore_is_a_secondary_action_not_a_separate_workspace(self) -> None:
         root, app = self.make_app()
         try:
             root.update()
             self.assertEqual(app.current_title.get(), "导出 Strings")
             texts = self._collect_widget_texts(root)
-            self.assertIn("列与 Tag 设置", texts)
+            self.assertIn("导出选项", texts)
             self.assertIn("回填译文…", texts)
             self.assertNotIn("开始回填", texts)
             self.assertNotIn("翻译完成的 Strings 工作簿", texts)
