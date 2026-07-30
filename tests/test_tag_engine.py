@@ -9,9 +9,7 @@ class TagEngineTests(unittest.TestCase):
             TAG_OPEN,
             TAG_SELF,
             is_protected_token,
-            is_tag_placeholder,
             make_protected_token,
-            make_tag_placeholder,
             parse_protected_token,
         )
 
@@ -23,13 +21,11 @@ class TagEngineTests(unittest.TestCase):
         self.assertEqual(make_protected_token(2, TAG_CLOSE), "<2}")
         self.assertEqual(make_protected_token(3, TAG_SELF), "{3}")
         self.assertEqual(make_protected_token(4, RAW_PLACEHOLDER), "{4}")
-        self.assertEqual(make_tag_placeholder(1, TAG_OPEN), "{1>")
         self.assertTrue(is_protected_token("{1>"))
         self.assertTrue(is_protected_token("<2}"))
         self.assertTrue(is_protected_token("{3}"))
         self.assertFalse(is_protected_token("{num1}"))
         self.assertFalse(is_protected_token("{t1_op}"))
-        self.assertTrue(is_tag_placeholder("{3}"))
         self.assertEqual(parse_protected_token("{1>"), (1, TAG_OPEN))
         self.assertEqual(parse_protected_token("<2}"), (2, TAG_CLOSE))
         self.assertEqual(parse_protected_token("{3}"), (3, "single"))
@@ -390,15 +386,6 @@ class TagEngineTests(unittest.TestCase):
             ((1, RAW_PLACEHOLDER, "{1}", "{t1_op}"),),
         )
         self.assertEqual(result.warnings, ())
-
-    def test_identifies_protected_only_segments(self):
-        from phraseloom.tag_engine import is_tag_only_segment
-
-        self.assertTrue(is_tag_only_segment("{1}"))
-        self.assertTrue(is_tag_only_segment("{1><2}"))
-        self.assertTrue(is_tag_only_segment("{1> <2}"))
-        self.assertFalse(is_tag_only_segment("{1>Click<2}"))
-        self.assertFalse(is_tag_only_segment("{1} 100 coins"))
 
     def test_restore_tags_replaces_known_protected_tokens_only(self):
         from phraseloom.tag_engine import extract_tags, restore_tags

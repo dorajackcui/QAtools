@@ -17,7 +17,6 @@ PROTECTED_TOKEN_RE = re.compile(r"\{([1-9]\d*)>|<([1-9]\d*)\}|\{([1-9]\d*)\}")
 _PROTECTED_TOKEN_FULL_RE = re.compile(
     r"^\{([1-9]\d*)>$|^<([1-9]\d*)\}$|^\{([1-9]\d*)\}$"
 )
-TAG_PLACEHOLDER_RE = PROTECTED_TOKEN_RE
 _TAG_SPAN_RE = re.compile(
     r"</[A-Za-z][A-Za-z0-9:._-]*\s*>"
     r"|</>"
@@ -77,18 +76,6 @@ def parse_protected_token(token: str) -> tuple[int, str] | None:
 
 def is_protected_token(token: str) -> bool:
     return parse_protected_token(token) is not None
-
-
-def make_tag_placeholder(index: int, kind: str) -> str:
-    return make_protected_token(index, kind)
-
-
-def parse_tag_placeholder(placeholder: str) -> tuple[int, str] | None:
-    return parse_protected_token(placeholder)
-
-
-def is_tag_placeholder(placeholder: str) -> bool:
-    return is_protected_token(placeholder)
 
 
 def extract_tags(text: str, rules: TagRules | None = None) -> TagExtraction:
@@ -177,15 +164,6 @@ def extract_tags(text: str, rules: TagRules | None = None) -> TagExtraction:
         )
 
     return TagExtraction("".join(chunks), tuple(tags), tuple(warnings))
-
-
-def is_tag_only_segment(source: str) -> bool:
-    text = "" if source is None else str(source)
-    stripped = text.strip()
-    if not stripped:
-        return False
-    remainder = PROTECTED_TOKEN_RE.sub("", stripped)
-    return remainder.strip() == ""
 
 
 def restore_tags(text: str, tags: tuple[TagToken, ...]) -> str:
@@ -429,18 +407,13 @@ __all__ = [
     "TAG_CLOSE",
     "TAG_SELF",
     "PROTECTED_TOKEN_RE",
-    "TAG_PLACEHOLDER_RE",
     "TagToken",
     "TagExtraction",
     "TagValidation",
     "make_protected_token",
     "parse_protected_token",
     "is_protected_token",
-    "make_tag_placeholder",
-    "parse_tag_placeholder",
-    "is_tag_placeholder",
     "extract_tags",
-    "is_tag_only_segment",
     "restore_tags",
     "validate_tag_placeholders",
     "serialize_known_tags",

@@ -8,8 +8,6 @@ from .tag_engine import PROTECTED_TOKEN_RE
 
 VAR_RE = re.compile(r"#[0-9A-Fa-f]{6}|\d+(?:[./:-]\d+)+|\d+(?:\.\d+)?")
 PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
-_TEMPORARY_TOKEN_START = 0xE000
-_TEMPORARY_TOKEN_END = 0xF8FF
 
 
 def _iter_protected_aware_spans(source: str):
@@ -21,20 +19,6 @@ def _iter_protected_aware_spans(source: str):
         pos = found.end()
     if pos < len(source):
         yield source[pos:], False
-
-
-def _replace_outside_protected_tokens(source: str, old: str, new: str) -> tuple[str, bool]:
-    changed = False
-    chunks: list[str] = []
-    for chunk, protected in _iter_protected_aware_spans(source):
-        if protected:
-            chunks.append(chunk)
-            continue
-        replaced = chunk.replace(old, new)
-        if replaced != chunk:
-            changed = True
-        chunks.append(replaced)
-    return "".join(chunks), changed
 
 
 def parse_template(text: object) -> TemplateMatch:
@@ -73,46 +57,6 @@ def _variable_key(value: str, counters: dict[str, int]) -> str:
     return f"{prefix}{counters[prefix]}"
 
 
-def infer_target_template(values: dict[str, str], target_text: object) -> str | None:
-    target_template = "" if target_text is None else str(target_text)
-    matched = False
-    tokens: dict[str, str] = {}
-    used_tokens: set[str] = set()
-
-    for index, (key, value) in enumerate(
-        sorted(values.items(), key=lambda item: len(item[1]), reverse=True)
-    ):
-        if not value:
-            continue
-        token = _temporary_token(index, target_template, used_tokens)
-        target_template, changed = _replace_outside_protected_tokens(
-            target_template, value, token
-        )
-        if changed:
-            used_tokens.add(token)
-            tokens[token] = "{" + key + "}"
-            matched = True
-
-    for token, placeholder in tokens.items():
-        target_template = target_template.replace(token, placeholder)
-
-    return target_template if matched else None
-
-
-def _temporary_token(
-    index: int,
-    target_template: str,
-    used_tokens: set[str],
-) -> str:
-    # Private-use characters are not matched by variable values and avoid
-    # cross-boundary replacements between adjacent temporary markers.
-    for codepoint in range(_TEMPORARY_TOKEN_START + index, _TEMPORARY_TOKEN_END + 1):
-        token = chr(codepoint)
-        if token not in target_template and token not in used_tokens:
-            return token
-    raise ValueError("too many template variables to infer target template")
-
-
 def apply_target_template(target_template: str, values: dict[str, str]) -> str:
     result = target_template
     for key, value in values.items():
@@ -141,7 +85,6 @@ __all__ = [
     "PLACEHOLDER_RE",
     "VAR_RE",
     "apply_target_template",
-    "infer_target_template",
     "is_candidate_template",
     "is_non_translatable_segment",
     "parse_template",

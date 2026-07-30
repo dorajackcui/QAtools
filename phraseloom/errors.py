@@ -19,11 +19,3 @@ class ColumnNotFoundError(WorkbookFormatError):
             f"Column {column!r} not found in header row.\n"
             f"Available columns: {available}"
         )
-
-
-class TranslationUnitLoadError(WorkbookFormatError):
-    """Raised when translated units cannot be loaded from a workbook."""
-
-
-class WorkflowError(PhraseLoomError):
-    """Raised when a workflow cannot complete with valid inputs."""
