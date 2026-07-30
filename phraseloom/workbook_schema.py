@@ -3,6 +3,17 @@ SCHEMA_VERSION_KEY = "schema_version"
 TAG_RULES_VERSION_KEY = "tag_rules_version"
 TAG_RULES_HASH_KEY = "tag_rules_hash"
 TAG_RULES_SOURCE_KEY = "tag_rules_source"
+TAG_RULES_PAYLOAD_KEY = "tag_rules_payload"
+WORKBOOK_KIND_KEY = "workbook_kind"
+TRANSLATION_PACKAGE_KIND = "translation_package"
+ORIGINAL_FILENAME_KEY = "original_filename"
+ORIGINAL_SHEET_STATES_KEY = "original_sheet_states"
+ORIGINAL_ACTIVE_SHEET_KEY = "original_active_sheet"
+SOURCE_COLUMN_KEY = "source_column"
+TARGET_COLUMN_KEY = "target_column"
+CONTEXT_COLUMN_KEY = "context_column"
+MIN_GROUP_SIZE_KEY = "min_group_size"
+USE_EXISTING_TARGETS_KEY = "use_existing_targets"
 
 SUMMARY_SHEET = "summary"
 METADATA_SHEET = "_metadata"
@@ -146,6 +157,7 @@ TM_PAIR_COLUMNS = [
     SAMPLE_TARGETS_COLUMN,
     ROW_NUMBERS_COLUMN,
     WARNING_COLUMN,
+    CONTEXT_COLUMN,
 ]
 TM_SOURCE_MAP_COLUMNS = [
     ROW_NUMBER_COLUMN,
@@ -155,6 +167,7 @@ TM_SOURCE_MAP_COLUMNS = [
     SOURCE_UNIT_COLUMN,
     TARGET_UNIT_COLUMN,
     VARIABLE_VALUES_COLUMN,
+    CONTEXT_COLUMN,
 ]
 TEMPLATE_REVIEW_REQUIRED_COLUMNS = [
     SOURCE_TEMPLATE_COLUMN,

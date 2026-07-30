@@ -750,8 +750,10 @@ class TemplateDemoTests(unittest.TestCase):
             todo_book = load_workbook(standalone_todo, data_only=True)
             self.assertEqual(
                 todo_book.sheetnames,
-                ["to_translate", "prefilled_units", "_metadata"],
+                ["Sheet", "to_translate", "prefilled_units", "_metadata"],
             )
+            self.assertEqual(todo_book["Sheet"].sheet_state, "hidden")
+            self.assertEqual(todo_book["to_translate"].sheet_state, "visible")
             self.assertEqual(todo_book["prefilled_units"].sheet_state, "visible")
 
     def test_non_translatable_numeric_and_symbol_segments_are_autofilled(self):
@@ -871,6 +873,78 @@ class TemplateDemoTests(unittest.TestCase):
                 ["Opening scene", "Shop scene", "Battle scene"],
             )
             self.assertEqual(rows[1]["sample_sources"], "VIP10 Pack")
+
+    def test_prepare_accepts_a_custom_context_column(self):
+        from phraseloom.workflow import prepare_translation_package
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "source.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target", "screen_notes"])
+            ws.append(["Start", None, "Login screen"])
+            wb.save(input_path)
+
+            stats = prepare_translation_package(
+                input_path,
+                source_col="source",
+                target_col="target",
+                context_col="screen_notes",
+            )
+
+            package = load_workbook(stats["to_translate_path"], data_only=True)
+            try:
+                todo = package["to_translate"]
+                headers = [cell.value for cell in todo[1]]
+                row = dict(zip(headers, next(todo.iter_rows(min_row=2, values_only=True))))
+            finally:
+                package.close()
+
+            self.assertEqual(row["context"], "Login screen")
+
+    def test_tm_output_includes_custom_context_in_pairs_and_map(self):
+        from phraseloom.workflow import generate_tm_pairs
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "tm.xlsx"
+            output_path = Path(tmp) / "tm_pairs.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target", "screen_notes"])
+            ws.append(["Start", "Démarrer", "Login screen"])
+            wb.save(input_path)
+
+            generate_tm_pairs(
+                input_path,
+                output_path,
+                context_col="screen_notes",
+            )
+
+            result = load_workbook(output_path, data_only=True)
+            try:
+                pairs = result["tm_pairs"]
+                pair_headers = [cell.value for cell in pairs[1]]
+                pair = dict(
+                    zip(
+                        pair_headers,
+                        next(pairs.iter_rows(min_row=2, values_only=True)),
+                    )
+                )
+                tm_map = result["tm_map"]
+                map_headers = [cell.value for cell in tm_map[1]]
+                mapped = dict(
+                    zip(
+                        map_headers,
+                        next(tm_map.iter_rows(min_row=2, values_only=True)),
+                    )
+                )
+            finally:
+                result.close()
+
+            self.assertEqual(pair["context"], "Login screen")
+            self.assertEqual(mapped["context"], "Login screen")
 
     def test_generated_unit_tables_use_source_and_target_headers(self):
         from phraseloom.workflow import (
@@ -1746,6 +1820,8 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         help_text = stdout.getvalue()
         self.assertIn("phraseloom tm-extract COMPLETED_TM.xlsx", help_text)
+        self.assertIn("phraseloom prepare SOURCE.xlsx --tm TM_PAIRS.xlsx", help_text)
+        self.assertIn("phraseloom fill TRANSLATOR_WORKBOOK.xlsx", help_text)
         self.assertIn("phraseloom extract SOURCE.xlsx", help_text)
         self.assertIn("python template_demo.py SOURCE.xlsx", help_text)
 
@@ -1809,16 +1885,16 @@ class TemplateDemoTests(unittest.TestCase):
         self.assertIn("1) Build TM from completed Excel", menu)
         self.assertIn("2) Prepare translator file for new source", menu)
         self.assertIn("3) Fill source from translated file", menu)
-        self.assertIn("4) Entity workflow", menu)
-        self.assertNotIn("Advanced tools", menu)
+        self.assertIn("a) Advanced tools", menu)
+        self.assertNotIn("4) Entity workflow", menu)
         self.assertNotIn("Extract source translation units", menu)
 
-    def test_interactive_extract_creates_template_pack(self):
+    def test_interactive_extract_creates_self_contained_translator_workbook(self):
         from phraseloom.cli import main
 
         with tempfile.TemporaryDirectory() as tmp:
             input_path = Path(tmp) / "input.xlsx"
-            output_path = Path(tmp) / "template_pack.xlsx"
+            output_path = Path(tmp) / "input_l10n" / "input_translator_todo.xlsx"
 
             wb = Workbook()
             ws = wb.active
@@ -1833,11 +1909,6 @@ class TemplateDemoTests(unittest.TestCase):
                     "2",
                     f"'{input_path}'",
                     "",
-                    "",
-                    "-",
-                    f'"{output_path}"',
-                    "",
-                    "n",
                 ]
             )
             stdout = StringIO()
@@ -1847,24 +1918,254 @@ class TemplateDemoTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertTrue(output_path.exists())
             self.assertNotIn("Optional: add source=target examples", stdout.getvalue())
+            self.assertNotIn("Minimum variants", stdout.getvalue())
+            self.assertNotIn("Output process workbook", stdout.getvalue())
 
             out = load_workbook(output_path, data_only=True)
-            summary = {
-                row[0].value: row[1].value
-                for row in out["summary"].iter_rows(min_row=1, max_col=2)
-            }
             self.assertEqual(
-                summary,
-                {
-                    "schema_version": "1.0",
-                    "total_source_rows": 2,
-                    "total_translation_units": 1,
-                    "already_filled_units": 0,
-                    "already_filled_source_rows": 0,
-                    "units_to_translate": 1,
-                    "source_rows_to_translate": 2,
-                },
+                out.sheetnames,
+                ["Sheet2", "to_translate", "prefilled_units", "_metadata"],
             )
+            self.assertEqual(out["Sheet2"].sheet_state, "hidden")
+            self.assertEqual(out["to_translate"].max_row, 2)
+            self.assertEqual(out["prefilled_units"].max_row, 1)
+            out.close()
+
+    def test_translation_package_prefilled_and_todo_edits_fill_original_copy(self):
+        from phraseloom.workflow import (
+            fill_translation_package,
+            prepare_translation_package,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "source.xlsx"
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Strings"
+            ws.append(["source", "target"])
+            ws.append(["Hello", "Bonjour old"])
+            ws.append(["New text", None])
+            wb.save(input_path)
+            wb.close()
+
+            prepare_stats = prepare_translation_package(
+                input_path,
+                use_existing_targets=True,
+            )
+            package_path = Path(str(prepare_stats["to_translate_path"]))
+            package = load_workbook(package_path)
+            try:
+                self.assertEqual(package["Strings"].sheet_state, "hidden")
+                self.assertEqual(package["to_translate"].sheet_state, "visible")
+                self.assertEqual(package["prefilled_units"].sheet_state, "visible")
+                for sheet_name, target in (
+                    ("to_translate", "Nouveau texte"),
+                    ("prefilled_units", "Bonjour modifié"),
+                ):
+                    sheet = package[sheet_name]
+                    headers = [cell.value for cell in sheet[1]]
+                    sheet.cell(
+                        row=2,
+                        column=headers.index("target") + 1,
+                    ).value = target
+                package.save(package_path)
+            finally:
+                package.close()
+
+            fill_stats = fill_translation_package(package_path)
+            output_path = Path(str(fill_stats["output_path"]))
+            self.assertNotIn("audit_output_path", fill_stats)
+
+            filled = load_workbook(output_path, data_only=True)
+            try:
+                self.assertEqual(filled.sheetnames, ["Strings"])
+                self.assertEqual(filled["Strings"].sheet_state, "visible")
+                self.assertEqual(
+                    list(filled["Strings"].values),
+                    [
+                        ("source", "target"),
+                        ("Hello", "Bonjour modifié"),
+                        ("New text", "Nouveau texte"),
+                    ],
+                )
+            finally:
+                filled.close()
+
+    def test_translation_package_writes_review_workbook_only_for_unfilled_rows(self):
+        from phraseloom.workflow import (
+            fill_translation_package,
+            prepare_translation_package,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "source.xlsx"
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Still missing", None])
+            wb.save(input_path)
+            wb.close()
+
+            prepare_stats = prepare_translation_package(input_path)
+            fill_stats = fill_translation_package(prepare_stats["to_translate_path"])
+
+            self.assertIn("audit_output_path", fill_stats)
+            self.assertTrue(Path(str(fill_stats["audit_output_path"])).exists())
+
+    def test_interactive_prepare_asks_for_tm_and_current_target_prefill(self):
+        from phraseloom.cli import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "source.xlsx"
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Hello", "Existing translation"])
+            wb.save(input_path)
+            wb.close()
+
+            answers = iter(["2", str(input_path), "", "n"])
+            prompts = []
+
+            def answer(prompt=""):
+                prompts.append(prompt)
+                return next(answers)
+
+            with patch("builtins.input", side_effect=answer), redirect_stdout(StringIO()):
+                self.assertEqual(main([]), 0)
+
+            prompt_text = "\n".join(prompts)
+            self.assertIn("TM workbook path", prompt_text)
+            self.assertIn("Use current target values as prefill", prompt_text)
+            self.assertNotIn("Minimum variants", prompt_text)
+            self.assertNotIn("Output process workbook", prompt_text)
+
+    def test_interactive_fill_needs_only_translator_workbook_path(self):
+        from phraseloom.cli import main
+        from phraseloom.workflow import prepare_translation_package
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "source.xlsx"
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Hello", None])
+            wb.save(input_path)
+            wb.close()
+
+            prepare_stats = prepare_translation_package(input_path)
+            package_path = Path(str(prepare_stats["to_translate_path"]))
+            package = load_workbook(package_path)
+            todo = package["to_translate"]
+            headers = [cell.value for cell in todo[1]]
+            todo.cell(row=2, column=headers.index("target") + 1).value = "Bonjour"
+            package.save(package_path)
+            package.close()
+
+            prompts = []
+            answers = iter(["3", str(package_path)])
+
+            def answer(prompt=""):
+                prompts.append(prompt)
+                return next(answers)
+
+            with patch("builtins.input", side_effect=answer), redirect_stdout(StringIO()):
+                self.assertEqual(main([]), 0)
+
+            self.assertEqual(len(prompts), 2)
+            self.assertIn("Translated to_translate workbook", prompts[1])
+            self.assertTrue(
+                (package_path.parent / "source_filled_result.xlsx").exists()
+            )
+
+    def test_package_cli_prepare_and_fill_use_one_translator_workbook(self):
+        from phraseloom.cli import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "source.xlsx"
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["Hello", None])
+            wb.save(input_path)
+            wb.close()
+
+            self.assertEqual(main(["prepare", str(input_path)]), 0)
+            package_path = input_path.parent / "source_l10n" / "source_translator_todo.xlsx"
+            package = load_workbook(package_path)
+            todo = package["to_translate"]
+            headers = [cell.value for cell in todo[1]]
+            todo.cell(row=2, column=headers.index("target") + 1).value = "Bonjour"
+            package.save(package_path)
+            package.close()
+
+            self.assertEqual(main(["fill", str(package_path)]), 0)
+            result_path = package_path.parent / "source_filled_result.xlsx"
+            result = load_workbook(result_path, data_only=True)
+            try:
+                self.assertEqual(result.active.cell(row=2, column=2).value, "Bonjour")
+            finally:
+                result.close()
+
+    def test_translation_package_embeds_custom_tag_rules_for_fill(self):
+        from phraseloom.workflow import (
+            fill_translation_package,
+            prepare_translation_package,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "source.xlsx"
+            config_path = tmp_path / "tag_rules.toml"
+            wb = Workbook()
+            ws = wb.active
+            ws.append(["source", "target"])
+            ws.append(["<foo>Power</foo>", None])
+            wb.save(input_path)
+            wb.close()
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "version = 1",
+                        "[angle_tags]",
+                        'mode = "allowlist"',
+                        'allowed = ["foo"]',
+                        "[bbcode_tags]",
+                        'mode = "allowlist"',
+                        "allowed = []",
+                        "[raw_braces]",
+                        "protect_all = true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            prepare_stats = prepare_translation_package(
+                input_path,
+                tag_config=config_path,
+            )
+            package_path = Path(str(prepare_stats["to_translate_path"]))
+            package = load_workbook(package_path)
+            todo = package["to_translate"]
+            headers = [cell.value for cell in todo[1]]
+            todo.cell(row=2, column=headers.index("target") + 1).value = (
+                "{1>Puissance<2}"
+            )
+            package.save(package_path)
+            package.close()
+            config_path.unlink()
+
+            fill_stats = fill_translation_package(package_path)
+            result = load_workbook(fill_stats["output_path"], data_only=True)
+            try:
+                self.assertEqual(
+                    result.active.cell(row=2, column=2).value,
+                    "<foo>Puissance</foo>",
+                )
+            finally:
+                result.close()
 
 
 class CompatibilityShimTests(unittest.TestCase):

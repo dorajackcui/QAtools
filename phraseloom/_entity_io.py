@@ -178,10 +178,20 @@ def _build_entity_pack_workbook(
     terms: list[dict[str, object]],
     source_map: list[dict[str, object]],
 ):
-    wb = Workbook()
+    source_wb = load_workbook(input_path)
+    if _is_translation_package_workbook(source_wb):
+        wb = source_wb
+        if schema.TO_TRANSLATE_SHEET in wb.sheetnames:
+            wb.remove(wb[schema.TO_TRANSLATE_SHEET])
+    else:
+        source_wb.close()
+        wb = Workbook()
     unit_headers = _display_unit_headers(schema.TO_TRANSLATE_COLUMNS)
-    related_ws = wb.active
-    related_ws.title = schema.RELATED_UNITS_SHEET
+    if wb.sheetnames == ["Sheet"] and wb["Sheet"].max_row == 1:
+        related_ws = wb.active
+        related_ws.title = schema.RELATED_UNITS_SHEET
+    else:
+        related_ws = wb.create_sheet(schema.RELATED_UNITS_SHEET)
     _append_unit_rows(
         related_ws,
         unit_headers,
@@ -215,12 +225,14 @@ def _build_entity_pack_workbook(
     entity_map_ws = wb.create_sheet(schema.ENTITY_MAP_SHEET)
     _append_dict_sheet(entity_map_ws, ENTITY_SOURCE_MAP_COLUMNS, source_map)
     entity_map_ws.sheet_state = "hidden"
-    _copy_support_sheets(input_path, wb, exclude={schema.TO_TRANSLATE_SHEET})
+    if not _is_translation_package_workbook(wb):
+        _copy_support_sheets(input_path, wb, exclude={schema.TO_TRANSLATE_SHEET})
     if schema.METADATA_SHEET not in wb.sheetnames:
         metadata_ws = wb.create_sheet(schema.METADATA_SHEET)
         metadata_ws.append(schema.METADATA_COLUMNS)
         metadata_ws.append([schema.SCHEMA_VERSION_KEY, schema.SCHEMA_VERSION])
     wb[schema.METADATA_SHEET].sheet_state = "hidden"
+    wb.active = wb.index(related_ws)
     return wb
 
 
@@ -326,10 +338,40 @@ def _copy_support_sheets(input_path: Path, target_wb, *, exclude: set[str]) -> N
 
 
 def _save_workbook(wb, output_path: Path) -> None:
-    for ws in wb.worksheets:
+    worksheets = (
+        [
+            ws
+            for ws in wb.worksheets
+            if ws.title
+            in {
+                schema.TO_TRANSLATE_SHEET,
+                schema.PREFILLED_UNITS_SHEET,
+                schema.RELATED_UNITS_SHEET,
+                schema.NON_RELATED_UNITS_SHEET,
+                schema.ENTITY_STRUCTURES_SHEET,
+                schema.ENTITY_TERMS_SHEET,
+                schema.ENTITY_MAP_SHEET,
+                schema.ENTITY_SOURCE_MAP_SHEET,
+            }
+        ]
+        if _is_translation_package_workbook(wb)
+        else wb.worksheets
+    )
+    for ws in worksheets:
         _style_sheet(ws)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_path)
+
+
+def _is_translation_package_workbook(wb) -> bool:
+    if schema.METADATA_SHEET not in wb.sheetnames:
+        return False
+    metadata = wb[schema.METADATA_SHEET]
+    return any(
+        key == schema.WORKBOOK_KIND_KEY
+        and value == schema.TRANSLATION_PACKAGE_KIND
+        for key, value, *_rest in metadata.iter_rows(min_row=2, values_only=True)
+    )
 
 
 def _replace_workbook_atomically(wb, output_path: Path) -> None:

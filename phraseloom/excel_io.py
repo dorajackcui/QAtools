@@ -10,10 +10,21 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from . import workbook_schema as schema
-from .errors import ColumnNotFoundError, ConfigError, TranslationUnitLoadError
+from .errors import (
+    ColumnNotFoundError,
+    ConfigError,
+    TranslationUnitLoadError,
+    WorkbookFormatError,
+)
 from .models import RowFillResult, RowItem, TranslationUnit
 from .tag_engine import extract_tags, is_tag_placeholder, serialize_known_tags
-from .tag_rules import TagRules, default_tag_rules, normalized_tag_rules_hash
+from .tag_rules import (
+    TagRules,
+    default_tag_rules,
+    normalized_tag_rules_hash,
+    tag_rules_from_payload,
+    tag_rules_payload,
+)
 from .template_engine import PLACEHOLDER_RE, parse_template
 
 
@@ -254,19 +265,32 @@ def _append_schema_version(summary) -> None:
     summary.append([schema.SCHEMA_VERSION_KEY, schema.SCHEMA_VERSION])
 
 
-def _add_metadata_sheet(wb, tag_rules: TagRules | None = None) -> None:
+def _add_metadata_sheet(
+    wb,
+    tag_rules: TagRules | None = None,
+    *,
+    extra_metadata: dict[str, object] | None = None,
+) -> None:
     metadata = wb.create_sheet(schema.METADATA_SHEET)
     metadata.append(schema.METADATA_COLUMNS)
-    _append_metadata_rows(metadata, tag_rules)
+    _append_metadata_rows(metadata, tag_rules, extra_metadata=extra_metadata)
     metadata.sheet_state = "hidden"
 
 
-def _append_metadata_rows(ws, tag_rules: TagRules | None = None) -> None:
+def _append_metadata_rows(
+    ws,
+    tag_rules: TagRules | None = None,
+    *,
+    extra_metadata: dict[str, object] | None = None,
+) -> None:
     ws.append([schema.SCHEMA_VERSION_KEY, schema.SCHEMA_VERSION])
     active_rules = default_tag_rules() if tag_rules is None else tag_rules
     ws.append([schema.TAG_RULES_VERSION_KEY, active_rules.version])
     ws.append([schema.TAG_RULES_HASH_KEY, normalized_tag_rules_hash(active_rules)])
     ws.append([schema.TAG_RULES_SOURCE_KEY, active_rules.source])
+    ws.append([schema.TAG_RULES_PAYLOAD_KEY, tag_rules_payload(active_rules)])
+    for key, value in (extra_metadata or {}).items():
+        ws.append([key, value])
 
 
 def _workbook_metadata(wb) -> dict[str, object]:
@@ -278,6 +302,28 @@ def _workbook_metadata(wb) -> dict[str, object]:
         for row in ws.iter_rows(min_row=2, max_col=2, values_only=True)
         if row and row[0] is not None
     }
+
+
+def _translation_package_metadata(path: Path) -> dict[str, object]:
+    wb = load_workbook(path, read_only=True, data_only=True)
+    try:
+        metadata = _workbook_metadata(wb)
+    finally:
+        wb.close()
+    if metadata.get(schema.WORKBOOK_KIND_KEY) != schema.TRANSLATION_PACKAGE_KIND:
+        raise WorkbookFormatError(
+            f"Workbook {path} is not a self-contained translation package. "
+            "Prepare it again with the current PhraseLoom workflow."
+        )
+    return metadata
+
+
+def _load_package_tag_rules(path: Path) -> TagRules:
+    metadata = _translation_package_metadata(path)
+    payload = metadata.get(schema.TAG_RULES_PAYLOAD_KEY)
+    if not payload:
+        return default_tag_rules()
+    return tag_rules_from_payload(str(payload), source=f"embedded:{path.name}")
 
 
 def _validate_tag_rules_metadata(
@@ -317,6 +363,12 @@ def _default_fill_output_path(input_path: Path) -> Path:
     return _default_work_dir(input_path) / f"{input_path.stem}_filled_result.xlsx"
 
 
+def _default_package_fill_output_path(package_path: Path) -> Path:
+    metadata = _translation_package_metadata(package_path)
+    original_filename = str(metadata.get(schema.ORIGINAL_FILENAME_KEY) or "source.xlsx")
+    return package_path.parent / f"{Path(original_filename).stem}_filled_result.xlsx"
+
+
 def _default_restore_audit_output_path(output_path: Path) -> Path:
     return output_path.with_name(f"{output_path.stem}_restore_audit{output_path.suffix}")
 
@@ -332,10 +384,11 @@ def _write_output_workbook(
     result_rows: list[RowFillResult],
     *,
     tag_rules: TagRules | None = None,
+    context_col: str | int | None = None,
 ) -> None:
     wb = Workbook()
     source_headers = _read_headers(input_path)
-    context_index = _context_column_index(source_headers)
+    context_index = _context_column_index(source_headers, context_col)
     summary = wb.active
     summary.title = schema.SUMMARY_SHEET
 
@@ -525,33 +578,77 @@ def _write_to_translate_workbook(
     units: list[TranslationUnit],
     *,
     tag_rules: TagRules | None = None,
+    source_col: str | int = "source",
+    target_col: str | int | None = "target",
+    context_col: str | int | None = None,
+    min_group_size: int = 2,
+    use_existing_targets: bool = False,
 ) -> None:
-    wb = Workbook()
-    source_headers = _read_headers(input_path)
-    context_index = _context_column_index(source_headers)
-    todo = wb.active
-    todo.title = schema.TO_TRANSLATE_SHEET
-    todo.append(_display_unit_headers(schema.TO_TRANSLATE_COLUMNS))
-    for unit in _units_in_source_order(units):
-        if unit.target_unit:
-            continue
-        todo.append(_to_translate_row(unit, context_index, target_unit=None))
+    reserved = {
+        schema.METADATA_SHEET,
+        schema.PREFILLED_UNITS_SHEET,
+        schema.TM_PAIRS_SHEET,
+        schema.TO_TRANSLATE_SHEET,
+        schema.TRANSLATION_UNITS_SHEET,
+        schema.TEMPLATE_REVIEW_SHEET,
+    }
+    wb = load_workbook(input_path)
+    try:
+        conflicts = sorted(reserved.intersection(wb.sheetnames))
+        if conflicts:
+            raise ConfigError(
+                "Source workbook uses reserved PhraseLoom sheet names: "
+                + ", ".join(conflicts)
+            )
 
-    prefilled = wb.create_sheet(schema.PREFILLED_UNITS_SHEET)
-    prefilled.append(_display_unit_headers(schema.TO_TRANSLATE_COLUMNS))
-    for unit in units:
-        if not unit.target_unit:
-            continue
-        prefilled.append(
-            _to_translate_row(unit, context_index, target_unit=unit.target_unit)
+        source_headers = _header_values(wb.worksheets[0], fallback=True)
+        context_index = _context_column_index(source_headers, context_col)
+        original_sheet_states = {ws.title: ws.sheet_state for ws in wb.worksheets}
+        original_active_sheet = wb.active.title
+        for ws in wb.worksheets:
+            ws.sheet_state = "hidden"
+
+        todo = wb.create_sheet(schema.TO_TRANSLATE_SHEET)
+        todo.append(_display_unit_headers(schema.TO_TRANSLATE_COLUMNS))
+        for unit in _units_in_source_order(units):
+            if unit.target_unit:
+                continue
+            todo.append(_to_translate_row(unit, context_index, target_unit=None))
+
+        prefilled = wb.create_sheet(schema.PREFILLED_UNITS_SHEET)
+        prefilled.append(_display_unit_headers(schema.TO_TRANSLATE_COLUMNS))
+        for unit in units:
+            if not unit.target_unit:
+                continue
+            prefilled.append(
+                _to_translate_row(unit, context_index, target_unit=unit.target_unit)
+            )
+
+        _add_metadata_sheet(
+            wb,
+            tag_rules,
+            extra_metadata={
+                schema.WORKBOOK_KIND_KEY: schema.TRANSLATION_PACKAGE_KIND,
+                schema.ORIGINAL_FILENAME_KEY: input_path.name,
+                schema.ORIGINAL_SHEET_STATES_KEY: json.dumps(
+                    original_sheet_states, ensure_ascii=False
+                ),
+                schema.ORIGINAL_ACTIVE_SHEET_KEY: original_active_sheet,
+                schema.SOURCE_COLUMN_KEY: json.dumps(source_col, ensure_ascii=False),
+                schema.TARGET_COLUMN_KEY: json.dumps(target_col, ensure_ascii=False),
+                schema.CONTEXT_COLUMN_KEY: json.dumps(context_col, ensure_ascii=False),
+                schema.MIN_GROUP_SIZE_KEY: min_group_size,
+                schema.USE_EXISTING_TARGETS_KEY: use_existing_targets,
+            },
         )
-    _add_metadata_sheet(wb, tag_rules)
 
-    for ws in wb.worksheets:
-        _style_sheet(ws)
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(output_path)
+        _style_sheet(todo)
+        _style_sheet(prefilled)
+        wb.active = wb.index(todo)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wb.save(output_path)
+    finally:
+        wb.close()
 
 
 def _to_translate_row(
@@ -592,6 +689,59 @@ def _write_target_column_workbook(
                     row=result_row.row.row_number,
                     column=target_index,
                 ).value = result_row.auto_target
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wb.save(output_path)
+    finally:
+        wb.close()
+
+
+def _write_translation_package_target_workbook(
+    output_path: Path,
+    package_path: Path,
+    target_col: str | int,
+    result_rows: list[RowFillResult],
+) -> None:
+    wb = load_workbook(package_path)
+    try:
+        metadata = _workbook_metadata(wb)
+        if metadata.get(schema.WORKBOOK_KIND_KEY) != schema.TRANSLATION_PACKAGE_KIND:
+            raise WorkbookFormatError(
+                f"Workbook {package_path} is not a self-contained translation package."
+            )
+        ws = wb.worksheets[0]
+        target_index = _resolve_or_create_column(ws, target_col)
+        for result_row in result_rows:
+            if result_row.auto_target:
+                ws.cell(
+                    row=result_row.row.row_number,
+                    column=target_index,
+                ).value = result_row.auto_target
+
+        try:
+            original_states = json.loads(
+                str(metadata.get(schema.ORIGINAL_SHEET_STATES_KEY) or "{}")
+            )
+        except json.JSONDecodeError as exc:
+            raise WorkbookFormatError(
+                f"Workbook {package_path} has invalid original sheet metadata."
+            ) from exc
+
+        for sheet_name in (
+            schema.TO_TRANSLATE_SHEET,
+            schema.PREFILLED_UNITS_SHEET,
+            schema.METADATA_SHEET,
+        ):
+            if sheet_name in wb.sheetnames:
+                wb.remove(wb[sheet_name])
+
+        for original_ws in wb.worksheets:
+            original_ws.sheet_state = str(original_states.get(original_ws.title, "visible"))
+        if not any(sheet.sheet_state == "visible" for sheet in wb.worksheets):
+            wb.worksheets[0].sheet_state = "visible"
+        active_sheet = str(metadata.get(schema.ORIGINAL_ACTIVE_SHEET_KEY) or "")
+        if active_sheet in wb.sheetnames:
+            wb.active = wb.index(wb[active_sheet])
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         wb.save(output_path)
@@ -776,8 +926,10 @@ def _write_tm_workbook(
     rows: list[RowItem],
     *,
     tag_rules: TagRules | None = None,
+    context_col: str | int | None = None,
 ) -> None:
     wb = Workbook()
+    context_index = _context_column_index(_read_headers(input_path), context_col)
     summary = wb.active
     summary.title = schema.SUMMARY_SHEET
 
@@ -819,6 +971,7 @@ def _write_tm_workbook(
                 ),
                 ",".join(str(item.row_number) for item in unit.items),
                 unit.warning or None,
+                _sample_contexts(unit, context_index),
             ]
         )
 
@@ -841,6 +994,7 @@ def _write_tm_workbook(
                     row.match.values if unit and unit.unit_type == "template" else {},
                     ensure_ascii=False,
                 ),
+                _original_context_value(row.original_values, context_index),
             ]
         )
 
@@ -903,11 +1057,26 @@ def _first_row_number(unit: TranslationUnit) -> int | None:
     return first.row_number if first else None
 
 
-def _context_column_index(headers: list[str]) -> int | None:
+def _context_column_index(
+    headers: list[str], context_col: str | int | None = None
+) -> int | None:
+    auto_detect = context_col is None or str(context_col).strip() == ""
+    wanted: str | int = schema.CONTEXT_COLUMN if auto_detect else context_col
+    if isinstance(wanted, int) or str(wanted).isdigit():
+        index = int(wanted)
+        if 1 <= index <= len(headers):
+            return index - 1
+        if auto_detect:
+            return None
+        raise ColumnNotFoundError(wanted, headers)
+
+    wanted_text = str(wanted).strip().lower()
     for index, header in enumerate(headers):
-        if header.strip().lower() == schema.CONTEXT_COLUMN:
+        if header.strip().lower() == wanted_text:
             return index
-    return None
+    if auto_detect:
+        return None
+    raise ColumnNotFoundError(wanted, headers)
 
 
 def _context_value(unit: TranslationUnit, context_index: int | None) -> object | None:
@@ -915,6 +1084,29 @@ def _context_value(unit: TranslationUnit, context_index: int | None) -> object |
     if first is None or context_index is None or context_index >= len(first.original_values):
         return None
     return first.original_values[context_index]
+
+
+def _sample_contexts(
+    unit: TranslationUnit, context_index: int | None, limit: int = 10
+) -> str | None:
+    if context_index is None:
+        return None
+    values = [
+        str(value)
+        for item in unit.items
+        if (value := _original_context_value(item.original_values, context_index))
+        not in (None, "")
+    ]
+    samples = list(dict.fromkeys(values))[:limit]
+    return "\n".join(samples) or None
+
+
+def _original_context_value(
+    values: tuple[object, ...], context_index: int | None
+) -> object | None:
+    if context_index is None or context_index >= len(values):
+        return None
+    return values[context_index]
 
 
 def _sample_sources(unit: TranslationUnit, limit: int) -> str:
@@ -950,18 +1142,22 @@ __all__ = [
     "_default_extract_output_path",
     "_default_fill_output_path",
     "_default_legacy_output_path",
+    "_default_package_fill_output_path",
     "_default_restore_audit_output_path",
     "_default_tm_output_path",
     "_default_to_translate_output_path",
     "_default_work_dir",
+    "_load_package_tag_rules",
     "_load_translated_units",
     "_load_unit_sheet",
     "_read_headers",
     "_read_source_rows",
     "_resolve_column",
+    "_translation_package_metadata",
     "_write_output_workbook",
     "_write_restore_audit_workbook",
     "_write_target_column_workbook",
+    "_write_translation_package_target_workbook",
     "_write_tm_workbook",
     "_write_to_translate_workbook",
 ]

@@ -7,15 +7,22 @@ repository. Read it before asking the user to re-explain the project.
 
 PhraseLoom is an internal Excel localization workflow tool. It reduces a source
 Excel file into reusable translation units, uses historical TM data to prefill
-matching units, creates a translator-facing todo workbook, and fills translated
-units back into a target column or report workbook.
+matching units, creates a self-contained translator workbook, and fills translated
+units back into a source-format workbook copy. A legacy report path remains for
+advanced diagnostics.
 
 Main workflow:
 
 1. Completed historical Excel -> reusable TM workbook.
-2. New source Excel + reusable TM workbook -> TM prefill pack + translator todo.
-3. Translator fills `target` in the todo workbook.
-4. Todo workbook -> filled source workbook copy or report workbook.
+2. New source Excel + optional reusable TM workbook -> one self-contained translator workbook.
+3. Translator edits `target` in visible `to_translate` and `prefilled_units` sheets.
+4. Translator workbook -> filled source-format workbook copy; a review workbook is emitted only when warnings or unfilled rows exist.
+
+The daily interactive workflow fixes `min_group_size` at 2, always asks whether
+to use a TM, and asks whether to use current target values only when that column
+contains data. The translator workbook carries hidden original sheets and fill
+metadata, so daily fill needs only that workbook path. Legacy process-pack and
+report commands remain available for advanced diagnostics.
 
 Protected-token extraction is integrated into the main workflow as an internal
 pre-template layer. It serializes allowed tags and every complete raw `{...}`
@@ -50,6 +57,7 @@ existing `fill` command.
   schema version constants.
 - `phraseloom/errors.py`: user-facing structured exceptions.
 - `phraseloom/cli.py`: argparse CLI and command dispatch.
+- `phraseloom/gui.py`: minimal Tk desktop UI and declarative CLI command forms.
 - `phraseloom/interactive.py`: interactive three-step prompt flow.
 - `phraseloom/entity_workflow.py`: public entity workflow facade for splitting
   preprocessed todo workbooks, extracting entity TM, prefill/fill, and merge.
@@ -93,6 +101,7 @@ Use the package modules for new code:
 - `phraseloom.excel_io`: Excel I/O and default path helpers.
 - `phraseloom.workbook_schema`: workbook contract constants.
 - `phraseloom.cli`: console entry point.
+- `phraseloom.gui`: desktop entry point; daily forms plus all advanced CLI flows.
 - `phraseloom.interactive`: prompt-based workflow.
 - `phraseloom.entity_workflow`: independent entity workflow API over
   preprocessed todo/TM workbooks.
@@ -108,8 +117,8 @@ points.
 Default outputs are created beside the input under `<input_stem>_l10n/`.
 
 - TM extraction: `<stem>_reusable_units.xlsx`
-- TM prefill process pack: `<stem>_tm_prefill_pack.xlsx`
-- Translator todo workbook: `<stem>_translator_todo.xlsx`
+- TM prefill process pack (advanced `extract` only): `<stem>_tm_prefill_pack.xlsx`
+- Self-contained translator workbook: `<stem>_translator_todo.xlsx`
 - Filled delivery workbook: `<stem>_filled_result.xlsx`
 - Legacy result workbook: `<stem>_phraseloom_result.xlsx`
 - Entity split outputs: `<todo_stem>_entity_related.xlsx` and
@@ -138,14 +147,21 @@ Run tests:
 py -3 -m unittest discover -v
 ```
 
+Launch the desktop GUI:
+
+```powershell
+phraseloom gui
+# or: phraseloom-gui
+```
+
 Run the three-step workflow against local sample files:
 
 ```powershell
 py -3 -m phraseloom.cli tm-extract testfiles\TM.xlsx --source-col source --target-col target
 
-py -3 -m phraseloom.cli extract testfiles\for_test.xlsx --source-col source --target-col target --tm testfiles\TM_l10n\TM_reusable_units.xlsx --no-existing-targets
+py -3 -m phraseloom.cli prepare testfiles\for_test.xlsx --source-col source --target-col target --tm testfiles\TM_l10n\TM_reusable_units.xlsx
 
-py -3 -m phraseloom.cli fill testfiles\for_test.xlsx --templates testfiles\for_test_l10n\for_test_translator_todo.xlsx --source-col source --target-col target --mode target-column
+py -3 -m phraseloom.cli fill testfiles\for_test_l10n\for_test_translator_todo.xlsx
 ```
 
 Run the independent entity workflow against local sample files:

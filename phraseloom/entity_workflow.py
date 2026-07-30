@@ -136,7 +136,10 @@ def prepare_entity_pack_workbook(
             wb,
             Path(tm_path),
         )
-    _save_workbook(wb, output_path)
+    try:
+        _save_workbook(wb, output_path)
+    finally:
+        wb.close()
     return {
         "related_unit_count": len(entity_rows),
         "non_related_unit_count": len(non_entity_rows),

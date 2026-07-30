@@ -16,6 +16,8 @@ __all__ = [
     "default_tag_rules",
     "load_tag_rules",
     "normalized_tag_rules_hash",
+    "tag_rules_from_payload",
+    "tag_rules_payload",
 ]
 
 
@@ -125,7 +127,46 @@ def load_tag_rules(path: str | Path | None = None) -> TagRules:
 
 
 def normalized_tag_rules_hash(rules: TagRules) -> str:
-    normalized = {
+    normalized = _normalized_tag_rules(rules)
+    payload = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def tag_rules_payload(rules: TagRules) -> str:
+    return json.dumps(
+        _normalized_tag_rules(rules),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def tag_rules_from_payload(payload: str, *, source: str = "embedded") -> TagRules:
+    try:
+        normalized = json.loads(payload)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ConfigError("embedded tag rules are invalid") from exc
+    if not isinstance(normalized, dict):
+        raise ConfigError("embedded tag rules are invalid")
+    try:
+        return TagRules(
+            version=normalized["version"],
+            angle_allowed=frozenset(normalized["angle_allowed"]),
+            bbcode_allowed=frozenset(normalized["bbcode_allowed"]),
+            protect_raw_braces=normalized["protect_raw_braces"],
+            source=source,
+            angle_aliases=normalized.get("angle_aliases", {}),
+            angle_single=frozenset(normalized.get("angle_single", [])),
+            angle_optional_pair=frozenset(
+                normalized.get("angle_optional_pair", [])
+            ),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ConfigError("embedded tag rules are invalid") from exc
+
+
+def _normalized_tag_rules(rules: TagRules) -> dict[str, Any]:
+    return {
         "version": rules.version,
         "angle_allowed": sorted(name.lower() for name in rules.angle_allowed),
         "angle_aliases": {
@@ -136,8 +177,6 @@ def normalized_tag_rules_hash(rules: TagRules) -> str:
         "bbcode_allowed": sorted(name.lower() for name in rules.bbcode_allowed),
         "protect_raw_braces": rules.protect_raw_braces,
     }
-    payload = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _parse_tag_rules(data: dict[str, Any], *, source: str) -> TagRules:

@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
 from phraseloom import workbook_schema as schema
@@ -704,11 +705,13 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
         from phraseloom.cli import _dispatch
 
         stream = StringIO()
-        with patch("builtins.input", side_effect=["4", "q"]), redirect_stdout(stream):
+        with patch("builtins.input", side_effect=["a", "1", "q"]), redirect_stdout(stream):
             self.assertEqual(_dispatch([]), 0)
 
         menu = stream.getvalue()
-        self.assertIn("4) Entity workflow", menu)
+        self.assertIn("a) Advanced tools", menu)
+        self.assertIn("Advanced Tools", menu)
+        self.assertIn("1) Entity workflow", menu)
         self.assertIn("Entity Workflow", menu)
 
     def test_entity_interactive_step_1_writes_memory_workbook(self):
@@ -1722,6 +1725,80 @@ class EntityPackWorkflowCliTests(unittest.TestCase):
                     "Pikachu launched a localized attack and dealt localized damage.",
                 ],
             )
+
+    def test_entity_pack_preserves_self_contained_translation_package(self):
+        from phraseloom.entity_workflow import (
+            fill_entity_pack_workbook,
+            merge_entity_pack_workbook,
+            prepare_entity_pack_workbook,
+        )
+        from phraseloom.workflow import (
+            fill_translation_package,
+            prepare_translation_package,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            source_path = tmp_path / "source.xlsx"
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Strings"
+            ws.append(["source", "target"])
+            ws.append(["Squirtle launched an attack and dealt damage.", None])
+            ws.append(["Login failed.", None])
+            ws.append(["Pikachu launched an attack and dealt damage.", None])
+            ws["A2"].fill = PatternFill("solid", fgColor="00FF00")
+            wb.save(source_path)
+            wb.close()
+
+            package_stats = prepare_translation_package(source_path)
+            package_path = Path(str(package_stats["to_translate_path"]))
+            entity_pack = tmp_path / "entity_pack.xlsx"
+            filled_pack = tmp_path / "entity_pack_filled.xlsx"
+            merged_package = tmp_path / "merged_translator_todo.xlsx"
+
+            prepare_entity_pack_workbook(
+                package_path,
+                entity_pack,
+                min_group_size=2,
+            )
+            self.assertEqual(_sheet_state(entity_pack, "Strings"), "hidden")
+            self.assertEqual(
+                _sheet_state(entity_pack, schema.PREFILLED_UNITS_SHEET),
+                "visible",
+            )
+
+            _complete_entity_tables(
+                entity_pack,
+                term_targets={"Squirtle": "Carapuce", "Pikachu": "Pikachu"},
+            )
+            _set_first_non_related_target(entity_pack, "Échec de connexion.")
+            fill_entity_pack_workbook(entity_pack, filled_pack)
+            merge_entity_pack_workbook(filled_pack, merged_package)
+
+            merged = load_workbook(merged_package, data_only=True)
+            try:
+                self.assertIn(schema.TO_TRANSLATE_SHEET, merged.sheetnames)
+                self.assertIn(schema.PREFILLED_UNITS_SHEET, merged.sheetnames)
+                self.assertEqual(merged["Strings"].sheet_state, "hidden")
+            finally:
+                merged.close()
+
+            fill_stats = fill_translation_package(merged_package)
+            result = load_workbook(fill_stats["output_path"], data_only=True)
+            try:
+                self.assertEqual(result.sheetnames, ["Strings"])
+                self.assertEqual(result["Strings"]["A2"].fill.fgColor.rgb, "0000FF00")
+                self.assertEqual(
+                    [row[1] for row in result["Strings"].iter_rows(min_row=2, values_only=True)],
+                    [
+                        "Carapuce launched a localized attack and dealt localized damage.",
+                        "Échec de connexion.",
+                        "Pikachu launched a localized attack and dealt localized damage.",
+                    ],
+                )
+            finally:
+                result.close()
 
 
 class EntityWorkflowCliTests(unittest.TestCase):

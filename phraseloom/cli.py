@@ -34,8 +34,10 @@ from .interactive import (
 )
 from .workflow import (
     fill_target_column_workbook,
+    fill_translation_package,
     generate_tm_pairs,
     generate_workbook,
+    prepare_translation_package,
 )
 
 
@@ -63,10 +65,16 @@ def _dispatch(argv: list[str] | None = None) -> int:
     if argv and argv[0] in {"-h", "--help"}:
         _print_top_level_help()
         return 0
+    if argv and argv[0] == "gui":
+        from .gui import main as gui_main
+
+        return gui_main()
     if not argv or argv[0] in {"interactive", "wizard"}:
         return run_interactive()
     if argv[0] in {"tm-extract", "extract-tm"}:
         return _main_tm_extract(argv[1:])
+    if argv[0] == "prepare":
+        return _main_prepare(argv[1:])
     if argv[0] == "extract":
         return _main_extract(argv[1:])
     if argv[0] == "fill":
@@ -102,6 +110,10 @@ def _main_tm_extract(argv: list[str]) -> int:
     parser.add_argument("-o", "--output", type=Path, help="Output TM pairs .xlsx file")
     parser.add_argument("--source-col", default="source", help="Header name or 1-based index")
     parser.add_argument("--target-col", default="target", help="Header name or 1-based index")
+    parser.add_argument(
+        "--context-col",
+        help="Optional context header or 1-based index; auto-detects 'context'",
+    )
     parser.add_argument("--min-group-size", type=int, default=2)
     parser.add_argument(
         "--tag-config",
@@ -116,6 +128,7 @@ def _main_tm_extract(argv: list[str]) -> int:
         output,
         source_col=args.source_col,
         target_col=args.target_col,
+        context_col=args.context_col,
         min_group_size=args.min_group_size,
         tag_config=args.tag_config,
     )
@@ -131,6 +144,10 @@ def _main_extract(argv: list[str]) -> int:
     parser.add_argument("-o", "--output", type=Path, help="Output .xlsx file")
     parser.add_argument("--source-col", default="source", help="Header name or 1-based index")
     parser.add_argument("--target-col", default="target", help="Header name or 1-based index")
+    parser.add_argument(
+        "--context-col",
+        help="Optional context header or 1-based index; auto-detects 'context'",
+    )
     parser.add_argument(
         "--tm",
         type=Path,
@@ -161,6 +178,7 @@ def _main_extract(argv: list[str]) -> int:
         output,
         source_col=args.source_col,
         target_col=_normalize_optional_column(args.target_col),
+        context_col=args.context_col,
         tm_workbook=args.tm,
         examples=_parse_examples(args.example),
         min_group_size=args.min_group_size,
@@ -171,16 +189,58 @@ def _main_extract(argv: list[str]) -> int:
     return 0
 
 
+def _main_prepare(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="Create one self-contained translator workbook from a source Excel file."
+    )
+    parser.add_argument("input", type=Path, help="Input .xlsx file")
+    parser.add_argument("-o", "--output", type=Path, help="Translator workbook path")
+    parser.add_argument("--source-col", default="source", help="Header name or 1-based index")
+    parser.add_argument("--target-col", default="target", help="Header name or 1-based index")
+    parser.add_argument(
+        "--context-col",
+        help="Optional context header or 1-based index; auto-detects 'context'",
+    )
+    parser.add_argument("--tm", type=Path, help="TM pairs workbook used for prefill")
+    parser.add_argument(
+        "--use-existing-targets",
+        action="store_true",
+        help="Use current target values as prefill suggestions",
+    )
+    parser.add_argument(
+        "--tag-config",
+        type=Path,
+        help="TOML file defining which tag-like spans are protected",
+    )
+    args = parser.parse_args(argv)
+    stats = prepare_translation_package(
+        args.input,
+        args.output,
+        source_col=args.source_col,
+        target_col=args.target_col,
+        context_col=args.context_col,
+        tm_workbook=args.tm,
+        min_group_size=2,
+        use_existing_targets=args.use_existing_targets,
+        tag_config=args.tag_config,
+    )
+    _print_prepare_stats(stats)
+    return 0
+
+
 def _main_fill(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description="Fill a source workbook from a translated template pack."
     )
-    parser.add_argument("input", type=Path, help="Original input .xlsx file")
+    parser.add_argument(
+        "input",
+        type=Path,
+        help="Self-contained translator workbook, or legacy source workbook with --templates",
+    )
     parser.add_argument(
         "--templates",
-        required=True,
         type=Path,
-        help="Translated template pack workbook",
+        help="Legacy translated template pack; omit for a self-contained translator workbook",
     )
     parser.add_argument("-o", "--output", type=Path, help="Output .xlsx file")
     parser.add_argument(
@@ -190,6 +250,10 @@ def _main_fill(argv: list[str]) -> int:
     )
     parser.add_argument("--source-col", default="source", help="Header name or 1-based index")
     parser.add_argument("--target-col", default="target", help="Header name or 1-based index")
+    parser.add_argument(
+        "--context-col",
+        help="Optional context header or 1-based index; auto-detects 'context'",
+    )
     parser.add_argument("--min-group-size", type=int, default=2)
     parser.add_argument(
         "--tag-config",
@@ -199,11 +263,23 @@ def _main_fill(argv: list[str]) -> int:
     parser.add_argument(
         "--mode",
         choices=["report", "target-column"],
-        default="report",
+        default="target-column",
         help="report creates analysis sheets; target-column writes auto targets into the target column of an output copy",
     )
 
     args = parser.parse_args(argv)
+    if args.templates is None:
+        if args.mode == "report":
+            raise ConfigError("report mode is an advanced legacy flow and needs --templates")
+        stats = fill_translation_package(
+            args.input,
+            args.output,
+            tag_config=args.tag_config,
+            audit_output_path=args.audit_output,
+        )
+        _print_package_fill_stats(stats)
+        return 0
+
     output = args.output or _default_fill_output_path(args.input)
     target_col = _normalize_optional_column(args.target_col)
     if args.mode == "target-column":
@@ -225,6 +301,7 @@ def _main_fill(argv: list[str]) -> int:
             output,
             source_col=args.source_col,
             target_col=target_col,
+            context_col=args.context_col,
             template_workbook=args.templates,
             min_group_size=args.min_group_size,
             use_existing_targets=False,
@@ -413,6 +490,10 @@ def _main_legacy(argv: list[str]) -> int:
     parser.add_argument("--source-col", default="source", help="Header name or 1-based index")
     parser.add_argument("--target-col", default="target", help="Header name or 1-based index")
     parser.add_argument(
+        "--context-col",
+        help="Optional context header or 1-based index; auto-detects 'context'",
+    )
+    parser.add_argument(
         "--templates",
         type=Path,
         help="Previous output workbook whose template_review sheet has target_template filled",
@@ -442,6 +523,7 @@ def _main_legacy(argv: list[str]) -> int:
         output,
         source_col=args.source_col,
         target_col=_normalize_optional_column(args.target_col),
+        context_col=args.context_col,
         examples=_parse_examples(args.example),
         template_workbook=args.templates,
         min_group_size=args.min_group_size,
@@ -474,6 +556,22 @@ def _print_tm_stats(output: Path, stats: dict[str, int]) -> None:
     print(f"TM pairs: {stats['tm_pair_count']}")
     print(f"Template pairs: {stats['template_pair_count']}")
     print(f"Segment pairs: {stats['segment_pair_count']}")
+
+
+def _print_prepare_stats(stats: dict[str, int | str]) -> None:
+    print(f"Translator workbook: {stats['to_translate_path']}")
+    print(f"Units to translate: {stats['new_translation_unit_count']}")
+    print(f"Prefilled units: {stats['prefilled_translation_unit_count']}")
+    print(f"Source rows covered: {stats['row_count']}")
+
+
+def _print_package_fill_stats(stats: dict[str, int | str]) -> None:
+    print(f"Filled workbook: {stats['output_path']}")
+    print(f"Filled source rows: {stats['autofilled_count']}")
+    unfilled = int(stats["row_count"]) - int(stats["autofilled_count"])
+    print(f"Unfilled source rows: {unfilled}")
+    if "audit_output_path" in stats:
+        print(f"Review workbook: {stats['audit_output_path']}")
 
 
 def _print_entity_split_stats(stats: dict[str, int | str]) -> None:
@@ -521,6 +619,7 @@ def _print_top_level_help() -> None:
     print("Localization Workflow")
     print()
     print("Interactive:")
+    print("  phraseloom gui")
     print("  phraseloom")
     print("  phraseloom interactive")
     print("  phraseloom entity")
@@ -533,10 +632,14 @@ def _print_top_level_help() -> None:
     print()
     print("Commands:")
     print("  phraseloom tm-extract COMPLETED_TM.xlsx [options]")
+    print("  phraseloom prepare SOURCE.xlsx --tm TM_PAIRS.xlsx [options]")
+    print("  phraseloom fill TRANSLATOR_WORKBOOK.xlsx [options]")
+    print()
+    print("Advanced template commands:")
     print("  phraseloom extract SOURCE.xlsx [options]")
     print("  phraseloom fill SOURCE.xlsx --templates TEMPLATE_PACK.xlsx [options]")
     print()
-    print("Entity workflow:")
+    print("Advanced entity workflow:")
     print("  phraseloom entity-tm TM_REUSABLE_UNITS.xlsx [options]")
     print("  phraseloom entity-prepare TRANSLATOR_WORKBOOK.xlsx [options]")
     print("  phraseloom entity-fill-pack ENTITY_PACK.xlsx [options]")
@@ -572,7 +675,10 @@ __all__ = [
     "_main_entity_tm",
     "_main_fill",
     "_main_legacy",
+    "_main_prepare",
     "_print_entity_prepare_stats",
+    "_print_package_fill_stats",
+    "_print_prepare_stats",
     "_print_stats",
     "_print_tm_stats",
     "_print_top_level_help",

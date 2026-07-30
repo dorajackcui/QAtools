@@ -6,9 +6,9 @@
 
 ```text
 历史完成稿 -> tm_pairs
-本轮源文件 + tm_pairs -> tm_prefill_pack + translator_todo
-译者翻译 to_translate
-to_translate -> 回填源文件
+本轮源文件 + 可选 tm_pairs -> 自包含 translator workbook
+译者修改 to_translate / prefilled_units
+translator workbook -> 回填后的原表格式副本
 ```
 
 ## 开发环境
@@ -32,6 +32,25 @@ python -m unittest discover -v
 
 安装后可以直接使用 `phraseloom` 命令；未安装时仍可使用兼容入口 `python3 template_demo.py`。
 
+## 极简 GUI
+
+启动桌面界面：
+
+```bash
+phraseloom gui
+```
+
+安装后也可以直接打开 `phraseloom-gui`。GUI 的“日常流程”只保留三个入口：
+
+1. 准备翻译
+2. 回填译文
+3. 生成 TM
+
+常用参数直接显示，输出路径、列名和 Tag 配置收在“更多选项”中。准备翻译时仍会明确显示
+TM 文件选择和“使用当前 target 内容作为预填”选项；不会自动使用 TM。回填时只需选择
+translator workbook。原有诊断与 Entity 命令全部放在“高级工具”页，功能与 CLI 对齐。
+“准备翻译”和“生成 TM”都支持可选 Context 列；留空时会自动识别名为 `context` 的列。
+
 ## 快速开始
 
 进入工具目录：
@@ -49,6 +68,7 @@ Localization Workflow
 1) Build TM from completed Excel
 2) Prepare translator file for new source
 3) Fill source from translated file
+a) Advanced tools
 q) Quit
 ```
 
@@ -56,11 +76,13 @@ q) Quit
 
 ```text
 1 = 把历史完成稿做成可复用 tm_pairs
-2 = 用本轮源文件 + tm_pairs 生成译者要翻译的 to_translate
-3 = 译者交回 to_translate 后，把译文回填到源文件 copy
+2 = 用本轮源文件 + 可选 tm_pairs 生成一个自包含 translator workbook
+3 = 只选择译者交回的 workbook，生成回填后的原表格式 copy
 ```
 
-如果你已经有 `tm_pairs.xlsx`，不用再做第 1 步，直接选第 2 步并填入已有 `tm_pairs` 路径即可。
+第 2 步每次都会询问是否使用 TM，不会自动沿用上一次的 TM。检测到当前
+target 列已有内容时，还会询问是否把这些内容作为 prefill。可复用模板的
+最小变体数固定为 2，不再作为日常问题显示。
 
 命令行批处理时用下面的命令。
 
@@ -71,7 +93,8 @@ q) Quit
 ```bash
 phraseloom tm-extract '/path/to/tm.xlsx' \
   --source-col en \
-  --target-col fr
+  --target-col fr \
+  --context-col screen_notes
 ```
 
 默认输出到：
@@ -82,59 +105,44 @@ phraseloom tm-extract '/path/to/tm.xlsx' \
 
 `tm_pairs.xlsx` 后续可以反复复用，不需要每次重新生成。
 
-## 2. 提取本轮待翻译内容
+## 2. 准备本轮 translator workbook
 
 用历史 TM 预填本轮源文件：
 
 ```bash
-phraseloom extract '/path/to/source.xlsx' \
+phraseloom prepare '/path/to/source.xlsx' \
   --source-col 'source' \
-  --target-col - \
-  --tm '/path/to/tm_l10n/tm_reusable_units.xlsx' \
-  --no-existing-targets
+  --target-col 'target' \
+  --context-col 'context' \
+  --tm '/path/to/tm_l10n/tm_reusable_units.xlsx'
 ```
 
-默认输出到源文件旁边的工作目录：
+如需把源文件当前 target 内容也作为预填，增加：
+
+```bash
+--use-existing-targets
+```
+
+默认只输出译者需要处理的自包含工作簿：
 
 ```text
-/path/to/source_l10n/source_tm_prefill_pack.xlsx
 /path/to/source_l10n/source_translator_todo.xlsx
 ```
 
-译者只需要处理：
+这个工作簿内部保存了原工作簿副本以及回填所需的列配置。原工作表暂时隐藏，
+译者主要处理两个可见 sheet：
 
-```text
-source_translator_todo.xlsx
-```
+- `to_translate`：尚未命中的内容，填写 `target`。
+- `prefilled_units`：TM 或当前 target 已预填的内容，保持可见并允许人工修改。
 
-填写 `to_translate` sheet 里的 `target` 列即可。已经由 TM 命中的内容在
-`prefilled_units` sheet 里；这个 sheet 会保留为可见，方便人工复核和修改，
-restore/fill 时也会一起读取。
+回填时会同时读取两个 sheet，以人工修改后的内容为准。
 
-## 3. 回填译者交付的 to_translate
+## 3. 回填译者交付的 translator workbook
 
-### 报告模式
-
-生成检查用 workbook，不改源文件结构：
+只需要提供译者工作簿，不再需要原文件路径、列名、回填模式或 reusable part：
 
 ```bash
-phraseloom fill '/path/to/source.xlsx' \
-  --templates '/path/to/source_l10n/source_translator_todo.xlsx' \
-  --source-col 'source' \
-  --target-col '法语' \
-  --mode report
-```
-
-### 交付模式
-
-生成一个源文件 copy，并把结果写进 target 列：
-
-```bash
-phraseloom fill '/path/to/source.xlsx' \
-  --templates '/path/to/source_l10n/source_translator_todo.xlsx' \
-  --source-col 'source' \
-  --target-col '法语' \
-  --mode target-column
+phraseloom fill '/path/to/source_l10n/source_translator_todo.xlsx'
 ```
 
 默认输出：
@@ -143,15 +151,20 @@ phraseloom fill '/path/to/source.xlsx' \
 /path/to/source_l10n/source_filled_result.xlsx
 ```
 
-交付模式会同时生成 restore audit workbook，默认在输出文件旁边：
+默认恢复原工作表结构、把结果写入 target 列，并移除 PhraseLoom 的内部 sheet。
+不会覆盖真正的原始源文件。
+
+只有存在 warning 或未回填行时，才会额外生成检查 workbook：
 
 ```text
 /path/to/source_l10n/source_filled_result_restore_audit.xlsx
 ```
 
-audit workbook 包含 `summary` 和 `restore_warnings`，只列出需要筛查的 warning / unfilled 行，不输出全量逐行流水账。`restore_warnings` 会把问题拆成 `source_warning`、`target_warning`、`restore_warning`，方便按原文问题、译文问题、回填流程问题过滤。可用 `--audit-output` 指定 audit 输出路径。
+检查 workbook 包含 `summary` 和 `restore_warnings`，只列出 warning / unfilled
+行。可以用 `--audit-output` 主动指定检查文件路径。
 
-不会覆盖原始源文件。
+旧的 `extract`、`fill SOURCE.xlsx --templates ...` 和 `report` 流程继续保留为
+高级兼容命令，但不再是日常推荐入口。
 
 ## 独立 Entity Engine
 
@@ -179,7 +192,7 @@ Entity engine 是 translator todo 的二次处理工具，不属于主 tag/templ
 
 ```bash
 phraseloom
-# 选择 4) Entity workflow
+# 选择 a) Advanced tools，再选择 1) Entity workflow
 
 phraseloom entity
 phraseloom entity-interactive
@@ -269,16 +282,19 @@ docs/entity-engine-flow.html
 
 `*_tm_prefill_pack.xlsx`
 
-过程包，包含 summary、translation_units、source_map、filled_workbook、qa_report 等详细信息。
+高级 `extract` 命令生成的诊断过程包，包含 summary、translation_units、
+source_map、filled_workbook、qa_report 等详细信息。日常 `prepare` 不生成它。
 
 `*_translator_todo.xlsx`
 
-给译者的独立文件。`to_translate` 里是需要翻译的空 target；
-`prefilled_units` 里是 TM 已命中的内容，保留可见，必要时也可以改 target。
+给译者的自包含工作簿。内部保存原工作表副本和回填参数；`to_translate` 里是
+需要翻译的空 target，`prefilled_units` 里是 TM 或当前 target 已预填的内容。
+两个 sheet 都会参与回填，`prefilled_units` 保持可见且允许修改。
 
 `*_filled_result.xlsx`
 
-回填后的交付文件，`target-column` 模式会把译文写进指定 target 列。
+回填后的原表格式副本。原工作表会恢复可见，PhraseLoom 的翻译和元数据
+sheet 会从交付文件中移除。
 
 `*_entity_memory.xlsx`
 

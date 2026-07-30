@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from openpyxl import load_workbook
+
 from .entity_workflow import (
     default_entity_filled_pack_output_path,
     default_entity_memory_output_path,
@@ -12,16 +14,16 @@ from .entity_workflow import (
     merge_entity_pack_workbook,
     prepare_entity_pack_workbook,
 )
-from .errors import ConfigError
+from .errors import ColumnNotFoundError
 from .excel_io import (
-    _default_extract_output_path,
-    _default_fill_output_path,
     _default_tm_output_path,
+    _read_headers,
+    _resolve_column,
 )
 from .workflow import (
-    fill_target_column_workbook,
+    fill_translation_package,
     generate_tm_pairs,
-    generate_workbook,
+    prepare_translation_package,
 )
 
 
@@ -31,7 +33,7 @@ def run_interactive() -> int:
     print("1) Build TM from completed Excel")
     print("2) Prepare translator file for new source")
     print("3) Fill source from translated file")
-    print("4) Entity workflow")
+    print("a) Advanced tools")
     print("q) Quit")
 
     action = _prompt_text("Choose step", default="2").lower()
@@ -44,6 +46,9 @@ def run_interactive() -> int:
         return _interactive_extract()
     if action in {"3", "fill", "f"}:
         return _interactive_fill()
+    if action in {"a", "advanced", "tools"}:
+        return run_advanced_interactive()
+    # Keep the old entry working for existing operator notes and scripts.
     if action in {"4", "entity", "entity-workflow", "e"}:
         return run_entity_interactive(back_returns_to_main=True)
 
@@ -51,21 +56,41 @@ def run_interactive() -> int:
     return 2
 
 
+def run_advanced_interactive() -> int:
+    print("Advanced Tools")
+    print()
+    print("1) Entity workflow")
+    print("b) Back")
+    print("q) Quit")
+
+    action = _prompt_text("Choose advanced tool", default="1").lower()
+    if action in {"q", "quit", "exit"}:
+        print("Bye.")
+        return 0
+    if action in {"b", "back"}:
+        return run_interactive()
+    if action in {"1", "entity", "e"}:
+        return run_entity_interactive(back_returns_to_main=True)
+    print(f"Unknown advanced tool: {action}")
+    return 2
+
+
 def _interactive_tm_extract() -> int:
     input_path = _user_path(_prompt_text("Completed Excel path", required=True))
-    source_col = _prompt_text("Source column in completed Excel", default="source")
-    target_col = _prompt_text("Target column in completed Excel", default="target")
-    output_path = _user_path(
-        _prompt_text("Output tm_pairs workbook", default=str(_default_tm_output_path(input_path)))
+    source_col = _detect_or_prompt_source_column(input_path)
+    target_col = _detect_or_prompt_target_column(
+        input_path,
+        source_col=source_col,
+        require_existing=True,
     )
-    min_group_size = _prompt_int("Minimum variants for a reusable template", default=2)
+    output_path = _default_tm_output_path(input_path)
 
     stats = generate_tm_pairs(
         input_path,
         output_path,
         source_col=source_col,
         target_col=target_col,
-        min_group_size=min_group_size,
+        min_group_size=2,
     )
     _display_tm_stats(output_path, stats)
     return 0
@@ -73,80 +98,97 @@ def _interactive_tm_extract() -> int:
 
 def _interactive_extract() -> int:
     input_path = _user_path(_prompt_text("New source Excel path", required=True))
-    source_col = _prompt_text("Source column in new file", default="source")
-    target_col = _normalize_optional_column(
-        _prompt_text("Existing target column (- for none)", default="target")
+    source_col = _detect_or_prompt_source_column(input_path)
+    target_col = _detect_or_prompt_target_column(
+        input_path,
+        source_col=source_col,
+        require_existing=False,
     )
-    tm_workbook_text = _prompt_text("Existing tm_pairs path (- for none)", default="-")
-    tm_workbook = (
-        _user_path(tm_workbook_text)
-        if _normalize_optional_column(tm_workbook_text) is not None
-        else None
-    )
-    output_path = _user_path(
-        _prompt_text(
-            "Output process workbook",
-            default=str(_default_extract_output_path(input_path)),
-        )
-    )
-    min_group_size = _prompt_int("Minimum variants for a reusable template", default=2)
+    tm_workbook_text = _prompt_text("TM workbook path (blank for none)")
+    tm_workbook = _user_path(tm_workbook_text) if tm_workbook_text else None
     use_existing_targets = (
-        _prompt_yes_no("Use existing target column as template suggestions", default=True)
-        if target_col is not None
+        _prompt_yes_no("Use current target values as prefill", default=True)
+        if _column_has_values(input_path, target_col)
         else False
     )
 
-    stats = generate_workbook(
+    stats = prepare_translation_package(
         input_path,
-        output_path,
         source_col=source_col,
         target_col=target_col,
         tm_workbook=tm_workbook,
-        min_group_size=min_group_size,
+        min_group_size=2,
         use_existing_targets=use_existing_targets,
     )
-    _display_stats(output_path, stats)
+    _display_prepare_stats(stats)
     return 0
 
 
 def _interactive_fill() -> int:
-    input_path = _user_path(_prompt_text("Original source Excel path", required=True))
-    template_workbook = _user_path(
-        _prompt_text("Translated to_translate file path", required=True)
+    package_path = _user_path(
+        _prompt_text("Translated to_translate workbook", required=True)
     )
-    source_col = _prompt_text("Source column in original file", default="source")
-    target_col = _normalize_optional_column(
-        _prompt_text("Target column to write/check", default="target")
-    )
-    mode = _prompt_text("Fill mode: report or target-column", default="report")
-    output_path = _user_path(
-        _prompt_text("Output filled workbook", default=str(_default_fill_output_path(input_path)))
-    )
-    min_group_size = _prompt_int("Minimum variants for a reusable template", default=2)
-
-    if mode == "target-column":
-        if target_col is None:
-            raise ConfigError("target-column mode needs a target column")
-        stats = fill_target_column_workbook(
-            input_path,
-            output_path,
-            source_col=source_col,
-            target_col=target_col,
-            template_workbook=template_workbook,
-            min_group_size=min_group_size,
-        )
-    else:
-        stats = generate_workbook(
-            input_path,
-            output_path,
-            source_col=source_col,
-            target_col=target_col,
-            template_workbook=template_workbook,
-            min_group_size=min_group_size,
-            use_existing_targets=False,
-        )
-    _display_stats(output_path, stats)
+    stats = fill_translation_package(package_path)
+    _display_fill_stats(stats)
     return 0
+
+
+def _detect_or_prompt_source_column(input_path: Path) -> str:
+    headers = _read_headers(input_path)
+    detected = _case_insensitive_header(headers, "source")
+    if detected is not None:
+        return detected
+    return _prompt_text(
+        f"Source column (available: {', '.join(headers)})",
+        required=True,
+    )
+
+
+def _detect_or_prompt_target_column(
+    input_path: Path,
+    *,
+    source_col: str,
+    require_existing: bool,
+) -> str:
+    headers = _read_headers(input_path)
+    detected = _case_insensitive_header(headers, "target")
+    if detected is not None:
+        return detected
+    candidates = [header for header in headers if header.lower() != source_col.lower()]
+    if not require_existing and not candidates:
+        return "target"
+    default = candidates[-1] if len(candidates) == 1 else None
+    return _prompt_text(
+        f"Target column (available: {', '.join(headers)})",
+        default=default,
+        required=default is None,
+    )
+
+
+def _case_insensitive_header(headers: list[str], wanted: str) -> str | None:
+    wanted_lower = wanted.lower()
+    return next((header for header in headers if header.lower() == wanted_lower), None)
+
+
+def _column_has_values(input_path: Path, column: str | int) -> bool:
+    wb = load_workbook(input_path, read_only=True, data_only=True)
+    try:
+        ws = wb.worksheets[0]
+        try:
+            column_index = _resolve_column(ws, column)
+        except ColumnNotFoundError:
+            return False
+        return any(
+            value is not None and str(value).strip() != ""
+            for (value,) in ws.iter_rows(
+                min_row=2,
+                min_col=column_index,
+                max_col=column_index,
+                values_only=True,
+            )
+        )
+    finally:
+        wb.close()
 
 
 def run_entity_interactive(*, back_returns_to_main: bool = False) -> int:
@@ -326,6 +368,22 @@ def _display_stats(output: Path, stats: dict[str, int]) -> None:
     print(f"Total source rows: {stats['row_count']}")
 
 
+def _display_prepare_stats(stats: dict[str, int | str]) -> None:
+    print(f"Translator workbook: {stats['to_translate_path']}")
+    print(f"Units to translate: {stats['new_translation_unit_count']}")
+    print(f"Prefilled units: {stats['prefilled_translation_unit_count']}")
+    print(f"Source rows covered: {stats['row_count']}")
+
+
+def _display_fill_stats(stats: dict[str, int | str]) -> None:
+    print(f"Filled workbook: {stats['output_path']}")
+    print(f"Filled source rows: {stats['autofilled_count']}")
+    unfilled = int(stats["row_count"]) - int(stats["autofilled_count"])
+    print(f"Unfilled source rows: {unfilled}")
+    if "audit_output_path" in stats:
+        print(f"Review workbook: {stats['audit_output_path']}")
+
+
 def _display_tm_stats(output: Path, stats: dict[str, int]) -> None:
     print(f"Wrote: {output}")
     print(f"TM source segments: {stats['row_count']}")
@@ -364,6 +422,7 @@ def _display_entity_merge_stats(stats: dict[str, int | str]) -> None:
 
 __all__ = [
     "run_interactive",
+    "run_advanced_interactive",
     "run_entity_interactive",
     "_interactive_tm_extract",
     "_interactive_extract",
@@ -377,6 +436,11 @@ __all__ = [
     "_prompt_yes_no",
     "_user_path",
     "_normalize_optional_column",
+    "_column_has_values",
+    "_detect_or_prompt_source_column",
+    "_detect_or_prompt_target_column",
+    "_display_fill_stats",
+    "_display_prepare_stats",
     "_display_entity_prepare_stats",
     "_display_entity_extract_tm_stats",
     "_display_entity_fill_stats",

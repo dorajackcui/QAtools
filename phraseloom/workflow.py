@@ -1,21 +1,28 @@
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Iterable
 
+from . import workbook_schema as schema
 from .excel_io import (
+    _default_package_fill_output_path,
     _default_restore_audit_output_path,
     _default_to_translate_output_path,
+    _load_package_tag_rules,
     _load_translated_units,
     _read_source_rows,
+    _translation_package_metadata,
     _write_output_workbook,
     _write_restore_audit_workbook,
     _write_target_column_workbook,
     _write_tm_workbook,
     _write_to_translate_workbook,
+    _write_translation_package_target_workbook,
 )
+from .errors import ConfigError
 from .models import RowFillResult, RowItem, TranslationUnit
 from .tag_engine import (
     extract_tags,
@@ -45,6 +52,7 @@ def generate_workbook(
     *,
     source_col: str | int = "source",
     target_col: str | int | None = "target",
+    context_col: str | int | None = None,
     examples: Iterable[tuple[str, str]] = (),
     template_workbook: str | Path | None = None,
     tm_workbook: str | Path | None = None,
@@ -69,17 +77,169 @@ def generate_workbook(
     )
 
     _write_output_workbook(
-        output_path, input_path, units, result_rows, tag_rules=tag_rules
+        output_path,
+        input_path,
+        units,
+        result_rows,
+        tag_rules=tag_rules,
+        context_col=context_col,
     )
     to_translate_path = _default_to_translate_output_path(input_path)
     if not template_workbook or Path(template_workbook).resolve() != to_translate_path.resolve():
         _write_to_translate_workbook(
-            to_translate_path, input_path, units, tag_rules=tag_rules
+            to_translate_path,
+            input_path,
+            units,
+            tag_rules=tag_rules,
+            source_col=source_col,
+            target_col=target_col,
+            context_col=context_col,
+            min_group_size=min_group_size,
+            use_existing_targets=use_existing_targets,
         )
 
     stats = _workbook_stats(rows, units, autofilled_count)
     stats["to_translate_path"] = str(to_translate_path)
     return stats
+
+
+def prepare_translation_package(
+    input_path: str | Path,
+    output_path: str | Path | None = None,
+    *,
+    source_col: str | int = "source",
+    target_col: str | int | None = "target",
+    context_col: str | int | None = None,
+    tm_workbook: str | Path | None = None,
+    min_group_size: int = 2,
+    use_existing_targets: bool = False,
+    tag_config: str | Path | None = None,
+) -> dict[str, int | str]:
+    input_path = Path(input_path)
+    package_path = (
+        Path(output_path)
+        if output_path is not None
+        else _default_to_translate_output_path(input_path)
+    )
+    tag_rules = load_tag_rules(tag_config)
+    rows, units, _result_rows, autofilled_count = _build_fill_context(
+        input_path,
+        source_col=source_col,
+        target_col=target_col,
+        tm_workbook=tm_workbook,
+        min_group_size=min_group_size,
+        use_existing_targets=use_existing_targets,
+        tag_rules=tag_rules,
+    )
+    _write_to_translate_workbook(
+        package_path,
+        input_path,
+        units,
+        tag_rules=tag_rules,
+        source_col=source_col,
+        target_col=target_col,
+        context_col=context_col,
+        min_group_size=min_group_size,
+        use_existing_targets=use_existing_targets,
+    )
+    stats: dict[str, int | str] = _workbook_stats(rows, units, autofilled_count)
+    stats["to_translate_path"] = str(package_path)
+    return stats
+
+
+def fill_translation_package(
+    package_path: str | Path,
+    output_path: str | Path | None = None,
+    *,
+    tag_config: str | Path | None = None,
+    audit_output_path: str | Path | None = None,
+) -> dict[str, int | str]:
+    package_path = Path(package_path)
+    metadata = _translation_package_metadata(package_path)
+    source_col = _metadata_column(metadata, schema.SOURCE_COLUMN_KEY)
+    target_col = _metadata_column(metadata, schema.TARGET_COLUMN_KEY)
+    if target_col is None:
+        raise ConfigError(
+            "Translation package does not define a target column. "
+            "Prepare it again and choose a target column."
+        )
+    try:
+        min_group_size = int(metadata.get(schema.MIN_GROUP_SIZE_KEY, 2))
+    except (TypeError, ValueError) as exc:
+        raise ConfigError("Translation package has an invalid reusable-part setting.") from exc
+    tag_rules = (
+        load_tag_rules(tag_config)
+        if tag_config
+        else _load_package_tag_rules(package_path)
+    )
+    filled_path = (
+        Path(output_path)
+        if output_path is not None
+        else _default_package_fill_output_path(package_path)
+    )
+
+    rows, units, result_rows, autofilled_count = _build_fill_context(
+        package_path,
+        source_col=source_col,
+        target_col=target_col,
+        template_workbook=package_path,
+        min_group_size=min_group_size,
+        use_existing_targets=False,
+        tag_rules=tag_rules,
+    )
+    _write_translation_package_target_workbook(
+        filled_path,
+        package_path,
+        target_col,
+        result_rows,
+    )
+
+    should_write_audit = audit_output_path is not None or _needs_restore_audit(result_rows)
+    audit_path: Path | None = None
+    if should_write_audit:
+        audit_path = (
+            Path(audit_output_path)
+            if audit_output_path is not None
+            else _default_restore_audit_output_path(filled_path)
+        )
+        _write_restore_audit_workbook(
+            audit_path,
+            package_path,
+            filled_path,
+            result_rows,
+            tag_rules=tag_rules,
+        )
+
+    stats = _workbook_stats(rows, units, autofilled_count)
+    stats["output_path"] = str(filled_path)
+    if audit_path is not None:
+        stats["audit_output_path"] = str(audit_path)
+    return stats
+
+
+def _metadata_column(metadata: dict[str, object], key: str) -> str | int | None:
+    value = metadata.get(key)
+    if value is None:
+        raise ConfigError(f"Translation package is missing metadata: {key}")
+    try:
+        parsed = json.loads(str(value))
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"Translation package has invalid metadata: {key}") from exc
+    if parsed is None or isinstance(parsed, (str, int)):
+        return parsed
+    raise ConfigError(f"Translation package has invalid metadata: {key}")
+
+
+def _needs_restore_audit(result_rows: list[RowFillResult]) -> bool:
+    return any(
+        result_row.unit is None
+        or not result_row.unit.target_unit
+        or bool(result_row.unit.warning)
+        or bool(result_row.warning)
+        or bool(result_row.row.tag_warnings)
+        or bool(result_row.row.target_tag_warnings)
+        for result_row in result_rows
+    )
 
 
 def fill_target_column_workbook(
@@ -228,6 +388,7 @@ def generate_tm_pairs(
     *,
     source_col: str | int = "source",
     target_col: str | int = "target",
+    context_col: str | int | None = None,
     min_group_size: int = 2,
     tag_config: str | Path | None = None,
 ) -> dict[str, int]:
@@ -248,7 +409,14 @@ def generate_tm_pairs(
         provided_sources={},
         use_existing_targets=True,
     )
-    _write_tm_workbook(output_path, input_path, units, rows, tag_rules=tag_rules)
+    _write_tm_workbook(
+        output_path,
+        input_path,
+        units,
+        rows,
+        tag_rules=tag_rules,
+        context_col=context_col,
+    )
 
     template_pairs = [unit for unit in units if unit.unit_type == "template"]
     segment_pairs = [unit for unit in units if unit.unit_type == "segment"]
@@ -505,14 +673,16 @@ def _format_rate(numerator: int, denominator: int) -> str:
 
 
 extract_tm_pairs = generate_tm_pairs
-prepare_translation = generate_workbook
-fill_translation = fill_target_column_workbook
+prepare_translation = prepare_translation_package
+fill_translation = fill_translation_package
 
 __all__ = [
     "extract_tm_pairs",
     "fill_target_column_workbook",
     "fill_translation",
+    "fill_translation_package",
     "generate_tm_pairs",
     "generate_workbook",
     "prepare_translation",
+    "prepare_translation_package",
 ]

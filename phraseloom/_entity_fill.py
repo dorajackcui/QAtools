@@ -8,6 +8,7 @@ from openpyxl import Workbook, load_workbook
 from . import workbook_schema as schema
 from ._entity_io import (
     _copy_support_sheets,
+    _is_translation_package_workbook,
     _parse_original_index,
     _read_pack_unit_rows,
     _read_unit_rows,
@@ -158,16 +159,10 @@ def merge_entity_pack_workbook(
     ]
     merged_rows = _merge_unit_rows(related_rows + non_related_rows)
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = schema.TO_TRANSLATE_SHEET
-    ws.append(headers)
-    for row in merged_rows:
-        ws.append([_unit_row_value(row, header) for header in headers])
-    _copy_support_sheets(
-        pack_path,
-        wb,
-        exclude={
+    source_wb = load_workbook(pack_path)
+    if _is_translation_package_workbook(source_wb):
+        wb = source_wb
+        for sheet_name in {
             schema.RELATED_UNITS_SHEET,
             schema.NON_RELATED_UNITS_SHEET,
             schema.ENTITY_STRUCTURES_SHEET,
@@ -175,9 +170,37 @@ def merge_entity_pack_workbook(
             schema.ENTITY_MAP_SHEET,
             schema.TO_TRANSLATE_SHEET,
             schema.ENTITY_SOURCE_MAP_SHEET,
-        },
-    )
-    _save_workbook(wb, output_path)
+        }:
+            if sheet_name in wb.sheetnames:
+                wb.remove(wb[sheet_name])
+        ws = wb.create_sheet(schema.TO_TRANSLATE_SHEET)
+    else:
+        source_wb.close()
+        wb = Workbook()
+        ws = wb.active
+        ws.title = schema.TO_TRANSLATE_SHEET
+    ws.append(headers)
+    for row in merged_rows:
+        ws.append([_unit_row_value(row, header) for header in headers])
+    if not _is_translation_package_workbook(wb):
+        _copy_support_sheets(
+            pack_path,
+            wb,
+            exclude={
+                schema.RELATED_UNITS_SHEET,
+                schema.NON_RELATED_UNITS_SHEET,
+                schema.ENTITY_STRUCTURES_SHEET,
+                schema.ENTITY_TERMS_SHEET,
+                schema.ENTITY_MAP_SHEET,
+                schema.TO_TRANSLATE_SHEET,
+                schema.ENTITY_SOURCE_MAP_SHEET,
+            },
+        )
+    wb.active = wb.index(ws)
+    try:
+        _save_workbook(wb, output_path)
+    finally:
+        wb.close()
     return {
         "merged_unit_count": len(merged_rows),
         "output_path": str(output_path),
