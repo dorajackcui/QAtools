@@ -1,6 +1,6 @@
 # Toolshub
 
-这个仓库现在是一个轻量的 Excel `toolshub`，每个工具都有独立目录、独立说明，同时继续共用根目录依赖。
+这个仓库现在是一个轻量的 Excel `toolshub`，包含独立 QA 工具与 PhraseLoom Strings 工作流，并统一共用根目录依赖和 GUI 入口。
 
 如果你是通过 agent / 脚本来调用这些工具，建议优先查看独立的 CLI 文档：[CLI 使用指南](docs/cli-usage.md)。
 
@@ -225,15 +225,41 @@ python3 tools/xbench_report_transformer/transform_xbench_report_gui.py
 
 详情见 `tools/xbench_report_transformer/README.md`。
 
+### 9. PhraseLoom Strings 工作流
+
+- 目录：`phraseloom`
+- 用途：把原始 Excel 导出为干净、去重、可选相似分组的 Strings 工作簿，并在翻译完成后回填到原文件副本
+- 已有 Target：保留为已完成内容，不进入待翻译清单
+- 自动完成：纯数字、纯符号及 Tag-only 内容会自动原样回填
+- 模板处理：数字、颜色值和版本序列等变量可压缩为模板，回填时按原始行恢复
+- GUI：已经嵌入 Toolshub 的“常用流程”板块
+- CLI：
+
+```bash
+python3 -m phraseloom.cli export source.xlsx
+python3 -m phraseloom.cli export source.xlsx --group-similar
+python3 -m phraseloom.cli restore source_strings.xlsx
+```
+
+详情见 [`phraseloom/README.md`](phraseloom/README.md)。
+
 ## 依赖安装
 
 ```bash
 pip install -r requirements.txt
 ```
 
+需要安装 `toolshub`、`phraseloom` 等命令行入口时：
+
+```bash
+pip install -e .
+```
+
 ## 文档导航
 
 - Agent / 脚本调用请看：[CLI 使用指南](docs/cli-usage.md)
+- PhraseLoom 工作流详细说明：[`phraseloom/README.md`](phraseloom/README.md)
+- PhraseLoom 合并记录：[`docs/phraseloom-migration.md`](docs/phraseloom-migration.md)
 - 术语检查详细说明：`tools/term_pair_checker/README.md`
 - Tag / Placeholder 检查详细说明：`tools/tag_placeholder_checker/README.md`
 - 换行数量检查详细说明：`tools/line_break_checker/README.md`
@@ -249,7 +275,9 @@ pip install -r requirements.txt
 python3 toolshub_gui.py
 ```
 
-会打开一个统一窗口管理这些工具。“一键质量检查”页默认执行“质量检查”板块的全部项目：术语检查、Tag 检查、换行数量检查、同源译文一致性和 Target 中文检查，并统一写入一个结果 Excel；每项检查仍可单独取消。workflow 不再保留五类检查各自的问题工作表，而是按原始行合并到统一的 `问题处理`；启用术语检查时仍保留 `术语表`。另有仅包含“检查项”和“问题行数”的 `质量检查汇总`。术语和 Tag 的详细设置默认折叠，Tag 可明确切换“常规 Tag / memoQ Tag”模式。该页面也支持给术语检查选择历史 TB，术语检查未选择 mark 时会仅使用历史 TB 做全表命中检查。
+会打开一个统一窗口管理这些工具。“常用流程”包含“一键质量检查”和“PhraseLoom”。PhraseLoom 页面可以直接导出 Strings，并在翻译完成后通过页面右下角操作回填译文。
+
+“一键质量检查”页默认执行“质量检查”板块的全部项目：术语检查、Tag 检查、换行数量检查、同源译文一致性和 Target 中文检查，并统一写入一个结果 Excel；每项检查仍可单独取消。workflow 不再保留五类检查各自的问题工作表，而是按原始行合并到统一的 `问题处理`；启用术语检查时仍保留 `术语表`。另有仅包含“检查项”和“问题行数”的 `质量检查汇总`。术语和 Tag 的详细设置默认折叠，Tag 可明确切换“常规 Tag / memoQ Tag”模式。该页面也支持给术语检查选择历史 TB，术语检查未选择 mark 时会仅使用历史 TB 做全表命中检查。
 
 “术语检查”和“一键质量检查”的术语设置中均支持共享的 `TB 项目`。首次选择历史 TB 并确认工作表、Source / Target 列及开始行后，可点击“保存当前”并命名；下次在任一页面选择该项目即可恢复完整 TB 设置。项目可直接更新或删除，删除项目不会删除原始 TB 文件。项目配置保存在当前用户的 Toolshub 应用数据目录中。
 

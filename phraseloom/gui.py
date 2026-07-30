@@ -166,13 +166,12 @@ def validate_task_specs() -> None:
             raise ValueError(f"GUI task needs a required input: {task.key}")
 
 
-class PhraseLoomGUI:
-    def __init__(self, root: tk.Tk) -> None:
-        self.root = root
-        self.root.withdraw()
-        self.root.title("PhraseLoom")
-        self.root.resizable(True, True)
+class PhraseLoomApp(ttk.Frame):
+    """Reusable PhraseLoom page for Toolshub and the standalone window."""
 
+    def __init__(self, parent: tk.Misc, *, standalone: bool = False) -> None:
+        super().__init__(parent)
+        self.root = self.winfo_toplevel()
         self.current_title = tk.StringVar()
         self.current_description = tk.StringVar()
         self.output_preview_var = tk.StringVar(
@@ -188,9 +187,11 @@ class PhraseLoomGUI:
         self.running_task_key: str | None = None
 
         self._configure_styles()
-        self._build_layout()
+        if standalone:
+            self._build_standalone_layout()
+        else:
+            self._build_embedded_layout()
         self._render_task()
-        self._fit_window_to_content()
 
     def _configure_styles(self) -> None:
         style = ttk.Style(self.root)
@@ -218,11 +219,11 @@ class PhraseLoomGUI:
         )
         style.configure("PhraseLoom.Description.TLabel", foreground="#555555")
 
-    def _build_layout(self) -> None:
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+    def _build_standalone_layout(self) -> None:
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
 
-        shell = ttk.Frame(self.root, padding=16)
+        shell = ttk.Frame(self, padding=16)
         shell.grid(row=0, column=0, sticky="nsew")
         shell.columnconfigure(1, weight=1)
         shell.rowconfigure(0, weight=1)
@@ -256,6 +257,13 @@ class PhraseLoomGUI:
 
         self.content_frame = ttk.Frame(workspace)
         self.content_frame.grid(row=3, column=0, sticky="nsew")
+        self.content_frame.columnconfigure(0, weight=1)
+
+    def _build_embedded_layout(self) -> None:
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+        self.content_frame = ttk.Frame(self)
+        self.content_frame.grid(row=0, column=0, sticky="nsew")
         self.content_frame.columnconfigure(0, weight=1)
 
     def _build_sidebar(self, parent: ttk.Frame) -> None:
@@ -637,6 +645,20 @@ class PhraseLoomGUI:
         self.root.deiconify()
 
 
+class PhraseLoomGUI(PhraseLoomApp):
+    """Backward-compatible standalone PhraseLoom window."""
+
+    def __init__(self, root: tk.Tk) -> None:
+        root.withdraw()
+        root.title("PhraseLoom")
+        root.resizable(True, True)
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(0, weight=1)
+        super().__init__(root, standalone=True)
+        self.grid(row=0, column=0, sticky="nsew")
+        self._fit_window_to_content()
+
+
 def main() -> int:
     root = tk.Tk()
     PhraseLoomGUI(root)
@@ -647,6 +669,7 @@ def main() -> int:
 __all__ = [
     "EXCEL_FILE_TYPES",
     "FieldSpec",
+    "PhraseLoomApp",
     "PhraseLoomGUI",
     "TASKS",
     "TASK_BY_KEY",

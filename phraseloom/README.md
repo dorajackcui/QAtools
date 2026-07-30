@@ -15,13 +15,14 @@ python -m venv .venv
 运行测试：
 
 ```powershell
-python -m unittest discover -v
+python -m unittest discover -s tests/phraseloom_tests -v
 ```
 
 只运行完整 Strings 流程回归：
 
 ```powershell
-python -m unittest tests.test_strings_workflow_e2e -v
+python -m unittest discover -s tests/phraseloom_tests `
+  -p test_strings_workflow_e2e.py -v
 ```
 
 该用例会临时生成测试工作簿，自动完成“清洗 -> 自动完成 -> 填写测试译文

@@ -11,6 +11,7 @@ import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from phraseloom.gui import PhraseLoomApp
 from tools.gui_common import configure_tool_page_style
 from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
 from tools.excel_line_splitter.split_excel_lines_gui import SplitExcelLinesApp
@@ -54,6 +55,12 @@ TOOL_GROUPS = (
                 title="一键质量检查",
                 description="按顺序执行质量检查板块的全部项目，统一写入输出 Excel。",
                 factory=WorkflowRunnerApp,
+            ),
+            ToolItem(
+                key="phraseloom",
+                title="PhraseLoom",
+                description="导出干净、去重的 Strings 工作簿，并在翻译后回填原始 Excel。",
+                factory=PhraseLoomApp,
             ),
         ),
     ),

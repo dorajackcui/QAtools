@@ -12,6 +12,9 @@ __pycache__/
 venv/
 env/
 ENV/
+.env
+.env.*
+!.env.example
 
 # Packaging / build artifacts
 build/
@@ -19,6 +22,11 @@ dist/
 *.egg-info/
 .eggs/
 pip-wheel-metadata/
+
+# Local worktrees and generated localization work folders
+.worktrees/
+*_l10n/
+/testfiles/
 
 # Test / coverage artifacts
 .pytest_cache/

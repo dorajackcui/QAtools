@@ -3,6 +3,7 @@ from __future__ import annotations
 import tkinter as tk
 import unittest
 
+from phraseloom.gui import PhraseLoomApp
 from toolshub_gui import TOOL_GROUPS, ToolshubApp, build_argument_parser
 
 
@@ -33,7 +34,10 @@ class ToolshubLayoutTests(unittest.TestCase):
             for group in TOOL_GROUPS
         }
 
-        self.assertEqual(grouped_tools["常用流程"], ["一键质量检查"])
+        self.assertEqual(
+            grouped_tools["常用流程"],
+            ["一键质量检查", "PhraseLoom"],
+        )
         self.assertNotIn("术语处理", grouped_tools)
         self.assertEqual(
             grouped_tools["质量检查"],
@@ -59,6 +63,19 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertEqual(app.current_tool_title.get(), "Tag 检查")
             self.assertIn("tag", app.current_tool_description.get().lower())
             self.assertIs(app.current_tool_frame, app.tool_frames["tag_checker"])
+        finally:
+            root.destroy()
+
+    def test_phraseloom_is_embedded_as_a_tool_page(self) -> None:
+        root, app = self.make_app()
+
+        try:
+            app.select_tool("phraseloom")
+            root.update()
+
+            self.assertIsInstance(app.current_tool_frame, PhraseLoomApp)
+            self.assertEqual(app.current_tool_title.get(), "PhraseLoom")
+            self.assertIn("Strings", app.current_tool_description.get())
         finally:
             root.destroy()
 

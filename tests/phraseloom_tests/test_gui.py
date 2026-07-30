@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from phraseloom.gui import (
+    PhraseLoomApp,
     PhraseLoomGUI,
     TASK_BY_KEY,
     TASKS,
@@ -19,7 +20,7 @@ from phraseloom.gui import (
 
 class GuiTaskSpecTests(unittest.TestCase):
     def test_gui_module_can_be_loaded_as_a_direct_script(self) -> None:
-        gui_path = Path(__file__).parents[1] / "phraseloom" / "gui.py"
+        gui_path = Path(__file__).parents[2] / "phraseloom" / "gui.py"
 
         namespace = runpy.run_path(
             str(gui_path),
@@ -143,6 +144,26 @@ class GuiLayoutTests(unittest.TestCase):
                 texts,
             )
             self.assertIn("运行结果", texts)
+        finally:
+            root.destroy()
+
+    def test_embedded_app_uses_the_existing_workflow_content(self) -> None:
+        try:
+            root = tk.Tk()
+        except tk.TclError as exc:
+            self.skipTest(f"Tk display is unavailable: {exc}")
+
+        try:
+            host = tk.Frame(root)
+            host.pack(fill="both", expand=True)
+            app = PhraseLoomApp(host)
+            app.pack(fill="both", expand=True)
+            root.update()
+
+            texts = self._collect_widget_texts(app)
+            self.assertIn("导出 Strings", texts)
+            self.assertIn("回填译文…", texts)
+            self.assertNotIn("常用流程", texts)
         finally:
             root.destroy()
 

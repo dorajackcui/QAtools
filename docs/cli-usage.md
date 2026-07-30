@@ -39,6 +39,12 @@
 - `tools/xbench_report_transformer/transform_xbench_report.py`
   - 必填：`input_file`
   - 常用可选：`-s/--sheet`、`-o/--output`
+- `python3 -m phraseloom.cli export`
+  - 必填：源 Excel 路径
+  - 常用可选：`-o/--output`、`--source-col`、`--target-col`、`--context-col`、`--tag-config`、`--group-similar`
+- `python3 -m phraseloom.cli restore`
+  - 必填：翻译完成的 Strings 工作簿
+  - 常用可选：`-o/--output`
 
 ## 推荐命令模板
 
@@ -330,6 +336,29 @@ python3 tools/xbench_report_transformer/transform_xbench_report.py ./Xbench_QA_R
 - 读取明细数
 - 输出行数
 - 输出文件路径
+
+### 9. PhraseLoom Strings 工作流
+
+导出待翻译 Strings：
+
+```bash
+python3 -m phraseloom.cli export ./source.xlsx \
+  --source-col source \
+  --target-col target \
+  --context-col context \
+  -o ./source_strings.xlsx
+```
+
+如需按相似结构调整显示顺序，增加 `--group-similar`。该选项只分组和排序，不会合并普通相似句或生成译文。
+
+翻译完成后回填：
+
+```bash
+python3 -m phraseloom.cli restore ./source_strings.xlsx \
+  -o ./source_translated.xlsx
+```
+
+Strings 工作簿内嵌原工作簿、行映射和 Tag 规则，因此回填时不需要再次传入原始 Excel。详细格式及校验规则见 [`../phraseloom/README.md`](../phraseloom/README.md)。
 
 ## Agent 调用注意事项
 

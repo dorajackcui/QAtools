@@ -71,8 +71,8 @@ phraseloom gui
 phraseloom export source.xlsx
 phraseloom export source.xlsx --group-similar
 phraseloom restore source_strings.xlsx
-python -m unittest discover -v
-python -m unittest tests.test_strings_workflow_e2e -v
+python -m unittest discover -s tests/phraseloom_tests -v
+python -m unittest discover -s tests/phraseloom_tests -p test_strings_workflow_e2e.py -v
 ```
 
 On this machine, if the project virtual environment is stale, use the bundled
