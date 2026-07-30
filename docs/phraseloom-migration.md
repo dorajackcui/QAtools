@@ -18,6 +18,7 @@ PhraseLoom remote；合并后的 `phraseloom/` 是后续开发的唯一代码来
 - PhraseLoom 测试：`tests/phraseloom_tests/`
 - Strings 工作流设计：`docs/superpowers/specs/2026-07-30-strings-workflow-redesign.md`
 - Toolshub 入口：`toolshub_gui.py`
+- 统一 CLI：`qatools phraseloom`
 
 PhraseLoom 的独立 GUI 仍可通过 `phraseloom gui` 或
 `python -m phraseloom.gui` 启动；统一 GUI 中则复用同一个

@@ -67,10 +67,10 @@ converted to a protected token before numeric template parsing.
 ## Commands
 
 ```powershell
-phraseloom gui
-phraseloom export source.xlsx
-phraseloom export source.xlsx --group-similar
-phraseloom restore source_strings.xlsx
+qatools phraseloom gui
+qatools phraseloom export source.xlsx
+qatools phraseloom export source.xlsx --group-similar
+qatools phraseloom restore source_strings.xlsx
 python -m unittest discover -s tests/phraseloom_tests -v
 python -m unittest discover -s tests/phraseloom_tests -p test_strings_workflow_e2e.py -v
 ```

@@ -1,5 +1,7 @@
 # PhraseLoom
 
+统一 CLI：`qatools phraseloom --help`。原有 `phraseloom` 命令继续兼容。
+
 PhraseLoom 把原始 Excel 整理成干净、去重、按相似结构分组的 Strings
 工作簿，并在翻译完成后准确写回原文件。
 
@@ -43,13 +45,13 @@ Angle Tag、BBCode、花括号 Placeholder、已有 Target、自动完成、
 桌面界面：
 
 ```powershell
-phraseloom gui
+qatools phraseloom gui
 ```
 
 交互式终端：
 
 ```powershell
-phraseloom
+qatools phraseloom
 ```
 
 桌面 GUI 只有“导出 Strings”主页面。翻译完成后，点击页面右下角的
@@ -59,7 +61,7 @@ phraseloom
 ## 1. 导出 Strings
 
 ```powershell
-phraseloom export source.xlsx
+qatools phraseloom export source.xlsx
 ```
 
 默认生成：
@@ -84,7 +86,7 @@ source_strings.xlsx
 时可以指定：
 
 ```powershell
-phraseloom export source.xlsx `
+qatools phraseloom export source.xlsx `
   --source-col en `
   --target-col fr `
   --context-col screen
@@ -93,7 +95,7 @@ phraseloom export source.xlsx `
 需要相似句分组时显式启用：
 
 ```powershell
-phraseloom export source.xlsx --group-similar
+qatools phraseloom export source.xlsx --group-similar
 ```
 
 输出工作簿包含两个可见部分：
@@ -151,7 +153,7 @@ Bulbasaur launched an attack
 译者填写 `strings` 工作表中的 Target 后运行：
 
 ```powershell
-phraseloom restore source_strings.xlsx
+qatools phraseloom restore source_strings.xlsx
 ```
 
 默认生成：

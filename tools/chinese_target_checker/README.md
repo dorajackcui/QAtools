@@ -1,5 +1,7 @@
 # Target 中文检查
 
+统一 CLI：`qatools chinese-check --help`。下文中的脚本路径作为兼容入口保留。
+
 检查 Excel `target` 列是否包含中文字符或中文/全角标点，并输出独立问题表。
 
 ## 功能

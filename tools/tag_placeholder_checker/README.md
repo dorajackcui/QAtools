@@ -1,5 +1,7 @@
 # Excel Tag / Placeholder 检查工具
 
+统一 CLI：`qatools tag-check --help`。下文中的脚本路径作为兼容入口保留。
+
 用于读取一份双语 Excel，逐行检查 `source` / `target` 中的 `<...>`、`[color=...]` / `[/color]`、`{...}` / `{{...}}`、`\n` 和 memoQ tag 是否一致，并输出新的检查结果 Excel。
 
 处理完成后会生成新的检查结果 Excel，并新增两个工作表：

@@ -1,5 +1,7 @@
 # Xbench QA Report 转换
 
+统一 CLI：`qatools xbench --help`。下文中的脚本路径作为兼容入口保留。
+
 ## 用途
 
 把 ApSIC Xbench 导出的 QA Report 转换成更适合修改和筛选的五列表格：

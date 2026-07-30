@@ -1,374 +1,252 @@
-# CLI 使用指南
+# QAtools CLI 使用指南
 
-这份文档面向 agent、自动化脚本、批处理命令。
+这份文档是 QAtools 命令行的统一入口，面向人工调用、agent、自动化脚本和
+批处理任务。各工具的业务规则仍以对应工具 README 为准。
 
-仓库中的 CLI 支持“缺参后交互输入”，但对 agent 来说不稳定，因此推荐始终使用非交互方式调用。
+## 安装与入口
 
-## 通用建议
-
-- 始终显式传入必填参数，不要依赖脚本在终端里继续提问。
-- 推荐显式指定 `--sheet` 和 `--start-row`，避免工作簿默认活动工作表变化带来不确定性。
-- 推荐显式指定 `-o/--output`，这样输出路径稳定，后续 agent 更容易继续处理结果文件。
-- 列参数统一使用 Excel 列字母，例如 `A`、`B`、`AA`。
-- 如果 CLI 与 GUI 行为看起来不同，优先记住：GUI 的“自动识别工作表 / source / target 列”属于界面增强，CLI 不会自动帮你补这些参数。
-- 除特别说明外，工具会生成新的 Excel 文件，不会覆盖原文件。
-
-## 非交互调用约定
-
-- `tools/term_pair_checker/extract_terms_from_excel.py`
-  - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
-  - 常用可选：`-s/--sheet`、`--start-row`、`--mark-style`、`--no-term-mark`、`--exclusion-config`、`--history-tb`、`--history-sheet`、`--history-source-column`、`--history-target-column`、`--history-start-row`、`-o/--output`
-- `tools/tag_placeholder_checker/check_tags_and_placeholders.py`
-  - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
-  - 常用可选：`-s/--sheet`、`--start-row`、`--token-type`、`--angle-config`、`-o/--output`
-- `tools/line_break_checker/check_line_breaks.py`
-  - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
-  - 常用可选：`-s/--sheet`、`--start-row`、`-o/--output`
-- `tools/source_consistency_checker/check_source_consistency.py`
-  - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
-  - 常用可选：`-s/--sheet`、`--start-row`、`-o/--output`
-- `tools/chinese_target_checker/check_chinese_target.py`
-  - 必填：`input_file`、`-c/--source-column`、`-t/--target-column`
-  - 常用可选：`-s/--sheet`、`--start-row`、`-o/--output`
-- `tools/excel_line_splitter/split_excel_lines.py`
-  - 必填：`input_file`、`-c/--source-column`、`-r/--result-column`
-  - 常用可选：`-s/--sheet`、`--start-row`、`-o/--output`
-- `tools/french_nbsp_restorer/restore_french_nbsp.py`
-  - 必填：`input_file`、`-t/--target-column`
-  - 常用可选：`-s/--sheet`、`-r/--result-column`、`--start-row`、`-o/--output`
-- `tools/xbench_report_transformer/transform_xbench_report.py`
-  - 必填：`input_file`
-  - 常用可选：`-s/--sheet`、`-o/--output`
-- `python3 -m phraseloom.cli export`
-  - 必填：源 Excel 路径
-  - 常用可选：`-o/--output`、`--source-col`、`--target-col`、`--context-col`、`--tag-config`、`--group-similar`
-- `python3 -m phraseloom.cli restore`
-  - 必填：翻译完成的 Strings 工作簿
-  - 常用可选：`-o/--output`
-
-## 推荐命令模板
-
-### 1. 术语检查
-
-最稳妥的 agent 调用方式：
+推荐在仓库根目录安装：
 
 ```bash
-python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
+python -m pip install -e .
+```
+
+安装后统一使用：
+
+```bash
+qatools <命令> [参数]
+```
+
+不安装也可以使用完全等价的模块入口：
+
+```bash
+python -m qatools <命令> [参数]
+```
+
+查看命令列表和原生参数：
+
+```bash
+qatools --help
+qatools list
+qatools help qa
+qatools tag-check --help
+```
+
+## 命令目录
+
+| 命令 | 用途 |
+|---|---|
+| `qatools gui` | 打开统一 Toolshub GUI |
+| `qatools qa` | 一次执行多项质量检查并生成统一报告 |
+| `qatools phraseloom` | 导出 Strings 并在翻译后回填 |
+| `qatools term-check` | 术语 mark 与历史 TB 检查 |
+| `qatools tag-check` | Tag、Placeholder、换行标记与 memoQ Tag 检查 |
+| `qatools line-break-check` | 真实换行数量检查 |
+| `qatools consistency-check` | 同源译文一致性检查 |
+| `qatools chinese-check` | Target 中文字符与中文标点检查 |
+| `qatools split-lines` | Excel 多行单元格拆列 |
+| `qatools french-nbsp` | 法语 NBSP 恢复 |
+| `qatools xbench` | Xbench QA Report 转换 |
+
+可用别名：
+
+- `qatools workflow` → `qatools qa`
+- `qatools strings` → `qatools phraseloom`
+- `qatools source-consistency` → `qatools consistency-check`
+- `qatools target-chinese` → `qatools chinese-check`
+- `qatools xbench-transform` → `qatools xbench`
+
+## 自动化调用约定
+
+- 始终显式传入输入文件、工作表、列和输出路径。
+- 列参数使用 Excel 列字母，例如 `A`、`B`、`AA`。
+- 不要依赖缺参后的终端交互。
+- 除特别说明外，工具生成新 Excel，不覆盖输入文件。
+- GUI 的工作表和列自动识别不属于 CLI 默认行为。
+- 每个子命令的 `--help` 直接来自对应工具参数解析器，是参数名称的权威来源。
+
+## 一键质量检查
+
+默认运行术语、Tag、换行数量、同源译文一致性和 Target 中文检查：
+
+```bash
+qatools qa ./input.xlsx \
   -s Sheet1 \
   -c A \
   -t B \
   --start-row 2 \
-  --mark-style '【】' \
-  -o ./artifacts/term_pair_check_input.xlsx
+  -o ./artifacts/workflow_check_input.xlsx
 ```
 
-如果需要同时检查多种术语 mark：
+用 `--check` 重复选择部分检查：
 
 ```bash
-python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  --mark-style '【】' \
-  --mark-style '[]' \
-  -o ./artifacts/term_pair_check_input.xlsx
+qatools qa ./input.xlsx -c A -t B \
+  --check tag \
+  --check line-break \
+  --check consistency
 ```
 
-如果要切换误判排除规则：
-
-```bash
-python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  --mark-style '【】' \
-  --exclusion-config ./custom_term_exclusions.json \
-  -o ./artifacts/term_pair_check_input.xlsx
-```
-
-如果要优先复用历史 TB：
-
-```bash
-python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  --mark-style '【】' \
-  --history-tb ./history_tb.xlsx \
-  --history-sheet Glossary \
-  -o ./artifacts/term_pair_check_input.xlsx
-```
-
-历史 TB 会自动识别第 1 行的 `source` / `target` 列；也兼容本工具输出里的 `source术语` / `target术语` 表头。读取历史值时会去掉支持的 mark。传入历史 TB 后，会先把历史 TB 全量加入检查词库，再合并本批次新增术语；命中历史 source 时使用历史 target，未命中的 source 才按本批次第一次出现建立新增术语对。输出的 `术语表` 只写本次检查文本中实际涉及的历史术语和本批次新增术语。
-
-如果不需要从 mark 提取新术语、只想用历史 TB 检查：
-
-```bash
-python3 tools/term_pair_checker/extract_terms_from_excel.py ./input.xlsx \
-  -s Sheet1 -c A -t B \
-  --start-row 2 \
-  --no-term-mark \
-  --history-tb ./glossary.xlsx \
-  --history-sheet Glossary \
-  --history-source-column A \
-  --history-target-column B \
-  -o ./artifacts/term_pair_check_input.xlsx
-```
-
-`--no-term-mark` 必须与 `--history-tb` 一起使用。该模式替代原“术语表命中检查”，输出统一为 `术语表` 和 `问题列`。
-
-输出结果中会新增这些工作表：
-
-- `术语表`：包含保留 mark、无 mark 和 `术语来源` 列；来源为 `历史TB` 或 `本批次新增`
-- `问题列`
-
-标准输出会打印：
-
-- 工作表名
-- source / target 列
-- mark 类型
-- 术语表条目数
-- 问题条数
-- 输出文件路径
-
-### 2. Excel 分行拆列
-
-推荐完整调用：
-
-```bash
-python3 tools/excel_line_splitter/split_excel_lines.py ./input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -r B \
-  --start-row 2 \
-  -o ./artifacts/input_split_lines.xlsx
-```
-
-标准输出会打印：
-
-- 工作表名
-- 源列 / 结果列
-- 开始行
-- 写入条目数
-- 输出文件路径
-
-### 3. Tag / Placeholder 检查
-
-推荐完整调用：
-
-```bash
-python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  --token-type angle \
-  --token-type square_color \
-  --token-type brace \
-  --token-type newline \
-  --token-type memoq \
-  -o ./artifacts/tag_check_input.xlsx
-```
-
-说明：
-
-- `<...>` 默认全量作为普通 tag 检查
-- 方括号 color tag 会检查 `[color=...]` 和 `[/color]`
-- memoQ tag 会按 `{n}`、`{n>`、`<n}` 单独检查，例如 `{1}{2>Glace du Néant<3}` 会提取为 `{1}`、`{2>`、`<3}`，不会作为普通 `{...}` placeholder 检查
-
-如果只检查 `<...>` tag：
-
-```bash
-python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py ./input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  --token-type angle \
-  -o ./artifacts/input_tag_checked.xlsx
-```
-
-输出结果中会新增：
-
-- `标签占位问题`
-- `检查汇总`
-
-标准输出会打印：
-
-- 检查工作表
-- 检查类型
-- 总行数
-- 命中检查类型行数
-- 含尖括号 tag 行数
-- 含方括号 color tag 行数
-- 含花括号 placeholder 行数
-- 含 `\n` mark 行数
-- 含 memoQ tag 行数
-- 问题行数 / 问题条数
-- 输出文件路径
-
-### 4. 换行数量检查
-
-```bash
-python3 tools/line_break_checker/check_line_breaks.py ./input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  -o ./artifacts/line_break_check_input.xlsx
-```
-
-输出结果会新增 `换行数量问题` 工作表，列出问题行号、双边换行数、数量差和原文。该工具检查 Excel 单元格中的真实换行；文本形式的 `\n` 不算真实换行。
-
-### 5. 同源译文一致性
-
-```bash
-python3 tools/source_consistency_checker/check_source_consistency.py ./input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  -o ./artifacts/source_consistency_check_input.xlsx
-```
-
-输出结果会新增 `同源译文不一致` 工作表，列出每个不一致 source 组中的全部原始行。source 和 target 均按单元格文本精确比较；空 source 跳过，空 target 参与比较。
-
-### 6. Target 中文检查
-
-生成新的检查结果文件：
-
-```bash
-python3 tools/chinese_target_checker/check_chinese_target.py ./input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  -o ./artifacts/input_chinese_target_checked.xlsx
-```
-
-说明：
-
-- 原数据工作表保持不变，命中行写入独立的 `Target中文问题` 工作表。
-- 问题表列为 `行号 / source原文 / target原文 / 问题描述 / 命中字符`。
-- 检查范围包含汉字、CJK 标点、全角标点和常见中文排版符号，例如 `【】（）`、`，。！？`、`《》“”‘’·`；单字符 `—` 和 `…` 放行。
-- 普通 ASCII 标点和全角英数不会单独触发标记。
-- 已有的 `Target中文问题` 或旧版 `中文检查问题` 工作表会在运行时重建或移除，避免残留。
-- 不传 `-o/--output` 时，默认生成 `target_chinese_check_<原文件名>`。
-
-标准输出会打印：
-
-- 工作表名
-- source / target 列
-- 开始行
-- 处理行数
-- 含中文行数
-- 输出文件路径
-
-### 7. 法语 NBSP 恢复
-
-直接修复 target 列：
-
-```bash
-python3 tools/french_nbsp_restorer/restore_french_nbsp.py ./input.xlsx \
-  -s Sheet1 \
-  -t B \
-  --start-row 2 \
-  -o ./artifacts/input_french_nbsp_restored.xlsx
-```
-
-如果希望保留原 target，并把修复后的完整译文写入另一列：
-
-```bash
-python3 tools/french_nbsp_restorer/restore_french_nbsp.py ./input.xlsx \
-  -s Sheet1 \
-  -t B \
-  -r C \
-  --start-row 2 \
-  -o ./artifacts/input_french_nbsp_restored.xlsx
-```
-
-说明：
-
-- 会恢复 `;`、`:`、`?`、`!` 前的 NBSP。
-- 会恢复 `«` 后和 `»` 前的 NBSP。
-- 指定 `-r/--result-column` 后，不需要修复的 target 也会复制到结果列。
-- 不会改写 URL 内标点和 `12:30` 这类时间冒号。
-
-标准输出会打印：
-
-- 工作表名
-- target 列 / 结果列
-- 开始行
-- 处理行数
-- 修复行数
-- 输出文件路径
-
-### 8. Xbench QA Report 转换
-
-推荐完整调用：
-
-```bash
-python3 tools/xbench_report_transformer/transform_xbench_report.py ./Xbench_QA_Report.xlsx \
-  -s "Xbench QA" \
-  -o ./xbench_flat.xlsx
-```
-
-输出列固定为：
+可选检查值：
 
 ```text
-文件名, key, source, target, QA问题
+term
+tag
+line-break
+consistency
+chinese
 ```
 
-说明：
+术语和 Tag 的高级参数：
 
-- `QA问题` 使用 `源术语 -> 目标术语：问题类型` 格式。
-- 同一组内多个问题用中文分号 `；` 合并。
-- `Metadata` 第一行作为 key，第二行作为文件名；没有 key 时按文件名+source 或 source 降级聚类。
-- 默认输出文件名为 `xbench_transform_<原文件名>`。
-- 工具会生成新的结果 Excel，不会覆盖原始 Xbench 报告；如果 `-o` 指向输入文件本身，会报错。
+```bash
+qatools qa ./input.xlsx -c A -t B \
+  --term-mark-style '【】' \
+  --term-mark-style '[]' \
+  --history-tb ./history_tb.xlsx \
+  --history-sheet Glossary \
+  --tag-token-type angle \
+  --tag-token-type brace
+```
 
-标准输出会打印：
+只使用历史 TB、不从 mark 提取新术语：
 
-- 工作表名
-- 读取明细数
-- 输出行数
-- 输出文件路径
+```bash
+qatools qa ./input.xlsx -c A -t B \
+  --check term \
+  --no-term-mark \
+  --history-tb ./history_tb.xlsx
+```
 
-### 9. PhraseLoom Strings 工作流
+## PhraseLoom
 
 导出待翻译 Strings：
 
 ```bash
-python3 -m phraseloom.cli export ./source.xlsx \
+qatools phraseloom export ./source.xlsx \
   --source-col source \
   --target-col target \
   --context-col context \
   -o ./source_strings.xlsx
 ```
 
-如需按相似结构调整显示顺序，增加 `--group-similar`。该选项只分组和排序，不会合并普通相似句或生成译文。
-
-翻译完成后回填：
+可选相似结构分组：
 
 ```bash
-python3 -m phraseloom.cli restore ./source_strings.xlsx \
+qatools phraseloom export ./source.xlsx --group-similar
+```
+
+回填翻译：
+
+```bash
+qatools phraseloom restore ./source_strings.xlsx \
   -o ./source_translated.xlsx
 ```
 
-Strings 工作簿内嵌原工作簿、行映射和 Tag 规则，因此回填时不需要再次传入原始 Excel。详细格式及校验规则见 [`../phraseloom/README.md`](../phraseloom/README.md)。
+Strings 工作簿内嵌原工作簿、行映射和 Tag 规则，回填时无需再次传入原始
+Excel。完整规则见 [PhraseLoom README](../phraseloom/README.md)。
 
-## Agent 调用注意事项
+## 单项质量检查
 
-- 不要把 GUI 的自动列识别能力当成 CLI 的默认能力；CLI 场景下请自己明确传列字母。
-- 不要省略位置参数，否则脚本可能进入交互提问模式。
-- 如果要批量处理多个文件，建议为每次运行都显式传入独立输出文件名，避免后续步骤误读旧结果。
-- 如果只需要默认输出命名，也可以省略 `-o`；默认命名分别是：
-  - `term_pair_check_<原文件名>`
-  - `tag_check_<原文件名>`
-  - `target_chinese_check_<原文件名>`
-  - `<原文件名>_split_lines.xlsx`
-  - `<原文件名>_french_nbsp_restored.xlsx`
-  - `xbench_transform_<原文件名>`
+术语检查：
+
+```bash
+qatools term-check ./input.xlsx \
+  -s Sheet1 -c A -t B --start-row 2 \
+  --mark-style '【】' \
+  --history-tb ./history_tb.xlsx \
+  -o ./artifacts/term_pair_check_input.xlsx
+```
+
+Tag / Placeholder 检查：
+
+```bash
+qatools tag-check ./input.xlsx \
+  -s Sheet1 -c A -t B --start-row 2 \
+  --token-type angle \
+  --token-type square_color \
+  --token-type brace \
+  --token-type newline \
+  -o ./artifacts/tag_check_input.xlsx
+```
+
+换行数量检查：
+
+```bash
+qatools line-break-check ./input.xlsx \
+  -s Sheet1 -c A -t B --start-row 2 \
+  -o ./artifacts/line_break_check_input.xlsx
+```
+
+同源译文一致性：
+
+```bash
+qatools consistency-check ./input.xlsx \
+  -s Sheet1 -c A -t B --start-row 2 \
+  -o ./artifacts/source_consistency_check_input.xlsx
+```
+
+Target 中文检查：
+
+```bash
+qatools chinese-check ./input.xlsx \
+  -s Sheet1 -c A -t B --start-row 2 \
+  -o ./artifacts/target_chinese_check_input.xlsx
+```
+
+## 文本修复与转换
+
+分行拆列：
+
+```bash
+qatools split-lines ./input.xlsx \
+  -s Sheet1 -c A -r B --start-row 2 \
+  -o ./artifacts/input_split_lines.xlsx
+```
+
+法语 NBSP 恢复：
+
+```bash
+qatools french-nbsp ./input.xlsx \
+  -s Sheet1 -t B -r C --start-row 2 \
+  -o ./artifacts/input_french_nbsp_restored.xlsx
+```
+
+Xbench 报告转换：
+
+```bash
+qatools xbench ./Xbench_QA_Report.xlsx \
+  -s "Xbench QA" \
+  -o ./artifacts/xbench_flat.xlsx
+```
+
+## 兼容入口
+
+统一 CLI 是新文档和新自动化的首选入口。以下旧入口继续可用：
+
+| 统一命令 | 兼容入口 |
+|---|---|
+| `qatools gui` | `python toolshub_gui.py`、`toolshub` |
+| `qatools phraseloom` | `phraseloom`、`python -m phraseloom.cli` |
+| `qatools term-check` | `python tools/term_pair_checker/extract_terms_from_excel.py` |
+| `qatools tag-check` | `python tools/tag_placeholder_checker/check_tags_and_placeholders.py` |
+| `qatools line-break-check` | `python tools/line_break_checker/check_line_breaks.py` |
+| `qatools consistency-check` | `python tools/source_consistency_checker/check_source_consistency.py` |
+| `qatools chinese-check` | `python tools/chinese_target_checker/check_chinese_target.py` |
+| `qatools split-lines` | `python tools/excel_line_splitter/split_excel_lines.py` |
+| `qatools french-nbsp` | `python tools/french_nbsp_restorer/restore_french_nbsp.py` |
+| `qatools xbench` | `python tools/xbench_report_transformer/transform_xbench_report.py` |
+
+`qatools qa` 是统一新增的一键检查 CLI；此前该流程只有 GUI。
+
+## 扩展新命令
+
+新增 CLI 工具时：
+
+1. 在独立模块中保留业务逻辑和原生参数解析器。
+2. 在 `qatools/cli.py` 的 `COMMANDS` 中登记命令、说明和模块。
+3. 在本文件加入至少一个 `qatools <命令>` 示例。
+4. 添加转发测试和工具自身测试。
+5. 运行 `qatools <命令> --help`、完整 unittest 和 wheel 构建。
+
+测试会校验每个正式命令都已出现在本指南中，从而减少注册表与文档漂移。

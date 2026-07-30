@@ -1,5 +1,7 @@
 # 同源译文一致性检查
 
+统一 CLI：`qatools consistency-check --help`。下文中的脚本路径作为兼容入口保留。
+
 检查 Excel 中完全相同的 `source` 是否对应多个不同 `target`，用于定位同源文本译法不一致问题。
 
 ## 规则

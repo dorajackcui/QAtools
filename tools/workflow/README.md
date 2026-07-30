@@ -1,6 +1,26 @@
 # 一键质量检查与修订回填
 
+统一 CLI：`qatools qa --help`。GUI 仍用于交互式检查和修订回填。
+
 workflow 会按顺序执行质量检查板块中选中的项目，并将结果写入同一个 Excel。
+
+## CLI 快速开始
+
+默认运行全部五项质量检查：
+
+```bash
+qatools qa input.xlsx -s Sheet1 -c A -t B
+```
+
+只运行指定检查：
+
+```bash
+qatools qa input.xlsx -c A -t B \
+  --check tag \
+  --check consistency
+```
+
+完整参数见 [`../../docs/cli-usage.md`](../../docs/cli-usage.md)。
 
 ## 快速修订流程
 

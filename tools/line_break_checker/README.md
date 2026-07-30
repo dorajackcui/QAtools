@@ -1,5 +1,7 @@
 # 换行数量检查
 
+统一 CLI：`qatools line-break-check --help`。下文中的脚本路径作为兼容入口保留。
+
 逐行比较 Excel `source` / `target` 单元格中的真实换行数量，定位肉眼不易发现的换行缺失或多出问题。
 
 ## 规则

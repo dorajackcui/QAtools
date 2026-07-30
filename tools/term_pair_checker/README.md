@@ -1,5 +1,7 @@
 # Excel 术语检查工具
 
+统一 CLI：`qatools term-check --help`。下文中的脚本路径作为兼容入口保留。
+
 统一处理两种术语检查模式：
 
 - 选择术语 mark：从 Excel 的 `source` / `target` 中提取新术语对，并结合历史 TB 回扫整表。

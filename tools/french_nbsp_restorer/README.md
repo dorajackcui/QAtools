@@ -1,5 +1,7 @@
 # 法语 NBSP 恢复
 
+统一 CLI：`qatools french-nbsp --help`。下文中的脚本路径作为兼容入口保留。
+
 这个工具用于恢复 Excel target 列中的法语 non-breaking space（NBSP），输出新的 Excel 文件，不覆盖原文件。
 
 ## 规则
