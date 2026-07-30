@@ -1,0 +1,35 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# Excel inputs/outputs may contain client or project-local translation data.
+*.xlsx
+*.xlsm
+*.xls
+
+# Generated localization work folders
+*_l10n/
+
+# Local git worktrees
+.worktrees/
+
+# Python tooling outputs
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Temporary files
+~$*
+*.tmp
+*.log
+/testfiles/

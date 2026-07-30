@@ -1,0 +1,63 @@
+SCHEMA_VERSION = "1.0"
+
+SCHEMA_VERSION_KEY = "schema_version"
+WORKBOOK_KIND_KEY = "workbook_kind"
+STRINGS_PACKAGE_KIND = "strings_package"
+ORIGINAL_FILENAME_KEY = "original_filename"
+ORIGINAL_SHEET_STATES_KEY = "original_sheet_states"
+ORIGINAL_ACTIVE_SHEET_KEY = "original_active_sheet"
+SOURCE_COLUMN_KEY = "source_column"
+TARGET_COLUMN_KEY = "target_column"
+CONTEXT_COLUMN_KEY = "context_column"
+GROUP_SIMILAR_KEY = "group_similar"
+MIN_GROUP_SIZE_KEY = "min_group_size"
+TAG_RULES_VERSION_KEY = "tag_rules_version"
+TAG_RULES_HASH_KEY = "tag_rules_hash"
+TAG_RULES_SOURCE_KEY = "tag_rules_source"
+TAG_RULES_PAYLOAD_KEY = "tag_rules_payload"
+
+STRINGS_SHEET = "strings"
+COMPLETED_STRINGS_SHEET = "completed"
+STRINGS_MAP_SHEET = "_strings_map"
+METADATA_SHEET = "_metadata"
+
+STRING_ID_COLUMN = "string_id"
+GROUP_COLUMN = "group"
+SOURCE_COLUMN = "source"
+TARGET_COLUMN = "target"
+SAMPLE_SOURCES_COLUMN = "sample_sources"
+CONTEXT_COLUMN = "context"
+OCCURRENCES_COLUMN = "occurrences"
+ROW_NUMBER_COLUMN = "row_number"
+STATUS_COLUMN = "status"
+UNIT_TYPE_COLUMN = "unit_type"
+SOURCE_UNIT_COLUMN = "source_unit"
+VARIABLE_VALUES_COLUMN = "variable_values"
+KEY_COLUMN = "key"
+VALUE_COLUMN = "value"
+
+STRINGS_COLUMNS = [
+    STRING_ID_COLUMN,
+    GROUP_COLUMN,
+    SOURCE_COLUMN,
+    TARGET_COLUMN,
+    SAMPLE_SOURCES_COLUMN,
+    CONTEXT_COLUMN,
+    OCCURRENCES_COLUMN,
+]
+COMPLETED_STRINGS_COLUMNS = [
+    ROW_NUMBER_COLUMN,
+    STATUS_COLUMN,
+    SOURCE_COLUMN,
+    TARGET_COLUMN,
+    CONTEXT_COLUMN,
+]
+STRINGS_MAP_COLUMNS = [
+    ROW_NUMBER_COLUMN,
+    STRING_ID_COLUMN,
+    SOURCE_COLUMN,
+    UNIT_TYPE_COLUMN,
+    SOURCE_UNIT_COLUMN,
+    VARIABLE_VALUES_COLUMN,
+]
+METADATA_COLUMNS = [KEY_COLUMN, VALUE_COLUMN]
