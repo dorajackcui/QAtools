@@ -405,6 +405,60 @@ class TagEngineTests(unittest.TestCase):
 
         self.assertEqual(restored, "Gagnant du gros lot n° {2} : {1}")
 
+    def test_mq_rxt_tags_are_atomic_and_restore_exactly(self):
+        from phraseloom.tag_engine import (
+            RAW_PLACEHOLDER,
+            TAG_SELF,
+            extract_tags,
+            restore_tags,
+        )
+
+        source = (
+            r'在[mq:rxt displaytext="<span color=\&quot;{color1}\&quot;>" '
+            r'val="<span color=\&quot;{color2}\&quot;>"]精英难度下的破碎中枢'
+            r'[mq:rxt displaytext="</>" val="</>"]中，使用{num1}次'
+            r'[mq:rxt displaytext="<hyperlink color=\&quot;{color3}\&quot; '
+            r'action=\&quot;{num2}\&quot;>" val="<hyperlink color=\&quot;'
+            r'{color4}\&quot; action=\&quot;{num3}\&quot;>"]'
+            r'[mq:rxt displaytext="\{1}" val="\{2}"]'
+            r'[mq:rxt displaytext="</>" val="</>"]'
+            r'([mq:rxt displaytext="\\{3}" val="\\{4}"]/'
+            r'[mq:rxt displaytext="\\{5}" val="\\{6}"])'
+        )
+
+        extraction = extract_tags(source)
+
+        self.assertEqual(
+            extraction.text,
+            "在{1}精英难度下的破碎中枢{2}中，使用{3}次{4}{5}{6}({7}/{8})",
+        )
+        self.assertEqual(
+            [tag.kind for tag in extraction.tags],
+            [
+                TAG_SELF,
+                TAG_SELF,
+                RAW_PLACEHOLDER,
+                TAG_SELF,
+                TAG_SELF,
+                TAG_SELF,
+                TAG_SELF,
+                TAG_SELF,
+            ],
+        )
+        self.assertEqual(extraction.tags[2].raw, "{num1}")
+        self.assertEqual(extraction.warnings, ())
+        self.assertEqual(restore_tags(extraction.text, extraction.tags), source)
+
+    def test_mq_rxt_scanner_ignores_closing_bracket_inside_quotes(self):
+        from phraseloom.tag_engine import extract_tags
+
+        source = '[mq:rxt displaytext="left]right" val="value"]tail'
+
+        extraction = extract_tags(source)
+
+        self.assertEqual(extraction.text, "{1}tail")
+        self.assertEqual(extraction.tags[0].raw, source[:-4])
+
     def test_validate_tag_placeholders_reports_extra_counts(self):
         from phraseloom.tag_engine import extract_tags, validate_tag_placeholders
 
@@ -444,6 +498,20 @@ class TagEngineTests(unittest.TestCase):
 
         self.assertEqual(result.text, "{1} A {2}")
         self.assertEqual(result.tags, tags)
+        self.assertEqual(result.warnings, ())
+
+    def test_serialize_known_tags_reserves_explicit_token_before_duplicate_raw_tag(self):
+        from phraseloom.tag_engine import TAG_SELF, TagToken, serialize_known_tags
+
+        tags = (
+            TagToken(1, TAG_SELF, "{1}", "<br/>"),
+            TagToken(2, TAG_SELF, "{2}", "<br/>"),
+        )
+
+        result = serialize_known_tags("{1} A <br/>", tags)
+
+        self.assertEqual(result.text, "{1} A {2}")
+        self.assertEqual(result.tags, (tags[1],))
         self.assertEqual(result.warnings, ())
 
     def test_serialize_known_tags_does_not_cascade_raw_brace_replacements(self):

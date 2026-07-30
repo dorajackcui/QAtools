@@ -133,6 +133,172 @@ class StringsWorkflowTests(unittest.TestCase):
             finally:
                 result.close()
 
+    def test_mq_rxt_tags_are_atomic_through_export_and_restore(self) -> None:
+        def mq_rxt(displaytext: str, value: str) -> str:
+            return f'[mq:rxt displaytext="{displaytext}" val="{value}"]'
+
+        def make_source(
+            *,
+            count: int,
+            display_color: str,
+            value_color: str,
+            display_link_color: str,
+            value_link_color: str,
+            display_action: int,
+            value_action: int,
+            references: tuple[int, int, int, int, int, int],
+        ) -> tuple[str, str]:
+            start = mq_rxt(
+                fr"<span color=\&quot;{display_color}\&quot;>",
+                fr"<span color=\&quot;{value_color}\&quot;>",
+            )
+            close = mq_rxt("</>", "</>")
+            link = mq_rxt(
+                fr"<hyperlink color=\&quot;{display_link_color}\&quot; "
+                fr"action=\&quot;{display_action}\&quot;>",
+                fr"<hyperlink color=\&quot;{value_link_color}\&quot; "
+                fr"action=\&quot;{value_action}\&quot;>",
+            )
+            reference = mq_rxt(
+                fr"\{{{references[0]}}}",
+                fr"\{{{references[1]}}}",
+            )
+            left = mq_rxt(
+                fr"\\{{{references[2]}}}",
+                fr"\\{{{references[3]}}}",
+            )
+            right = mq_rxt(
+                fr"\\{{{references[4]}}}",
+                fr"\\{{{references[5]}}}",
+            )
+            source = (
+                f"在{start}精英难度下的破碎中枢{close}中，使用{count}次"
+                f"{link}{reference}{close}({left}/{right})"
+            )
+            expected_target = (
+                f"In {start}the Shattered Nexus on Elite difficulty{close}, "
+                f"use {count} times {link}{reference}{close}({left}/{right})"
+            )
+            return source, expected_target
+
+        source_one, expected_one = make_source(
+            count=3,
+            display_color="#FF0000",
+            value_color="#00FF00",
+            display_link_color="#ABCDEF",
+            value_link_color="#123456",
+            display_action=101,
+            value_action=201,
+            references=(1, 2, 3, 4, 5, 6),
+        )
+        source_two, expected_two = make_source(
+            count=4,
+            display_color="#112233",
+            value_color="#445566",
+            display_link_color="#778899",
+            value_link_color="#AABBCC",
+            display_action=102,
+            value_action=202,
+            references=(7, 8, 9, 10, 11, 12),
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "mq_tags.xlsx"
+            package_path = Path(tmp) / "mq_tags_strings.xlsx"
+            result_path = Path(tmp) / "mq_tags_translated.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["source", "target"])
+            worksheet.append([source_one, None])
+            worksheet.append([source_two, None])
+            workbook.save(source_path)
+            workbook.close()
+
+            export_stats = export_strings_workbook(source_path, package_path)
+
+            self.assertEqual(export_stats["pending_row_count"], 2)
+            self.assertEqual(export_stats["string_count"], 1)
+            package = load_workbook(package_path)
+            strings = package[schema.STRINGS_SHEET]
+            headers = [cell.value for cell in strings[1]]
+            source_index = headers.index(schema.SOURCE_COLUMN) + 1
+            target_index = headers.index(schema.TARGET_COLUMN) + 1
+            self.assertEqual(
+                strings.cell(row=2, column=source_index).value,
+                (
+                    "在{1}精英难度下的破碎中枢{2}中，使用{num1}次"
+                    "{3}{4}{5}({6}/{7})"
+                ),
+            )
+            strings.cell(row=2, column=target_index).value = (
+                "In {1}the Shattered Nexus on Elite difficulty{2}, "
+                "use {num1} times {3}{4}{5}({6}/{7})"
+            )
+            package.save(package_path)
+            package.close()
+
+            restore_stats = restore_strings_workbook(package_path, result_path)
+
+            self.assertEqual(restore_stats["restored_row_count"], 2)
+            self.assertEqual(restore_stats["issue_count"], 0)
+            result = load_workbook(result_path, data_only=True)
+            try:
+                targets = [
+                    row[1]
+                    for row in result.active.iter_rows(min_row=2, values_only=True)
+                ]
+                self.assertEqual(targets, [expected_one, expected_two])
+            finally:
+                result.close()
+
+    def test_restore_accepts_mixed_tokens_and_complete_raw_mq_tags(self) -> None:
+        hyperlink = (
+            r'[mq:rxt displaytext="<hyperlink color=\&quot;#FF8E33\&quot; '
+            r'action=\&quot;19040000001\&quot;>" val="<hyperlink color='
+            r'\&quot;#FF8E33\&quot; action=\&quot;19040000001\&quot;>"]'
+        )
+        reference = r'[mq:rxt displaytext="\{2}" val="\{2}"]'
+        close = r'[mq:rxt displaytext="</>" val="</>"]'
+        left = r'[mq:rxt displaytext="\{0}" val="\{0}"]'
+        right = r'[mq:rxt displaytext="\{1}" val="\{1}"]'
+        raw_source = (
+            f"拾取从该区域回收的{hyperlink}{reference}{close}"
+            f"({left}/{right})"
+        )
+        mixed_target = f"拾取从该区域回收的{{1}}{reference}{{3}}({{4}}/{{5}})"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "mq_raw_target.xlsx"
+            package_path = Path(tmp) / "mq_raw_target_strings.xlsx"
+            result_path = Path(tmp) / "mq_raw_target_restored.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["source", "target"])
+            worksheet.append([raw_source, None])
+            workbook.save(source_path)
+            workbook.close()
+
+            export_strings_workbook(source_path, package_path)
+            package = load_workbook(package_path)
+            strings = package[schema.STRINGS_SHEET]
+            headers = [cell.value for cell in strings[1]]
+            strings.cell(
+                row=2,
+                column=headers.index(schema.TARGET_COLUMN) + 1,
+            ).value = mixed_target
+            package.save(package_path)
+            package.close()
+
+            restore_stats = restore_strings_workbook(package_path, result_path)
+
+            self.assertEqual(restore_stats["restored_row_count"], 1)
+            self.assertEqual(restore_stats["issue_count"], 0)
+            result = load_workbook(result_path, data_only=True)
+            try:
+                self.assertEqual(result.active.cell(row=2, column=2).value, raw_source)
+            finally:
+                result.close()
+
     def test_export_skips_completed_rows_deduplicates_and_groups(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             source_path = Path(tmp) / "source.xlsx"
@@ -483,7 +649,13 @@ class StringsWorkflowTests(unittest.TestCase):
 
             stats = restore_strings_workbook(package_path)
 
+            self.assertEqual(stats["restored_row_count"], 0)
             self.assertGreater(stats["issue_count"], 0)
+            result = load_workbook(stats["output_path"], data_only=True)
+            try:
+                self.assertIsNone(result.active.cell(row=2, column=2).value)
+            finally:
+                result.close()
             audit = load_workbook(stats["audit_output_path"], data_only=True)
             try:
                 issue_text = "\n".join(

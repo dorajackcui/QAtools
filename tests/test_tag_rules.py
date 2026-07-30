@@ -24,6 +24,9 @@ class TagRulesTests(unittest.TestCase):
         self.assertTrue(rules.is_angle_optional_pair("i"))
         self.assertTrue(rules.is_angle_optional_pair("outline"))
         self.assertFalse(rules.is_angle_optional_pair("u"))
+        self.assertTrue(rules.allows_atomic_square("mq:rxt"))
+        self.assertTrue(rules.allows_atomic_square("MQ:RXT"))
+        self.assertFalse(rules.allows_atomic_square("mq:other"))
 
     def test_custom_rules_load_from_toml(self):
         from phraseloom.tag_rules import load_tag_rules
@@ -52,6 +55,10 @@ class TagRulesTests(unittest.TestCase):
                         'mode = "allowlist"',
                         'allowed = ["bar"]',
                         "",
+                        "[atomic_square_tags]",
+                        'mode = "allowlist"',
+                        'allowed = ["MQ:RXT"]',
+                        "",
                         "[raw_braces]",
                         "protect_all = false",
                     ]
@@ -68,6 +75,7 @@ class TagRulesTests(unittest.TestCase):
         self.assertTrue(rules.is_angle_single("br"))
         self.assertTrue(rules.is_angle_optional_pair("foo"))
         self.assertTrue(rules.allows_bbcode("bar"))
+        self.assertTrue(rules.allows_atomic_square("mq:rxt"))
         self.assertFalse(rules.protect_raw_braces)
 
     def test_normalized_hash_ignores_order_and_case(self):
@@ -79,6 +87,7 @@ class TagRulesTests(unittest.TestCase):
             bbcode_allowed=frozenset({"b", "color"}),
             protect_raw_braces=True,
             source="left",
+            atomic_square_allowed=frozenset({"mq:rxt"}),
         )
         right = TagRules(
             version=1,
@@ -86,6 +95,7 @@ class TagRulesTests(unittest.TestCase):
             bbcode_allowed=frozenset({"COLOR", "B"}),
             protect_raw_braces=True,
             source="right",
+            atomic_square_allowed=frozenset({"MQ:RXT"}),
         )
 
         self.assertEqual(

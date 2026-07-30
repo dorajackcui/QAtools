@@ -17,5 +17,9 @@ tags = ["i", "outline"]
 mode = "allowlist"
 allowed = ["color", "b", "i", "u", "size"]
 
+[atomic_square_tags]
+mode = "allowlist"
+allowed = ["mq:rxt"]
+
 [raw_braces]
 protect_all = true

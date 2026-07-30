@@ -31,6 +31,7 @@ class TagRules:
     angle_aliases: Mapping[str, str] = field(default_factory=dict)
     angle_single: frozenset[str] = field(default_factory=frozenset)
     angle_optional_pair: frozenset[str] = field(default_factory=frozenset)
+    atomic_square_allowed: frozenset[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
         aliases = {
@@ -68,6 +69,11 @@ class TagRules:
             "angle_optional_pair",
             frozenset(canonicalize(name) for name in self.angle_optional_pair),
         )
+        object.__setattr__(
+            self,
+            "atomic_square_allowed",
+            frozenset(name.strip().lower() for name in self.atomic_square_allowed),
+        )
 
     def canonical_angle(self, name: str) -> str:
         current = name.strip().lower()
@@ -89,6 +95,9 @@ class TagRules:
 
     def is_angle_optional_pair(self, name: str) -> bool:
         return self.canonical_angle(name) in self.angle_optional_pair
+
+    def allows_atomic_square(self, name: str) -> bool:
+        return name.strip().lower() in self.atomic_square_allowed
 
 
 def default_tag_rules() -> TagRules:
@@ -160,6 +169,9 @@ def tag_rules_from_payload(payload: str, *, source: str = "embedded") -> TagRule
             angle_optional_pair=frozenset(
                 normalized.get("angle_optional_pair", [])
             ),
+            atomic_square_allowed=frozenset(
+                normalized.get("atomic_square_allowed", [])
+            ),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise ConfigError("embedded tag rules are invalid") from exc
@@ -174,6 +186,7 @@ def _normalized_tag_rules(rules: TagRules) -> dict[str, Any]:
         },
         "angle_single": sorted(rules.angle_single),
         "angle_optional_pair": sorted(rules.angle_optional_pair),
+        "atomic_square_allowed": sorted(rules.atomic_square_allowed),
         "bbcode_allowed": sorted(name.lower() for name in rules.bbcode_allowed),
         "protect_raw_braces": rules.protect_raw_braces,
     }
@@ -192,6 +205,9 @@ def _parse_tag_rules(data: dict[str, Any], *, source: str) -> TagRules:
         angle_section, "angle_tags.optional_pair"
     )
     bbcode_allowed = _read_allowlist_section(data, "bbcode_tags")
+    atomic_square_allowed = _read_optional_allowlist_section(
+        data, "atomic_square_tags"
+    )
 
     raw_braces = data.get("raw_braces")
     if not isinstance(raw_braces, dict):
@@ -210,6 +226,7 @@ def _parse_tag_rules(data: dict[str, Any], *, source: str) -> TagRules:
         angle_aliases=angle_aliases,
         angle_single=angle_single,
         angle_optional_pair=angle_optional_pair,
+        atomic_square_allowed=atomic_square_allowed,
     )
 
 
@@ -232,6 +249,14 @@ def _read_allowlist_section(data: dict[str, Any], section_name: str) -> frozense
         normalized.add(item.strip().lower())
 
     return frozenset(normalized)
+
+
+def _read_optional_allowlist_section(
+    data: dict[str, Any], section_name: str
+) -> frozenset[str]:
+    if section_name not in data:
+        return frozenset()
+    return _read_allowlist_section(data, section_name)
 
 
 def _read_required_section(data: dict[str, Any], section_name: str) -> dict[str, Any]:

@@ -380,6 +380,7 @@ def _restore_mapped_row(
                 "; ".join(warnings),
             )
         )
+        return False
     worksheet.cell(row=row_number, column=target_index).value = restored_target
     return True
 
@@ -405,14 +406,9 @@ def _restore_target_unit(
         candidate = apply_target_template(target_unit, variables)
 
     source_extraction = extract_tags(raw_source, rules=tag_rules)
-    tags_needing_serialization = tuple(
-        tag
-        for tag in source_extraction.tags
-        if tag.placeholder not in candidate
-    )
     serialized_target = serialize_known_tags(
         candidate,
-        tags_needing_serialization,
+        source_extraction.tags,
     )
     warnings.extend(source_extraction.warnings)
     warnings.extend(serialized_target.warnings)
