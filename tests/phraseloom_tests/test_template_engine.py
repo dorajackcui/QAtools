@@ -35,6 +35,15 @@ class TemplateEngineTests(unittest.TestCase):
         self.assertEqual(match.template, "{1>Level {num1}<2} {3}")
         self.assertEqual(match.values, {"num1": "10"})
 
+    def test_preserves_named_placeholders_while_parsing_numbers(self) -> None:
+        match = parse_template("Level {value}: 10 / {num1}")
+
+        self.assertEqual(
+            match.template,
+            "Level {value}: {num2} / {num1}",
+        )
+        self.assertEqual(match.values, {"num2": "10"})
+
     def test_raw_brace_placeholder_is_protected_before_parsing(self) -> None:
         protected = extract_tags("Damage {0}: 10").text
         match = parse_template(protected)

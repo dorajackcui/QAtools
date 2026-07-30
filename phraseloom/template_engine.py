@@ -8,11 +8,15 @@ from .tag_engine import PROTECTED_TOKEN_RE
 
 VAR_RE = re.compile(r"#[0-9A-Fa-f]{6}|\d+(?:[./:-]\d+)+|\d+(?:\.\d+)?")
 PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
+_NUMBERED_PLACEHOLDER_RE = re.compile(r"\{(color|stage|seq|num)(\d+)\}")
+_TEMPLATE_PROTECTED_TOKEN_RE = re.compile(
+    rf"(?:{PROTECTED_TOKEN_RE.pattern})|(?:{PLACEHOLDER_RE.pattern})"
+)
 
 
 def _iter_protected_aware_spans(source: str):
     pos = 0
-    for found in PROTECTED_TOKEN_RE.finditer(source):
+    for found in _TEMPLATE_PROTECTED_TOKEN_RE.finditer(source):
         if found.start() > pos:
             yield source[pos : found.start()], False
         yield found.group(0), True
@@ -26,6 +30,8 @@ def parse_template(text: object) -> TemplateMatch:
     chunks: list[str] = []
     values: dict[str, str] = {}
     counters: dict[str, int] = defaultdict(int)
+    for prefix, index in _NUMBERED_PLACEHOLDER_RE.findall(source):
+        counters[prefix] = max(counters[prefix], int(index))
 
     for span, protected in _iter_protected_aware_spans(source):
         if protected:
