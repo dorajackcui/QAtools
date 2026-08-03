@@ -430,6 +430,31 @@ class GuiSheetSelectionTests(unittest.TestCase):
             self.assertEqual(app.sheet_var.get(), "Tags")
             self.assertEqual(app.target_column_var.get(), "F")
 
+    def test_french_nbsp_restorer_loads_finder_file_with_safe_defaults(self) -> None:
+        app = FrenchNbspRestorerApp.__new__(FrenchNbspRestorerApp)
+        app.input_file_var = FakeVar("")
+        app.sheet_var = FakeVar("Old Sheet")
+        app.target_column_var = FakeVar("Z")
+        app.result_column_var = FakeVar("AA")
+        app.start_row_var = FakeVar("9")
+
+        with (
+            patch.object(app, "refresh_sheet_choices") as refresh_mock,
+            patch.object(app, "update_output_preview") as preview_mock,
+        ):
+            app.load_input_file(
+                "/tmp/from-finder.xlsx",
+                reset_options=True,
+            )
+
+        self.assertEqual(app.input_file_var.get(), "/tmp/from-finder.xlsx")
+        self.assertEqual(app.sheet_var.get(), "")
+        self.assertEqual(app.target_column_var.get(), "B")
+        self.assertEqual(app.result_column_var.get(), "")
+        self.assertEqual(app.start_row_var.get(), "2")
+        refresh_mock.assert_called_once_with(show_error=True)
+        preview_mock.assert_called_once()
+
     def test_chinese_target_checker_refresh_detects_source_and_target_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workbook_path = Path(tmp_dir) / "chinese.xlsx"

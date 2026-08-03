@@ -1,10 +1,11 @@
-"""Receive Excel files forwarded by the macOS Finder QA quick action."""
+"""Receive Excel files forwarded by macOS Finder quick actions."""
 
 from __future__ import annotations
 
 import json
 import os
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
 
@@ -15,6 +16,36 @@ except ImportError:  # pragma: no cover - Finder integration is macOS-only.
 
 
 SUPPORTED_EXCEL_SUFFIXES = frozenset({".xlsx", ".xlsm"})
+QA_WORKFLOW_ACTION = "qa_workflow"
+FRENCH_NBSP_RESTORE_ACTION = "french_nbsp_restore"
+SUPPORTED_FILE_ACTIONS = frozenset(
+    {
+        QA_WORKFLOW_ACTION,
+        FRENCH_NBSP_RESTORE_ACTION,
+    }
+)
+
+
+@dataclass(frozen=True)
+class ToolFileRequest:
+    action: str
+    file_path: str
+
+
+def normalize_excel_input_file(
+    file_path: str | os.PathLike[str],
+    *,
+    action_name: str = "Toolshub",
+    require_exists: bool = True,
+) -> Path:
+    """Return a normalized supported Excel path or raise ``ValueError``."""
+
+    candidate = Path(file_path).expanduser()
+    if candidate.suffix.lower() not in SUPPORTED_EXCEL_SUFFIXES:
+        raise ValueError(f"{action_name} 只支持 .xlsx 或 .xlsm 文件。")
+    if require_exists and not candidate.is_file():
+        raise ValueError(f"Excel 文件不存在：{candidate}")
+    return candidate.absolute()
 
 
 def normalize_workflow_input_file(
@@ -24,12 +55,11 @@ def normalize_workflow_input_file(
 ) -> Path:
     """Return a normalized supported Excel path or raise ``ValueError``."""
 
-    candidate = Path(file_path).expanduser()
-    if candidate.suffix.lower() not in SUPPORTED_EXCEL_SUFFIXES:
-        raise ValueError("QA workflow 只支持 .xlsx 或 .xlsm 文件。")
-    if require_exists and not candidate.is_file():
-        raise ValueError(f"Excel 文件不存在：{candidate}")
-    return candidate.absolute()
+    return normalize_excel_input_file(
+        file_path,
+        action_name="QA workflow",
+        require_exists=require_exists,
+    )
 
 
 def default_receiver_directory() -> Path:
@@ -71,7 +101,32 @@ def send_workflow_input_file(
     ``False`` means that no current Toolshub receiver could be reached.
     """
 
-    normalized_path = normalize_workflow_input_file(file_path)
+    return send_tool_input_file(
+        QA_WORKFLOW_ACTION,
+        file_path,
+        receiver_directory=receiver_directory,
+    )
+
+
+def send_tool_input_file(
+    action: str,
+    file_path: str | os.PathLike[str],
+    *,
+    receiver_directory: str | os.PathLike[str] | None = None,
+) -> bool:
+    """Forward an Excel file and requested action to the current Toolshub."""
+
+    if action not in SUPPORTED_FILE_ACTIONS:
+        raise ValueError(f"不支持的 Toolshub 文件操作：{action}")
+    action_name = (
+        "NBSP restore"
+        if action == FRENCH_NBSP_RESTORE_ACTION
+        else "QA workflow"
+    )
+    normalized_path = normalize_excel_input_file(
+        file_path,
+        action_name=action_name,
+    )
     receiver_path = (
         Path(receiver_directory)
         if receiver_directory
@@ -85,7 +140,10 @@ def send_workflow_input_file(
     temporary_request = inbox_path / f".{request_id}.tmp"
     ready_request = inbox_path / f"{request_id}.json"
     payload = json.dumps(
-        {"path": str(normalized_path)},
+        {
+            "action": action,
+            "path": str(normalized_path),
+        },
         ensure_ascii=False,
     )
     try:
@@ -141,17 +199,26 @@ class WorkflowFileReceiver:
         self._lock_file = lock_file
         return True
 
-    def pop_pending_paths(self) -> tuple[str, ...]:
-        paths: list[str] = []
+    def pop_pending_requests(self) -> tuple[ToolFileRequest, ...]:
+        requests: list[ToolFileRequest] = []
         if self._lock_file is None:
             return ()
 
         for request_file in sorted(self.inbox_path.glob("*.json")):
             try:
                 payload = json.loads(request_file.read_text(encoding="utf-8"))
+                requested_action = payload.get("action", QA_WORKFLOW_ACTION)
                 requested_path = payload["path"]
-                if isinstance(requested_path, str):
-                    paths.append(requested_path)
+                if (
+                    requested_action in SUPPORTED_FILE_ACTIONS
+                    and isinstance(requested_path, str)
+                ):
+                    requests.append(
+                        ToolFileRequest(
+                            action=requested_action,
+                            file_path=requested_path,
+                        )
+                    )
             except (KeyError, OSError, TypeError, ValueError, UnicodeDecodeError):
                 pass
             finally:
@@ -159,7 +226,15 @@ class WorkflowFileReceiver:
                     request_file.unlink()
                 except FileNotFoundError:
                     pass
-        return tuple(paths)
+        return tuple(requests)
+
+    def pop_pending_paths(self) -> tuple[str, ...]:
+        """Compatibility helper for callers that only expect QA file paths."""
+
+        return tuple(
+            request.file_path
+            for request in self.pop_pending_requests()
+        )
 
     def close(self) -> None:
         if self._lock_file is None:

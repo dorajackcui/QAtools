@@ -122,7 +122,9 @@ def apply_workflow_revisions(
         original_target = review_sheet.cell(review_row, 3).value
         revised_target = review_sheet.cell(review_row, 4).value
 
-        if revised_target is None:
+        if revised_target is None or (
+            isinstance(revised_target, str) and not revised_target.strip()
+        ):
             ignored_count += 1
             continue
 

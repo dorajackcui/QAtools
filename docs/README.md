@@ -5,7 +5,7 @@
 - [CLI 使用指南](cli-usage.md)：统一命令、自动化约定、示例和旧入口映射
 - [PhraseLoom](../phraseloom/README.md)：Strings 导出、清洗、翻译与回填
 - [术语与 Tag 检查规则](term-and-tag-check-rules.md)：检查边界和示例
-- [macOS Finder 快速操作](macos-finder-workflow.md)：右键发送到一键质量检查
+- [macOS Finder 快速操作](macos-finder-workflow.md)：右键执行 QA 或 NBSP 恢复
 
 各单项工具的完整业务规则位于对应的 `tools/<tool>/README.md`。
 

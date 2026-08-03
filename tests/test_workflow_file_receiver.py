@@ -6,8 +6,10 @@ import unittest
 from pathlib import Path
 
 from tools.workflow.file_receiver import (
+    FRENCH_NBSP_RESTORE_ACTION,
     WorkflowFileReceiver,
     normalize_workflow_input_file,
+    send_tool_input_file,
     send_workflow_input_file,
 )
 
@@ -72,6 +74,39 @@ class WorkflowFileReceiverTests(unittest.TestCase):
             finally:
                 second_receiver.close()
                 first_receiver.close()
+
+    def test_receiver_preserves_nbsp_restore_action(self) -> None:
+        with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
+            temp_path = Path(tmp_dir)
+            workbook_path = temp_path / "input.xlsx"
+            workbook_path.touch()
+            receiver_directory = temp_path / "receiver"
+            receiver = WorkflowFileReceiver(
+                receiver_directory=receiver_directory
+            )
+
+            try:
+                self.assertTrue(receiver.start())
+                self.assertTrue(
+                    send_tool_input_file(
+                        FRENCH_NBSP_RESTORE_ACTION,
+                        workbook_path,
+                        receiver_directory=receiver_directory,
+                    )
+                )
+
+                requests = receiver.pop_pending_requests()
+                self.assertEqual(len(requests), 1)
+                self.assertEqual(
+                    requests[0].action,
+                    FRENCH_NBSP_RESTORE_ACTION,
+                )
+                self.assertEqual(
+                    requests[0].file_path,
+                    str(workbook_path.absolute()),
+                )
+            finally:
+                receiver.close()
 
 
 if __name__ == "__main__":

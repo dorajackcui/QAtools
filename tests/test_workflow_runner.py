@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from openpyxl import Workbook, load_workbook
 
@@ -271,6 +272,49 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(data_sheet["C1"].value, "note")
             self.assertEqual(data_sheet["C3"].value, "keep me")
 
+    def test_apply_workflow_revisions_ignores_empty_string_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            report_path = Path(tmp_dir) / "workflow_output.xlsx"
+            revised_path = Path(tmp_dir) / "revised_input.xlsx"
+            self.create_workbook(input_path)
+            run_workflow(
+                input_file=input_path,
+                output_file=report_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                start_row=2,
+                term_mark_styles=("[]",),
+                tag_token_types=("angle", "brace"),
+            )
+
+            report_workbook = load_workbook(report_path)
+            review_sheet = report_workbook[WORKFLOW_REVIEW_SHEET_NAME]
+            review_sheet["D2"] = ""
+            review_sheet["D3"] = " \t"
+            review_sheet["D4"] = "第三行修订"
+
+            with patch(
+                "tools.workflow.revision_applier.load_workbook_for_editing",
+                return_value=report_workbook,
+            ):
+                summary = apply_workflow_revisions(
+                    report_path,
+                    output_file=revised_path,
+                )
+
+            self.assertEqual(summary.revised_count, 1)
+            self.assertEqual(summary.ignored_count, 3)
+            self.assertEqual(summary.unchanged_count, 0)
+            self.assertEqual(summary.conflict_rows, ())
+            revised_workbook = load_workbook(revised_path)
+            data_sheet = revised_workbook["Data"]
+            self.assertEqual(data_sheet["B2"].value, "第一行 [阿尔法] 和 <color=red>{name}")
+            self.assertEqual(data_sheet["B3"].value, "第二行复用 [错误阿尔法] 和 {name}")
+            self.assertEqual(data_sheet["B4"].value, "第三行修订")
+            self.assertEqual(data_sheet["B5"].value, "译文二")
+
     def test_apply_workflow_revisions_skips_target_conflicts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
@@ -321,7 +365,7 @@ class WorkflowRunnerTests(unittest.TestCase):
 
             self.assertEqual(
                 build_default_revised_output_path(report_path),
-                Path(tmp_dir) / "revised_input.xlsx",
+                (Path(tmp_dir) / "revised_input.xlsx").resolve(),
             )
 
     def test_apply_revisions_preserves_unrelated_sheets_from_disabled_checks(self) -> None:

@@ -107,8 +107,24 @@ class FrenchNbspRestorerApp(OutputPreviewMixin, ttk.Frame):
         )
         if not file_path:
             return
+        self.load_input_file(file_path)
+
+    def load_input_file(
+        self,
+        file_path: str,
+        *,
+        reset_options: bool = False,
+        show_error: bool = True,
+    ) -> None:
+        """Load an Excel path supplied by the picker or Finder quick action."""
+
+        if reset_options:
+            self.sheet_var.set("")
+            self.target_column_var.set("B")
+            self.result_column_var.set("")
+            self.start_row_var.set("2")
         self.input_file_var.set(file_path)
-        self.refresh_sheet_choices()
+        self.refresh_sheet_choices(show_error=show_error)
         self.update_output_preview()
 
     def clear_sheet_choices(self) -> None:

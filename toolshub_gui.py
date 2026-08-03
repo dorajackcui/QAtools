@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -21,9 +20,12 @@ from tools.source_consistency_checker.check_source_consistency_gui import Source
 from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
 from tools.workflow.file_receiver import (
+    FRENCH_NBSP_RESTORE_ACTION,
+    QA_WORKFLOW_ACTION,
+    ToolFileRequest,
     WorkflowFileReceiver,
-    normalize_workflow_input_file,
-    send_workflow_input_file,
+    normalize_excel_input_file,
+    send_tool_input_file,
 )
 from tools.workflow.workflow_gui import WorkflowRunnerApp
 from tools.xbench_report_transformer.transform_xbench_report_gui import XbenchReportTransformerApp
@@ -255,7 +257,10 @@ class ToolshubApp:
     def open_qa_workflow_file(self, file_path: str) -> None:
         """Select the workflow page and load an Excel file from Finder."""
 
-        normalized_path = normalize_workflow_input_file(file_path)
+        normalized_path = normalize_excel_input_file(
+            file_path,
+            action_name="QA workflow",
+        )
         workflow_frame = self.tool_frames["workflow"]
         if not isinstance(workflow_frame, WorkflowRunnerApp):
             raise RuntimeError("一键质量检查页面未正确加载。")
@@ -263,6 +268,31 @@ class ToolshubApp:
         self.select_tool("workflow")
         workflow_frame.load_input_file(str(normalized_path))
         self._bring_window_to_front()
+
+    def open_french_nbsp_restore_file(
+        self,
+        file_path: str,
+        *,
+        run_immediately: bool = True,
+    ) -> None:
+        """Load a Finder file into French NBSP restore and optionally run it."""
+
+        normalized_path = normalize_excel_input_file(
+            file_path,
+            action_name="NBSP restore",
+        )
+        restorer_frame = self.tool_frames["french_nbsp"]
+        if not isinstance(restorer_frame, FrenchNbspRestorerApp):
+            raise RuntimeError("法语 NBSP 恢复页面未正确加载。")
+
+        self.select_tool("french_nbsp")
+        restorer_frame.load_input_file(
+            str(normalized_path),
+            reset_options=True,
+        )
+        self._bring_window_to_front()
+        if run_immediately:
+            self.root.after_idle(restorer_frame.run_restore)
 
     def _bring_window_to_front(self) -> None:
         self.root.deiconify()
@@ -289,10 +319,16 @@ class ToolshubApp:
 
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="打开 Toolshub Excel 工具箱。")
-    parser.add_argument(
+    finder_action_group = parser.add_mutually_exclusive_group()
+    finder_action_group.add_argument(
         "--qa-workflow",
         metavar="EXCEL_FILE",
         help="把 Excel 文件载入一键质量检查页面。",
+    )
+    finder_action_group.add_argument(
+        "--nbsp-restore",
+        metavar="EXCEL_FILE",
+        help="对 Excel 自动执行法语 NBSP 恢复。",
     )
     parser.add_argument(
         "--smoke-test",
@@ -313,28 +349,63 @@ def main(argv: list[str] | None = None) -> int:
             root.destroy()
         return 0
 
-    initial_workflow_file: Path | None = None
+    initial_request: ToolFileRequest | None = None
     if args.qa_workflow:
         try:
-            initial_workflow_file = normalize_workflow_input_file(args.qa_workflow)
+            initial_request = ToolFileRequest(
+                action=QA_WORKFLOW_ACTION,
+                file_path=str(
+                    normalize_excel_input_file(
+                        args.qa_workflow,
+                        action_name="QA workflow",
+                    )
+                ),
+            )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        if send_workflow_input_file(initial_workflow_file):
-            return 0
+    elif args.nbsp_restore:
+        try:
+            initial_request = ToolFileRequest(
+                action=FRENCH_NBSP_RESTORE_ACTION,
+                file_path=str(
+                    normalize_excel_input_file(
+                        args.nbsp_restore,
+                        action_name="NBSP restore",
+                    )
+                ),
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+
+    if initial_request and send_tool_input_file(
+        initial_request.action,
+        initial_request.file_path,
+    ):
+        return 0
 
     receiver = WorkflowFileReceiver()
     receiver_started = receiver.start()
-    if initial_workflow_file and not receiver_started:
-        if send_workflow_input_file(initial_workflow_file):
+    if initial_request and not receiver_started:
+        if send_tool_input_file(
+            initial_request.action,
+            initial_request.file_path,
+        ):
             return 0
 
     root = tk.Tk()
     app = ToolshubApp(root)
 
-    if initial_workflow_file:
+    def handle_file_request(request: ToolFileRequest) -> None:
+        if request.action == FRENCH_NBSP_RESTORE_ACTION:
+            app.open_french_nbsp_restore_file(request.file_path)
+        else:
+            app.open_qa_workflow_file(request.file_path)
+
+    if initial_request:
         try:
-            app.open_qa_workflow_file(str(initial_workflow_file))
+            handle_file_request(initial_request)
         except Exception as exc:
             messagebox.showerror("无法载入 Excel", str(exc))
 
@@ -342,9 +413,9 @@ def main(argv: list[str] | None = None) -> int:
 
     def poll_forwarded_files() -> None:
         nonlocal poll_job
-        for forwarded_path in receiver.pop_pending_paths():
+        for forwarded_request in receiver.pop_pending_requests():
             try:
-                app.open_qa_workflow_file(forwarded_path)
+                handle_file_request(forwarded_request)
             except Exception as exc:
                 messagebox.showerror("无法载入 Excel", str(exc))
         poll_job = root.after(150, poll_forwarded_files)

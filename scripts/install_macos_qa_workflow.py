@@ -8,25 +8,69 @@ import plistlib
 import shlex
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 
-QUICK_ACTION_NAME = "QA workflow"
-QUICK_ACTION_BUNDLE_NAME = f"{QUICK_ACTION_NAME}.workflow"
 EXCEL_UTIS = (
     "org.openxmlformats.spreadsheetml.sheet",
     "org.openxmlformats.spreadsheetml.sheet.macroenabled",
 )
 
 
-def build_shell_command(*, python_executable: Path, launcher: Path) -> str:
+@dataclass(frozen=True)
+class QuickActionSpec:
+    name: str
+    menu_item_name: str
+    bundle_identifier: str
+    launcher_flag: str
+    log_path: str
+    action_uuid: str
+    input_uuid: str
+    output_uuid: str
+
+    @property
+    def bundle_name(self) -> str:
+        return f"{self.name}.workflow"
+
+
+QA_QUICK_ACTION = QuickActionSpec(
+    name="QA workflow",
+    menu_item_name="ABC · QA workflow",
+    bundle_identifier="com.tagexactor.services.qa-workflow",
+    launcher_flag="--qa-workflow",
+    log_path="/tmp/tagexactor-qa-workflow.log",
+    action_uuid="F37C9B40-3792-4DCB-BFA4-54B563B9DE62",
+    input_uuid="E46C53F2-B932-4B76-A6F5-C6C5997454F7",
+    output_uuid="9DE2345D-B130-4947-A86F-D708C066A2B6",
+)
+NBSP_QUICK_ACTION = QuickActionSpec(
+    name="NBSP restore",
+    menu_item_name="ABC · NBSP restore",
+    bundle_identifier="com.tagexactor.services.nbsp-restore",
+    launcher_flag="--nbsp-restore",
+    log_path="/tmp/tagexactor-nbsp-restore.log",
+    action_uuid="0EB6B477-F006-4CFF-A89C-6D6D96514731",
+    input_uuid="49F12AC6-2289-482E-BD89-D8AD4500A6D1",
+    output_uuid="F0098923-B758-45E7-82B1-48603188E53D",
+)
+QUICK_ACTION_NAME = QA_QUICK_ACTION.name
+QUICK_ACTION_BUNDLE_NAME = QA_QUICK_ACTION.bundle_name
+
+
+def build_shell_command(
+    *,
+    python_executable: Path,
+    launcher: Path,
+    spec: QuickActionSpec = QA_QUICK_ACTION,
+) -> str:
     python_arg = shlex.quote(str(python_executable))
     launcher_arg = shlex.quote(str(launcher))
-    log_arg = shlex.quote("/tmp/tagexactor-qa-workflow.log")
+    log_arg = shlex.quote(spec.log_path)
     return f"""for qa_file in "$@"; do
   case "$qa_file" in
     *.xlsx|*.XLSX|*.xlsm|*.XLSM)
-      /usr/bin/nohup {python_arg} {launcher_arg} --qa-workflow "$qa_file" >>{log_arg} 2>&1 </dev/null &
+      /usr/bin/nohup {python_arg} {launcher_arg} {spec.launcher_flag} "$qa_file" >>{log_arg} 2>&1 </dev/null &
       exit 0
       ;;
   esac
@@ -35,15 +79,17 @@ exit 1
 """
 
 
-def build_info_plist() -> dict[str, object]:
+def build_info_plist(
+    spec: QuickActionSpec = QA_QUICK_ACTION,
+) -> dict[str, object]:
     return {
         "CFBundleDevelopmentRegion": "zh_CN",
-        "CFBundleIdentifier": "com.tagexactor.services.qa-workflow",
-        "CFBundleName": QUICK_ACTION_NAME,
+        "CFBundleIdentifier": spec.bundle_identifier,
+        "CFBundleName": spec.name,
         "CFBundleShortVersionString": "1.0",
         "NSServices": [
             {
-                "NSMenuItem": {"default": QUICK_ACTION_NAME},
+                "NSMenuItem": {"default": spec.menu_item_name},
                 "NSMessage": "runWorkflowAsService",
                 "NSSendFileTypes": list(EXCEL_UTIS),
             }
@@ -51,10 +97,10 @@ def build_info_plist() -> dict[str, object]:
     }
 
 
-def build_document_plist(shell_command: str) -> dict[str, object]:
-    action_uuid = "F37C9B40-3792-4DCB-BFA4-54B563B9DE62"
-    input_uuid = "E46C53F2-B932-4B76-A6F5-C6C5997454F7"
-    output_uuid = "9DE2345D-B130-4947-A86F-D708C066A2B6"
+def build_document_plist(
+    shell_command: str,
+    spec: QuickActionSpec = QA_QUICK_ACTION,
+) -> dict[str, object]:
     return {
         "AMApplicationBuild": "523",
         "AMApplicationVersion": "2.10",
@@ -97,9 +143,9 @@ def build_document_plist(shell_command: str) -> dict[str, object]:
                     "Category": ["AMCategoryUtilities"],
                     "CFBundleVersion": "2.0.3",
                     "Class Name": "RunShellScriptAction",
-                    "InputUUID": input_uuid,
-                    "OutputUUID": output_uuid,
-                    "UUID": action_uuid,
+                    "InputUUID": spec.input_uuid,
+                    "OutputUUID": spec.output_uuid,
+                    "UUID": spec.action_uuid,
                 },
                 "isViewVisible": True,
             }
@@ -121,20 +167,22 @@ def build_quick_action_bundle(
     *,
     python_executable: Path,
     launcher: Path,
+    spec: QuickActionSpec = QA_QUICK_ACTION,
 ) -> Path:
-    bundle_path = destination / QUICK_ACTION_BUNDLE_NAME
+    bundle_path = destination / spec.bundle_name
     resources_path = bundle_path / "Contents" / "Resources"
     resources_path.mkdir(parents=True, exist_ok=True)
 
     shell_command = build_shell_command(
         python_executable=python_executable,
         launcher=launcher,
+        spec=spec,
     )
     with (bundle_path / "Contents" / "Info.plist").open("wb") as info_file:
-        plistlib.dump(build_info_plist(), info_file, sort_keys=False)
+        plistlib.dump(build_info_plist(spec), info_file, sort_keys=False)
     with (resources_path / "document.wflow").open("wb") as document_file:
         plistlib.dump(
-            build_document_plist(shell_command),
+            build_document_plist(shell_command, spec),
             document_file,
             sort_keys=False,
         )
@@ -144,7 +192,13 @@ def build_quick_action_bundle(
 def build_argument_parser() -> argparse.ArgumentParser:
     project_root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(
-        description='生成或安装 Finder 右键快速操作“QA workflow”。'
+        description="生成或安装 QAtools 的 Finder Excel 快速操作。"
+    )
+    parser.add_argument(
+        "--action",
+        choices=("qa", "nbsp", "all"),
+        default="qa",
+        help="安装 QA workflow、NBSP restore，或同时安装两者。",
     )
     parser.add_argument(
         "--destination",
@@ -187,11 +241,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"找不到 Python：{python_executable}", file=sys.stderr)
         return 2
 
-    bundle_path = build_quick_action_bundle(
-        args.destination.expanduser().absolute(),
-        python_executable=python_executable,
-        launcher=launcher,
-    )
+    specs = {
+        "qa": (QA_QUICK_ACTION,),
+        "nbsp": (NBSP_QUICK_ACTION,),
+        "all": (QA_QUICK_ACTION, NBSP_QUICK_ACTION),
+    }[args.action]
+    bundle_paths = [
+        build_quick_action_bundle(
+            args.destination.expanduser().absolute(),
+            python_executable=python_executable,
+            launcher=launcher,
+            spec=spec,
+        )
+        for spec in specs
+    ]
 
     if not args.no_refresh:
         pbs = Path("/System/Library/CoreServices/pbs")
@@ -202,7 +265,8 @@ def main(argv: list[str] | None = None) -> int:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-    print(bundle_path)
+    for bundle_path in bundle_paths:
+        print(bundle_path)
     return 0
 
 

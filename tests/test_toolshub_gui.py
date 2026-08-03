@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import tkinter as tk
+import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from phraseloom.gui import PhraseLoomApp
 from toolshub_gui import TOOL_GROUPS, ToolshubApp, build_argument_parser, main
+from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
 
 
 class ToolshubLayoutTests(unittest.TestCase):
@@ -109,6 +113,38 @@ class ToolshubLayoutTests(unittest.TestCase):
         )
 
         self.assertEqual(args.qa_workflow, "/tmp/QA input.xlsx")
+
+    def test_nbsp_restore_argument_accepts_finder_excel_path(self) -> None:
+        args = build_argument_parser().parse_args(
+            ["--nbsp-restore", "/tmp/French input.xlsx"]
+        )
+
+        self.assertEqual(args.nbsp_restore, "/tmp/French input.xlsx")
+
+    def test_nbsp_finder_action_loads_safe_defaults_and_runs_restore(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "French input.xlsx"
+            workbook_path.touch()
+            restorer = FrenchNbspRestorerApp.__new__(FrenchNbspRestorerApp)
+            restorer.load_input_file = Mock()
+            restorer.run_restore = Mock()
+            app = ToolshubApp.__new__(ToolshubApp)
+            app.root = SimpleNamespace(
+                after_idle=lambda callback: callback(),
+            )
+            app.tool_frames = {"french_nbsp": restorer}
+            app.select_tool = Mock()
+            app._bring_window_to_front = Mock()
+
+            app.open_french_nbsp_restore_file(str(workbook_path))
+
+            app.select_tool.assert_called_once_with("french_nbsp")
+            restorer.load_input_file.assert_called_once_with(
+                str(workbook_path.absolute()),
+                reset_options=True,
+            )
+            app._bring_window_to_front.assert_called_once()
+            restorer.run_restore.assert_called_once()
 
     def collect_widget_texts(self, widget: tk.Misc) -> set[str]:
         texts: set[str] = set()
