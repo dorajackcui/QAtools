@@ -294,11 +294,25 @@ def build_argument_parser() -> argparse.ArgumentParser:
         metavar="EXCEL_FILE",
         help="把 Excel 文件载入一键质量检查页面。",
     )
+    parser.add_argument(
+        "--smoke-test",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_argument_parser().parse_args(argv)
+    if args.smoke_test:
+        root = tk.Tk()
+        try:
+            root.withdraw()
+            root.update_idletasks()
+        finally:
+            root.destroy()
+        return 0
+
     initial_workflow_file: Path | None = None
     if args.qa_workflow:
         try:

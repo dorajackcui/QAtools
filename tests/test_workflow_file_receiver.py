@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,6 +30,7 @@ class WorkflowFileReceiverTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, r"\.xlsx"):
                 normalize_workflow_input_file(text_path)
 
+    @unittest.skipIf(os.name == "nt", "Finder file forwarding requires fcntl")
     def test_receiver_accepts_forwarded_file_from_local_inbox(self) -> None:
         with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
             temp_path = Path(tmp_dir)
@@ -53,6 +55,7 @@ class WorkflowFileReceiverTests(unittest.TestCase):
             finally:
                 receiver.close()
 
+    @unittest.skipIf(os.name == "nt", "Finder file forwarding requires fcntl")
     def test_second_receiver_does_not_replace_active_receiver(self) -> None:
         with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
             receiver_directory = Path(tmp_dir) / "receiver"

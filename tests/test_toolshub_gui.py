@@ -2,12 +2,22 @@ from __future__ import annotations
 
 import tkinter as tk
 import unittest
+from unittest.mock import Mock, patch
 
 from phraseloom.gui import PhraseLoomApp
-from toolshub_gui import TOOL_GROUPS, ToolshubApp, build_argument_parser
+from toolshub_gui import TOOL_GROUPS, ToolshubApp, build_argument_parser, main
 
 
 class ToolshubLayoutTests(unittest.TestCase):
+    def test_smoke_test_initializes_tk_without_building_the_app(self) -> None:
+        root = Mock()
+        with patch("toolshub_gui.tk.Tk", return_value=root):
+            self.assertEqual(main(["--smoke-test"]), 0)
+
+        root.withdraw.assert_called_once_with()
+        root.update_idletasks.assert_called_once_with()
+        root.destroy.assert_called_once_with()
+
     def make_app(self) -> tuple[tk.Tk, ToolshubApp]:
         try:
             root = tk.Tk()

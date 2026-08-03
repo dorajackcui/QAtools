@@ -76,6 +76,18 @@ qatools phraseloom export source.xlsx
 qatools phraseloom restore source_strings.xlsx
 ```
 
+## Windows 便携版
+
+在 64 位 Windows 上生成无需安装 Python 的开箱即用版本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows_release.ps1
+```
+
+脚本会先运行回归测试，再生成 `QAtools.exe`（统一 GUI）、
+`QAtools-CLI.exe`（统一 CLI）和完整 ZIP，输出到 `dist/`。如果已经单独完成测试，
+可以追加 `-SkipTests`。分发包内的具体用法见 `packaging/README-Windows.txt`。
+
 ## 仓库结构
 
 ```text
@@ -113,5 +125,4 @@ python -m compileall -q qatools phraseloom tools tests
 git diff --check
 ```
 
-当前 Windows 环境中，两个写死 `/tmp` 的文件转发测试和一个 macOS 路径测试
-属于既有平台限制；它们在原始 `main` 上也会产生相同结果。
+Finder 文件转发测试依赖 macOS 的 `fcntl`，在 Windows 上会自动跳过。

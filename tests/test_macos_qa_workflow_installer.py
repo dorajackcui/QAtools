@@ -3,7 +3,7 @@ from __future__ import annotations
 import plistlib
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from scripts.install_macos_qa_workflow import (
     EXCEL_UTIS,
@@ -18,8 +18,10 @@ class MacosQaWorkflowInstallerTests(unittest.TestCase):
             destination = Path(tmp_dir)
             bundle_path = build_quick_action_bundle(
                 destination,
-                python_executable=Path("/opt/example/python3"),
-                launcher=Path("/Users/example/tagExactor/toolshub_gui.py"),
+                python_executable=PurePosixPath("/opt/example/python3"),
+                launcher=PurePosixPath(
+                    "/Users/example/tagExactor/toolshub_gui.py"
+                ),
             )
 
             self.assertEqual(bundle_path.name, QUICK_ACTION_BUNDLE_NAME)
