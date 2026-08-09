@@ -380,7 +380,6 @@ def _restore_mapped_row(
                 "; ".join(warnings),
             )
         )
-        return False
     worksheet.cell(row=row_number, column=target_index).value = restored_target
     return True
 

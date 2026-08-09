@@ -115,6 +115,41 @@ class TagEngineTests(unittest.TestCase):
         )
         self.assertEqual(result.warnings, ())
 
+    def test_default_rules_extract_span_and_hyperlink_pairs(self):
+        from phraseloom.tag_engine import TAG_CLOSE, TAG_OPEN, extract_tags
+
+        source = (
+            '<span color="#BFF8FA" size="36">Title</>'
+            '<hyperlink color="#E98845" action="Key39">Open</>'
+        )
+
+        result = extract_tags(source)
+
+        self.assertEqual(result.text, "{1>Title<2}{3>Open<4}")
+        self.assertEqual(
+            tuple(
+                (tag.kind, tag.placeholder, tag.raw, tag.partner_index)
+                for tag in result.tags
+            ),
+            (
+                (
+                    TAG_OPEN,
+                    "{1>",
+                    '<span color="#BFF8FA" size="36">',
+                    None,
+                ),
+                (TAG_CLOSE, "<2}", "</>", 1),
+                (
+                    TAG_OPEN,
+                    "{3>",
+                    '<hyperlink color="#E98845" action="Key39">',
+                    None,
+                ),
+                (TAG_CLOSE, "<4}", "</>", 3),
+            ),
+        )
+        self.assertEqual(result.warnings, ())
+
     def test_default_rules_leave_unlisted_named_close_raw(self):
         from phraseloom.tag_engine import extract_tags
 

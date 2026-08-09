@@ -251,6 +251,57 @@ class StringsWorkflowTests(unittest.TestCase):
             finally:
                 result.close()
 
+    def test_raw_span_and_hyperlink_tags_are_protected_and_restored(self) -> None:
+        raw_source = (
+            '<span color="#BFF8FA" size="36">Hello</> '
+            '<hyperlink color="#E98845" action="Key39">details</>'
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "raw_rich_text_tags.xlsx"
+            package_path = Path(tmp) / "raw_rich_text_tags_strings.xlsx"
+            result_path = Path(tmp) / "raw_rich_text_tags_translated.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["source", "target"])
+            worksheet.append([raw_source, None])
+            workbook.save(source_path)
+            workbook.close()
+
+            export_strings_workbook(source_path, package_path)
+
+            package = load_workbook(package_path)
+            strings = package[schema.STRINGS_SHEET]
+            headers = [cell.value for cell in strings[1]]
+            source_index = headers.index(schema.SOURCE_COLUMN) + 1
+            target_index = headers.index(schema.TARGET_COLUMN) + 1
+            self.assertEqual(
+                strings.cell(row=2, column=source_index).value,
+                "{1>Hello<2} {3>details<4}",
+            )
+            strings.cell(row=2, column=target_index).value = (
+                "{1>Bonjour<2} {3>more details<4}"
+            )
+            package.save(package_path)
+            package.close()
+
+            restore_stats = restore_strings_workbook(package_path, result_path)
+
+            self.assertEqual(restore_stats["restored_row_count"], 1)
+            self.assertEqual(restore_stats["issue_count"], 0)
+            result = load_workbook(result_path, data_only=True)
+            try:
+                self.assertEqual(
+                    result.active.cell(row=2, column=2).value,
+                    (
+                        '<span color="#BFF8FA" size="36">Bonjour</> '
+                        '<hyperlink color="#E98845" action="Key39">'
+                        "more details</>"
+                    ),
+                )
+            finally:
+                result.close()
+
     def test_restore_accepts_mixed_tokens_and_complete_raw_mq_tags(self) -> None:
         hyperlink = (
             r'[mq:rxt displaytext="<hyperlink color=\&quot;#FF8E33\&quot; '
@@ -625,7 +676,7 @@ class StringsWorkflowTests(unittest.TestCase):
             finally:
                 result.close()
 
-    def test_restore_reports_missing_protected_tags(self) -> None:
+    def test_restore_writes_target_and_reports_missing_protected_tags(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             source_path = Path(tmp) / "source.xlsx"
             package_path = Path(tmp) / "source_strings.xlsx"
@@ -649,11 +700,11 @@ class StringsWorkflowTests(unittest.TestCase):
 
             stats = restore_strings_workbook(package_path)
 
-            self.assertEqual(stats["restored_row_count"], 0)
+            self.assertEqual(stats["restored_row_count"], 1)
             self.assertGreater(stats["issue_count"], 0)
             result = load_workbook(stats["output_path"], data_only=True)
             try:
-                self.assertIsNone(result.active.cell(row=2, column=2).value)
+                self.assertEqual(result.active.cell(row=2, column=2).value, "Bonjour")
             finally:
                 result.close()
             audit = load_workbook(stats["audit_output_path"], data_only=True)

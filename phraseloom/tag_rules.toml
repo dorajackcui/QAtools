@@ -2,7 +2,7 @@ version = 1
 
 [angle_tags]
 mode = "allowlist"
-allowed = ["color", "size", "img", "br", "i", "u", "outline", "c"]
+allowed = ["color", "size", "img", "br", "i", "u", "outline", "c", "span", "hyperlink"]
 
 [angle_tags.aliases]
 c = "color"
