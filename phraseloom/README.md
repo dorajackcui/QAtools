@@ -74,6 +74,8 @@ source_strings.xlsx
 
 - Source 为空：忽略。
 - Target 已有内容：视为已完成，不进入翻译清单且不修改。
+- Source 单元格内有多行文本：每个非空行作为独立 Segment 导出；回填时按
+  原始顺序、空行和换行符精确合并回同一个 Target 单元格。
 - 纯数字、纯符号或 Tag-only：自动将 Source 作为 Target，不进入翻译清单。
 - 完全相同的待翻译 Source：合并为一条。
 - 沿用原有 Translation Unit 清洗：数字等可变部分压缩为模板，例如

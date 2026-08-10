@@ -17,7 +17,12 @@ class RowItem:
     match: TemplateMatch
     original_values: tuple[object, ...]
     raw_source: str
+    raw_segment: str
     raw_existing_target: str
+    segment_index: int
+    segment_count: int
+    segment_prefix: str
+    segment_suffix: str
 
 __all__ = [
     "RowItem",

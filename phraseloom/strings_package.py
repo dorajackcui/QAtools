@@ -102,7 +102,7 @@ def write_strings_package(
                 [
                     item.item.row_number,
                     item.status,
-                    item.item.raw_source,
+                    item.item.raw_segment,
                     item.target,
                     item.context,
                 ]
@@ -122,6 +122,11 @@ def write_strings_package(
                         unit.unit_type,
                         unit.source,
                         json.dumps(item.match.values, ensure_ascii=False),
+                        item.raw_segment,
+                        item.segment_index,
+                        item.segment_count,
+                        item.segment_prefix,
+                        item.segment_suffix,
                     ]
                 )
         passthrough_items = [
@@ -138,6 +143,11 @@ def write_strings_package(
                     PASSTHROUGH_UNIT_TYPE,
                     item.source,
                     "{}",
+                    item.raw_segment,
+                    item.segment_index,
+                    item.segment_count,
+                    item.segment_prefix,
+                    item.segment_suffix,
                 ]
             )
         mapping.sheet_state = "hidden"
@@ -261,7 +271,7 @@ def read_strings_rows(worksheet) -> dict[str, dict[str, object]]:
 
 def read_mapping_rows(worksheet) -> list[dict[str, object]]:
     headers = header_values(worksheet)
-    missing = set(schema.STRINGS_MAP_COLUMNS) - set(headers)
+    missing = set(schema.LEGACY_STRINGS_MAP_COLUMNS) - set(headers)
     if missing:
         raise WorkbookFormatError(
             f"Strings mapping is missing columns: {', '.join(sorted(missing))}"

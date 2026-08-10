@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -46,20 +47,39 @@ def read_source_rows(
 
             seen_source = True
             consecutive_blanks = 0
-            raw_source = str(source_value).strip()
-            protected_source = extract_tags(raw_source, rules=active_rules).text
+            raw_source = str(source_value)
             target_value = _cell_value(values, target_index)
             raw_target = "" if target_value is None else str(target_value).strip()
-            rows.append(
-                RowItem(
-                    row_number=row_number,
-                    source=protected_source,
-                    match=parse_template(protected_source),
-                    original_values=tuple(values),
-                    raw_source=raw_source,
-                    raw_existing_target=raw_target,
-                )
+            segments = _protected_source_segments(
+                raw_source,
+                split_lines=not raw_target,
+                tag_rules=active_rules,
             )
+            segment_count = len(segments)
+            for segment_index, (
+                raw_segment,
+                protected_source,
+                prefix,
+                suffix,
+            ) in enumerate(
+                segments,
+                start=1,
+            ):
+                rows.append(
+                    RowItem(
+                        row_number=row_number,
+                        source=protected_source,
+                        match=parse_template(protected_source),
+                        original_values=tuple(values),
+                        raw_source=raw_source,
+                        raw_segment=raw_segment,
+                        raw_existing_target=raw_target,
+                        segment_index=segment_index,
+                        segment_count=segment_count,
+                        segment_prefix=prefix,
+                        segment_suffix=suffix,
+                    )
+                )
         return rows
     finally:
         workbook.close()
@@ -116,6 +136,85 @@ def _cell_value(
         return None
     zero_based = one_based_index - 1
     return row[zero_based] if zero_based < len(row) else None
+
+
+def _split_source_segments(source: str) -> list[tuple[str, str, str]]:
+    """Split a cell into non-empty line segments with reversible whitespace."""
+    parts = re.split(r"(\r\n|\r|\n)", source)
+    segments: list[list[str]] = []
+    pending_prefix = ""
+    for position in range(0, len(parts), 2):
+        line = parts[position]
+        separator = parts[position + 1] if position + 1 < len(parts) else ""
+        raw_segment = line.strip()
+        if not raw_segment:
+            structure = line + separator
+            if segments:
+                segments[-1][2] += structure
+            else:
+                pending_prefix += structure
+            continue
+
+        core_start = len(line) - len(line.lstrip())
+        core_end = len(line.rstrip())
+        prefix = pending_prefix + line[:core_start]
+        suffix = line[core_end:] + separator
+        pending_prefix = ""
+        segments.append([raw_segment, prefix, suffix])
+
+    return [(segment, prefix, suffix) for segment, prefix, suffix in segments]
+
+
+def _protected_source_segments(
+    raw_source: str,
+    *,
+    split_lines: bool,
+    tag_rules: TagRules,
+) -> list[tuple[str, str, str, str]]:
+    extraction = extract_tags(raw_source, rules=tag_rules)
+    if not split_lines:
+        return [
+            (
+                raw_source.strip(),
+                extraction.text.strip(),
+                "",
+                "",
+            )
+        ]
+
+    raw_segments = _split_source_segments(raw_source)
+    protected_segments = _split_source_segments(extraction.text)
+    if len(raw_segments) == len(protected_segments):
+        return [
+            (
+                raw_segment,
+                protected_segment,
+                prefix,
+                suffix,
+            )
+            for (
+                raw_segment,
+                prefix,
+                suffix,
+            ), (
+                protected_segment,
+                _protected_prefix,
+                _protected_suffix,
+            ) in zip(raw_segments, protected_segments, strict=True)
+        ]
+
+    # A protected atomic span can itself contain a line break. Splitting inside
+    # it would expose partial tag syntax, so keep that uncommon cell as one unit.
+    leading_size = len(raw_source) - len(raw_source.lstrip())
+    trailing_start = len(raw_source.rstrip())
+    return [
+        (
+            raw_source.strip(),
+            extraction.text.strip(),
+            raw_source[:leading_size],
+            raw_source[trailing_start:],
+        )
+    ]
 
 
 __all__ = [

@@ -86,7 +86,7 @@ def export_strings_workbook(
                 if row.raw_existing_target
                 else AUTO_PASSTHROUGH_STATUS
             ),
-            target=row.raw_existing_target or row.raw_source,
+            target=row.raw_existing_target or row.raw_segment,
             context=_row_context(row, context_index),
         )
         for row in rows
@@ -133,8 +133,10 @@ def export_strings_workbook(
         min_group_size=min_group_size,
     )
 
-    existing_target_count = sum(
-        1 for row in rows if row.raw_existing_target
+    source_row_numbers = {row.row_number for row in rows}
+    pending_row_numbers = {row.row_number for row in pending_rows}
+    existing_target_count = len(
+        {row.row_number for row in rows if row.raw_existing_target}
     )
     passthrough_count = sum(
         1
@@ -142,15 +144,49 @@ def export_strings_workbook(
         if not row.raw_existing_target
         and is_non_translatable_segment(row.source)
     )
+    rows_by_number: dict[int, list[RowItem]] = {}
+    for row in rows:
+        rows_by_number.setdefault(row.row_number, []).append(row)
+    auto_completed_row_numbers = {
+        row_number
+        for row_number, row_segments in rows_by_number.items()
+        if all(
+            not row.raw_existing_target
+            and is_non_translatable_segment(row.source)
+            for row in row_segments
+        )
+    }
+    representative_row_numbers = {
+        min(
+            unit.items,
+            key=lambda item: (item.row_number, item.segment_index),
+        ).row_number
+        for unit in grouped_units
+    }
+    duplicate_segment_count = len(pending_rows) - len(grouped_units)
     return {
         "output_path": str(output_path),
-        "source_row_count": len(rows),
+        "source_row_count": len(source_row_numbers),
+        "source_segment_count": len(rows),
+        "multiline_source_row_count": len(
+            {
+                row.row_number
+                for row in rows
+                if "\n" in row.raw_source or "\r" in row.raw_source
+            }
+        ),
         "completed_row_count": existing_target_count,
-        "non_translatable_row_count": passthrough_count,
-        "auto_completed_row_count": passthrough_count,
-        "pending_row_count": len(pending_rows),
+        "non_translatable_row_count": len(auto_completed_row_numbers),
+        "non_translatable_segment_count": passthrough_count,
+        "auto_completed_row_count": len(auto_completed_row_numbers),
+        "auto_completed_segment_count": passthrough_count,
+        "pending_row_count": len(pending_row_numbers),
+        "pending_segment_count": len(pending_rows),
         "string_count": len(grouped_units),
-        "duplicate_row_count": len(pending_rows) - len(grouped_units),
+        "duplicate_row_count": len(
+            pending_row_numbers - representative_row_numbers
+        ),
+        "duplicate_segment_count": duplicate_segment_count,
         "group_count": group_count,
         "grouped_string_count": grouped_count,
         "grouping_enabled": group_similar,
@@ -199,12 +235,17 @@ def restore_strings_workbook(
         source_index = resolve_column(original, source_column)
         target_index = resolve_or_create_column(original, target_column)
 
+        mapping_rows_by_source_row: dict[int, list[dict[str, object]]] = {}
         for map_row in mapping_rows:
-            restored = _restore_mapped_row(
+            row_number = int(map_row[schema.ROW_NUMBER_COLUMN])
+            mapping_rows_by_source_row.setdefault(row_number, []).append(map_row)
+
+        for source_rows in mapping_rows_by_source_row.values():
+            restored = _restore_mapped_cell(
                 original,
                 source_index=source_index,
                 target_index=target_index,
-                map_row=map_row,
+                map_rows=source_rows,
                 string_rows=string_rows,
                 tag_rules=tag_rules,
                 issues=issues,
@@ -216,7 +257,6 @@ def restore_strings_workbook(
         workbook.save(output_path)
     finally:
         workbook.close()
-
     stats: dict[str, int | str] = {
         "output_path": str(output_path),
         "restored_row_count": restored_count,
@@ -303,34 +343,139 @@ def _apply_optional_grouping(
     return grouped_units, len(clusters), len(group_by_index)
 
 
-def _restore_mapped_row(
+def _restore_mapped_cell(
     worksheet,
     *,
     source_index: int,
     target_index: int,
-    map_row: dict[str, object],
+    map_rows: list[dict[str, object]],
     string_rows: dict[str, dict[str, object]],
     tag_rules: TagRules,
     issues: list[dict[str, object]],
 ) -> bool:
-    string_id = str(map_row[schema.STRING_ID_COLUMN])
-    row_number = int(map_row[schema.ROW_NUMBER_COLUMN])
-    raw_source = str(map_row[schema.SOURCE_COLUMN])
-    unit_source = str(map_row[schema.SOURCE_UNIT_COLUMN])
-    unit_type = str(map_row[schema.UNIT_TYPE_COLUMN])
+    if not map_rows:
+        return False
 
-    actual_source = worksheet.cell(
-        row=row_number,
-        column=source_index,
-    ).value
-    if ("" if actual_source is None else str(actual_source).strip()) != raw_source:
+    row_number = int(map_rows[0][schema.ROW_NUMBER_COLUMN])
+    raw_source = str(map_rows[0][schema.SOURCE_COLUMN])
+    if any(
+        int(map_row[schema.ROW_NUMBER_COLUMN]) != row_number
+        or str(map_row[schema.SOURCE_COLUMN]) != raw_source
+        for map_row in map_rows[1:]
+    ):
+        raise WorkbookFormatError(
+            f"Strings mapping is inconsistent at row {row_number}."
+        )
+
+    segmented = all(
+        map_row.get(schema.SEGMENT_INDEX_COLUMN) not in (None, "")
+        for map_row in map_rows
+    )
+    if segmented:
+        map_rows = sorted(
+            map_rows,
+            key=lambda map_row: int(map_row[schema.SEGMENT_INDEX_COLUMN]),
+        )
+        segment_count = int(map_rows[0][schema.SEGMENT_COUNT_COLUMN])
+        expected_indexes = list(range(1, segment_count + 1))
+        actual_indexes = [
+            int(map_row[schema.SEGMENT_INDEX_COLUMN]) for map_row in map_rows
+        ]
+        if (
+            len(map_rows) != segment_count
+            or actual_indexes != expected_indexes
+            or any(
+                int(map_row[schema.SEGMENT_COUNT_COLUMN]) != segment_count
+                for map_row in map_rows
+            )
+        ):
+            raise WorkbookFormatError(
+                f"Strings mapping has incomplete segments at row {row_number}."
+            )
+    elif len(map_rows) != 1:
+        raise WorkbookFormatError(
+            f"Legacy Strings mapping has duplicate rows at row {row_number}."
+        )
+
+    actual_source = worksheet.cell(row=row_number, column=source_index).value
+    comparable_actual = "" if actual_source is None else str(actual_source)
+    if (
+        comparable_actual != raw_source
+        if segmented
+        else comparable_actual.strip() != raw_source
+    ):
         raise WorkbookFormatError(
             f"Original Source changed at row {row_number}: {raw_source!r}"
         )
 
+    restored_segments: list[str] = []
+    complete = True
+    for map_row in map_rows:
+        restored_segment = _restore_mapped_segment(
+            map_row=map_row,
+            string_rows=string_rows,
+            tag_rules=tag_rules,
+            issues=issues,
+            defer_tag_restore=segmented,
+        )
+        if restored_segment is None:
+            complete = False
+            continue
+        prefix = str(map_row.get(schema.SEGMENT_PREFIX_COLUMN) or "")
+        suffix = str(map_row.get(schema.SEGMENT_SUFFIX_COLUMN) or "")
+        restored_segments.append(prefix + restored_segment + suffix)
+
+    if not complete:
+        return False
+    restored_target = "".join(restored_segments)
+    if segmented:
+        restored_target, warnings = _restore_target_unit(
+            raw_source=raw_source,
+            source_unit="",
+            target_unit=restored_target,
+            unit_type="segment",
+            variables={},
+            tag_rules=tag_rules,
+        )
+        if warnings:
+            issues.append(
+                _issue(
+                    ",".join(
+                        dict.fromkeys(
+                            str(map_row[schema.STRING_ID_COLUMN])
+                            for map_row in map_rows
+                        )
+                    ),
+                    raw_source,
+                    restored_target,
+                    row_number,
+                    "; ".join(warnings),
+                )
+            )
+    worksheet.cell(row=row_number, column=target_index).value = restored_target
+    return True
+
+
+def _restore_mapped_segment(
+    *,
+    map_row: dict[str, object],
+    string_rows: dict[str, dict[str, object]],
+    tag_rules: TagRules,
+    issues: list[dict[str, object]],
+    defer_tag_restore: bool,
+) -> str | None:
+    string_id = str(map_row[schema.STRING_ID_COLUMN])
+    row_number = int(map_row[schema.ROW_NUMBER_COLUMN])
+    raw_segment = str(
+        map_row.get(schema.RAW_SEGMENT_COLUMN)
+        if map_row.get(schema.RAW_SEGMENT_COLUMN) is not None
+        else map_row[schema.SOURCE_COLUMN]
+    )
+    unit_source = str(map_row[schema.SOURCE_UNIT_COLUMN])
+    unit_type = str(map_row[schema.UNIT_TYPE_COLUMN])
+
     if unit_type == PASSTHROUGH_UNIT_TYPE:
-        worksheet.cell(row=row_number, column=target_index).value = raw_source
-        return True
+        return raw_segment
 
     string_row = string_rows.get(string_id)
     if string_row is None:
@@ -343,7 +488,7 @@ def _restore_mapped_row(
                 "String row is missing.",
             )
         )
-        return False
+        return None
     visible_source = str(string_row[schema.SOURCE_COLUMN] or "").strip()
     if visible_source != unit_source:
         raise WorkbookFormatError(
@@ -360,16 +505,24 @@ def _restore_mapped_row(
                 "Target is empty.",
             )
         )
-        return False
+        return None
 
-    restored_target, warnings = _restore_target_unit(
-        raw_source=raw_source,
-        source_unit=unit_source,
-        target_unit=target_unit,
-        unit_type=unit_type,
-        variables=mapping_variables(map_row),
-        tag_rules=tag_rules,
-    )
+    if defer_tag_restore:
+        restored_target, warnings = _apply_target_variables(
+            source_unit=unit_source,
+            target_unit=target_unit,
+            unit_type=unit_type,
+            variables=mapping_variables(map_row),
+        )
+    else:
+        restored_target, warnings = _restore_target_unit(
+            raw_source=raw_segment,
+            source_unit=unit_source,
+            target_unit=target_unit,
+            unit_type=unit_type,
+            variables=mapping_variables(map_row),
+            tag_rules=tag_rules,
+        )
     if warnings:
         issues.append(
             _issue(
@@ -380,8 +533,7 @@ def _restore_mapped_row(
                 "; ".join(warnings),
             )
         )
-    worksheet.cell(row=row_number, column=target_index).value = restored_target
-    return True
+    return restored_target
 
 
 def _restore_target_unit(
@@ -393,16 +545,12 @@ def _restore_target_unit(
     variables: dict[str, str],
     tag_rules: TagRules,
 ) -> tuple[str, list[str]]:
-    warnings: list[str] = []
-    candidate = target_unit
-    if unit_type == "template":
-        source_variables = set(PLACEHOLDER_RE.findall(source_unit))
-        target_variables = set(PLACEHOLDER_RE.findall(target_unit))
-        warnings.extend(
-            f"target_unit is missing source variable: {variable}"
-            for variable in sorted(source_variables - target_variables)
-        )
-        candidate = apply_target_template(target_unit, variables)
+    candidate, warnings = _apply_target_variables(
+        source_unit=source_unit,
+        target_unit=target_unit,
+        unit_type=unit_type,
+        variables=variables,
+    )
 
     source_extraction = extract_tags(raw_source, rules=tag_rules)
     serialized_target = serialize_known_tags(
@@ -423,6 +571,24 @@ def _restore_target_unit(
     )
     warnings.extend(_target_warnings(raw_source, restored_target, tag_rules))
     return restored_target, list(dict.fromkeys(warnings))
+
+
+def _apply_target_variables(
+    *,
+    source_unit: str,
+    target_unit: str,
+    unit_type: str,
+    variables: dict[str, str],
+) -> tuple[str, list[str]]:
+    if unit_type != "template":
+        return target_unit, []
+    source_variables = set(PLACEHOLDER_RE.findall(source_unit))
+    target_variables = set(PLACEHOLDER_RE.findall(target_unit))
+    warnings = [
+        f"target_unit is missing source variable: {variable}"
+        for variable in sorted(source_variables - target_variables)
+    ]
+    return apply_target_template(target_unit, variables), warnings
 
 
 def _target_warnings(
@@ -505,15 +671,19 @@ def _row_context(
 
 def _sample_source(items: Iterable[RowItem]) -> str:
     first = _first_item(items)
-    return first.raw_source if first is not None else ""
+    return first.raw_segment if first is not None else ""
 
 
 def _first_item(items: Iterable[RowItem]) -> RowItem | None:
-    return min(items, key=lambda item: item.row_number, default=None)
+    return min(
+        items,
+        key=lambda item: (item.row_number, item.segment_index),
+        default=None,
+    )
 
 
-def _source_order(unit: StringUnit) -> int:
-    return min(item.row_number for item in unit.items)
+def _source_order(unit: StringUnit) -> tuple[int, int]:
+    return min((item.row_number, item.segment_index) for item in unit.items)
 
 
 def _issue(

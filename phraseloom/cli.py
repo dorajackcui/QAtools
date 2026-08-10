@@ -95,7 +95,14 @@ def _print_export_stats(stats: dict[str, int | str]) -> None:
     print(f"Strings workbook: {stats['output_path']}")
     print(f"Strings to translate: {stats['string_count']}")
     print(f"Pending source rows: {stats['pending_row_count']}")
-    print(f"Rows consolidated by cleaning: {stats['duplicate_row_count']}")
+    if stats["pending_segment_count"] != stats["pending_row_count"]:
+        print(f"Pending segments: {stats['pending_segment_count']}")
+    print(f"Source rows consolidated by cleaning: {stats['duplicate_row_count']}")
+    if stats["duplicate_segment_count"] != stats["duplicate_row_count"]:
+        print(
+            "Segments consolidated by cleaning: "
+            f"{stats['duplicate_segment_count']}"
+        )
     print(
         f"Similar groups: {stats['group_count']}"
         if stats["grouping_enabled"]
@@ -103,9 +110,14 @@ def _print_export_stats(stats: dict[str, int | str]) -> None:
     )
     print(f"Existing targets skipped: {stats['completed_row_count']}")
     print(
-        "Non-translatable rows auto-completed: "
+        "Non-translatable source rows auto-completed: "
         f"{stats['auto_completed_row_count']}"
     )
+    if stats["auto_completed_segment_count"] != stats["auto_completed_row_count"]:
+        print(
+            "Non-translatable segments auto-completed: "
+            f"{stats['auto_completed_segment_count']}"
+        )
 
 
 def _print_restore_stats(stats: dict[str, int | str]) -> None:

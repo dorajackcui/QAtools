@@ -23,8 +23,8 @@ def build_clean_string_units(
 ) -> list[CleanStringUnit]:
     """Deduplicate rows and merge eligible numeric variants into templates."""
     template_groups = _eligible_template_groups(rows, min_template_variants)
-    assigned_rows = {
-        item.row_number
+    assigned_segments = {
+        (item.row_number, item.segment_index)
         for items in template_groups.values()
         for item in items
     }
@@ -44,7 +44,7 @@ def build_clean_string_units(
 
     segment_groups: dict[str, list[RowItem]] = defaultdict(list)
     for row in rows:
-        if row.row_number not in assigned_rows:
+        if (row.row_number, row.segment_index) not in assigned_segments:
             segment_groups[row.source].append(row)
     units.extend(
         CleanStringUnit(

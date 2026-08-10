@@ -33,6 +33,322 @@ def _write_source(path: Path) -> None:
 
 
 class StringsWorkflowTests(unittest.TestCase):
+    def test_multiline_source_cells_export_segments_and_restore_exact_structure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "done.xlsx"
+            package_path = Path(tmp) / "done_strings.xlsx"
+            result_path = Path(tmp) / "done_translated.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["source", "target"])
+            worksheet.append(["三\n四\n五", None])
+            worksheet.append(["三\n", None])
+            worksheet.append(["四", None])
+            worksheet.append(["五", None])
+            workbook.save(source_path)
+            workbook.close()
+
+            stats = export_strings_workbook(source_path, package_path)
+
+            self.assertEqual(stats["source_row_count"], 4)
+            self.assertEqual(stats["source_segment_count"], 6)
+            self.assertEqual(stats["multiline_source_row_count"], 2)
+            self.assertEqual(stats["pending_row_count"], 4)
+            self.assertEqual(stats["pending_segment_count"], 6)
+            self.assertEqual(stats["string_count"], 3)
+            self.assertEqual(stats["duplicate_row_count"], 3)
+
+            package = load_workbook(package_path)
+            strings = package[schema.STRINGS_SHEET]
+            headers = [cell.value for cell in strings[1]]
+            source_index = headers.index(schema.SOURCE_COLUMN) + 1
+            target_index = headers.index(schema.TARGET_COLUMN) + 1
+            self.assertEqual(
+                [
+                    strings.cell(row=row_number, column=source_index).value
+                    for row_number in range(2, strings.max_row + 1)
+                ],
+                ["三", "四", "五"],
+            )
+            translations = {"三": "Three", "四": "Four", "五": "Five"}
+            for row_number in range(2, strings.max_row + 1):
+                source = strings.cell(row=row_number, column=source_index).value
+                strings.cell(row=row_number, column=target_index).value = translations[source]
+
+            mapping = package[schema.STRINGS_MAP_SHEET]
+            mapping_headers = [cell.value for cell in mapping[1]]
+            mapping_records = [
+                dict(zip(mapping_headers, values))
+                for values in mapping.iter_rows(min_row=2, values_only=True)
+            ]
+            row_two_segments = sorted(
+                (
+                    record
+                    for record in mapping_records
+                    if record[schema.ROW_NUMBER_COLUMN] == 2
+                ),
+                key=lambda record: record[schema.SEGMENT_INDEX_COLUMN],
+            )
+            self.assertEqual(
+                [record[schema.RAW_SEGMENT_COLUMN] for record in row_two_segments],
+                ["三", "四", "五"],
+            )
+            self.assertEqual(
+                [record[schema.SEGMENT_SUFFIX_COLUMN] or "" for record in row_two_segments],
+                ["\n", "\n", ""],
+            )
+            row_three = next(
+                record
+                for record in mapping_records
+                if record[schema.ROW_NUMBER_COLUMN] == 3
+            )
+            self.assertEqual(row_three[schema.SEGMENT_SUFFIX_COLUMN], "\n")
+            package.save(package_path)
+            package.close()
+
+            restore_stats = restore_strings_workbook(package_path, result_path)
+
+            self.assertEqual(restore_stats["restored_row_count"], 4)
+            self.assertEqual(restore_stats["issue_count"], 0)
+            restored = load_workbook(result_path, data_only=True)
+            try:
+                self.assertEqual(
+                    [
+                        row[1]
+                        for row in restored.active.iter_rows(
+                            min_row=2,
+                            values_only=True,
+                        )
+                    ],
+                    ["Three\nFour\nFive", "Three\n", "Four", "Five"],
+                )
+            finally:
+                restored.close()
+
+    def test_template_cleanup_does_not_drop_sibling_segment_in_same_cell(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "multiline_template.xlsx"
+            package_path = Path(tmp) / "multiline_template_strings.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["source", "target"])
+            worksheet.append(["Level 1\nStandalone", None])
+            worksheet.append(["Level 2", None])
+            workbook.save(source_path)
+            workbook.close()
+
+            export_strings_workbook(source_path, package_path)
+
+            package = load_workbook(package_path, data_only=True)
+            try:
+                strings = package[schema.STRINGS_SHEET]
+                headers = [cell.value for cell in strings[1]]
+                source_index = headers.index(schema.SOURCE_COLUMN)
+                self.assertEqual(
+                    [
+                        row[source_index]
+                        for row in strings.iter_rows(min_row=2, values_only=True)
+                    ],
+                    ["Level {num1}", "Standalone"],
+                )
+            finally:
+                package.close()
+
+    def test_multiline_restore_does_not_write_a_partially_translated_cell(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "partial.xlsx"
+            package_path = Path(tmp) / "partial_strings.xlsx"
+            result_path = Path(tmp) / "partial_translated.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["source", "target"])
+            worksheet.append(["One\nTwo", None])
+            workbook.save(source_path)
+            workbook.close()
+
+            export_strings_workbook(source_path, package_path)
+            package = load_workbook(package_path)
+            strings = package[schema.STRINGS_SHEET]
+            headers = [cell.value for cell in strings[1]]
+            source_index = headers.index(schema.SOURCE_COLUMN) + 1
+            target_index = headers.index(schema.TARGET_COLUMN) + 1
+            for row_number in range(2, strings.max_row + 1):
+                if strings.cell(row=row_number, column=source_index).value == "One":
+                    strings.cell(row=row_number, column=target_index).value = "Un"
+            package.save(package_path)
+            package.close()
+
+            stats = restore_strings_workbook(package_path, result_path)
+
+            self.assertEqual(stats["restored_row_count"], 0)
+            self.assertEqual(stats["issue_count"], 1)
+            restored = load_workbook(result_path, data_only=True)
+            try:
+                self.assertIsNone(restored.active.cell(row=2, column=2).value)
+            finally:
+                restored.close()
+
+    def test_cross_line_paired_tags_stay_protected_and_restore_without_issues(self) -> None:
+        sources = (
+            "<color=#FF0000>Hello\nWorld</color>",
+            "[b]Hello\nWorld[/b]",
+        )
+        for case_number, raw_source in enumerate(sources, start=1):
+            with self.subTest(raw_source=raw_source), tempfile.TemporaryDirectory() as tmp:
+                source_path = Path(tmp) / f"paired_{case_number}.xlsx"
+                package_path = Path(tmp) / f"paired_{case_number}_strings.xlsx"
+                result_path = Path(tmp) / f"paired_{case_number}_translated.xlsx"
+                workbook = Workbook()
+                worksheet = workbook.active
+                worksheet.append(["source", "target"])
+                worksheet.append([raw_source, None])
+                workbook.save(source_path)
+                workbook.close()
+
+                stats = export_strings_workbook(source_path, package_path)
+
+                self.assertEqual(stats["source_segment_count"], 2)
+                package = load_workbook(package_path)
+                strings = package[schema.STRINGS_SHEET]
+                headers = [cell.value for cell in strings[1]]
+                source_index = headers.index(schema.SOURCE_COLUMN) + 1
+                target_index = headers.index(schema.TARGET_COLUMN) + 1
+                visible_sources = [
+                    strings.cell(row=row_number, column=source_index).value
+                    for row_number in range(2, strings.max_row + 1)
+                ]
+                self.assertEqual(visible_sources, ["{1>Hello", "World<2}"])
+                for row_number in range(2, strings.max_row + 1):
+                    strings.cell(row=row_number, column=target_index).value = (
+                        strings.cell(row=row_number, column=source_index).value
+                    )
+                package.save(package_path)
+                package.close()
+
+                restore_stats = restore_strings_workbook(package_path, result_path)
+
+                self.assertEqual(restore_stats["restored_row_count"], 1)
+                self.assertEqual(restore_stats["issue_count"], 0)
+                restored = load_workbook(result_path, data_only=True)
+                try:
+                    self.assertEqual(
+                        restored.active.cell(row=2, column=2).value,
+                        raw_source,
+                    )
+                finally:
+                    restored.close()
+
+    def test_multiline_atomic_tag_is_not_split_inside_protected_syntax(self) -> None:
+        raw_source = '[mq:rxt displaytext="Hello\nWorld" val="value"] suffix'
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "atomic.xlsx"
+            package_path = Path(tmp) / "atomic_strings.xlsx"
+            result_path = Path(tmp) / "atomic_translated.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["source", "target"])
+            worksheet.append([raw_source, None])
+            workbook.save(source_path)
+            workbook.close()
+
+            stats = export_strings_workbook(source_path, package_path)
+
+            self.assertEqual(stats["multiline_source_row_count"], 1)
+            self.assertEqual(stats["source_segment_count"], 1)
+            package = load_workbook(package_path)
+            strings = package[schema.STRINGS_SHEET]
+            headers = [cell.value for cell in strings[1]]
+            source_index = headers.index(schema.SOURCE_COLUMN) + 1
+            target_index = headers.index(schema.TARGET_COLUMN) + 1
+            self.assertEqual(
+                strings.cell(row=2, column=source_index).value,
+                "{1} suffix",
+            )
+            strings.cell(row=2, column=target_index).value = "{1} suffix"
+            package.save(package_path)
+            package.close()
+
+            restore_stats = restore_strings_workbook(package_path, result_path)
+
+            self.assertEqual(restore_stats["issue_count"], 0)
+            restored = load_workbook(result_path, data_only=True)
+            try:
+                self.assertEqual(restored.active.cell(row=2, column=2).value, raw_source)
+            finally:
+                restored.close()
+
+    def test_multiline_passthrough_stats_distinguish_rows_and_segments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "passthrough_stats.xlsx"
+            package_path = Path(tmp) / "passthrough_stats_strings.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["source", "target"])
+            worksheet.append(["123\n---", None])
+            worksheet.append(["Hello\n---", None])
+            workbook.save(source_path)
+            workbook.close()
+
+            stats = export_strings_workbook(source_path, package_path)
+
+            self.assertEqual(stats["source_row_count"], 2)
+            self.assertEqual(stats["source_segment_count"], 4)
+            self.assertEqual(stats["auto_completed_row_count"], 1)
+            self.assertEqual(stats["auto_completed_segment_count"], 3)
+            self.assertEqual(stats["non_translatable_row_count"], 1)
+            self.assertEqual(stats["non_translatable_segment_count"], 3)
+            self.assertEqual(stats["pending_row_count"], 1)
+            self.assertEqual(stats["pending_segment_count"], 1)
+            self.assertEqual(stats["duplicate_row_count"], 0)
+            self.assertEqual(stats["duplicate_segment_count"], 0)
+
+    def test_restore_accepts_legacy_single_segment_mapping(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "legacy.xlsx"
+            package_path = Path(tmp) / "legacy_strings.xlsx"
+            result_path = Path(tmp) / "legacy_translated.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["source", "target"])
+            worksheet.append(["Hello", None])
+            workbook.save(source_path)
+            workbook.close()
+
+            export_strings_workbook(source_path, package_path)
+            package = load_workbook(package_path)
+            strings = package[schema.STRINGS_SHEET]
+            string_headers = [cell.value for cell in strings[1]]
+            strings.cell(
+                row=2,
+                column=string_headers.index(schema.TARGET_COLUMN) + 1,
+            ).value = "Bonjour"
+            mapping = package[schema.STRINGS_MAP_SHEET]
+            mapping.delete_cols(
+                len(schema.LEGACY_STRINGS_MAP_COLUMNS) + 1,
+                len(schema.STRINGS_MAP_COLUMNS)
+                - len(schema.LEGACY_STRINGS_MAP_COLUMNS),
+            )
+            metadata = package[schema.METADATA_SHEET]
+            for row in metadata.iter_rows(min_row=2, max_col=2):
+                if row[0].value == schema.SCHEMA_VERSION_KEY:
+                    row[1].value = "1.0"
+                    break
+            package.save(package_path)
+            package.close()
+
+            stats = restore_strings_workbook(package_path, result_path)
+
+            self.assertEqual(stats["restored_row_count"], 1)
+            self.assertEqual(stats["issue_count"], 0)
+            restored = load_workbook(result_path, data_only=True)
+            try:
+                self.assertEqual(
+                    restored.active.cell(row=2, column=2).value,
+                    "Bonjour",
+                )
+            finally:
+                restored.close()
+
     def test_numeric_variants_use_old_cleaning_before_grouping_and_restore(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             source_path = Path(tmp) / "equipment.xlsx"

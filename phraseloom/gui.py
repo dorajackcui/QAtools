@@ -300,6 +300,7 @@ class PhraseLoomApp(ttk.Frame):
             input_section,
             text=(
                 "已有 Target 会视为已完成并跳过；重复 Source 只导出一次；"
+                "单元格内多行 Source 会逐行拆成 Segment，并在回填时按原换行还原；"
                 "Context 留空时自动识别同名列。"
             ),
             style=MUTED_LABEL_STYLE,
