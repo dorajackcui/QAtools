@@ -83,13 +83,6 @@ COMMANDS: tuple[CommandSpec, ...] = (
         legacy_entry="python tools/chinese_target_checker/check_chinese_target.py",
     ),
     CommandSpec(
-        name="split-lines",
-        summary="把单元格多行文本连续拆写到结果列",
-        module="tools.excel_line_splitter.split_excel_lines",
-        mode="legacy",
-        legacy_entry="python tools/excel_line_splitter/split_excel_lines.py",
-    ),
-    CommandSpec(
         name="french-nbsp",
         summary="恢复法语标点所需的 NBSP",
         module="tools.french_nbsp_restorer.restore_french_nbsp",

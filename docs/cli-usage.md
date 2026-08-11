@@ -44,7 +44,6 @@ qatools tag-check --help
 | `qatools line-break-check` | 真实换行数量检查 |
 | `qatools consistency-check` | 同源译文一致性检查 |
 | `qatools chinese-check` | Target 中文字符与中文标点检查 |
-| `qatools split-lines` | Excel 多行单元格拆列 |
 | `qatools french-nbsp` | 法语 NBSP 恢复 |
 | `qatools xbench` | Xbench QA Report 转换 |
 
@@ -196,14 +195,6 @@ qatools chinese-check ./input.xlsx \
 
 ## 文本修复与转换
 
-分行拆列：
-
-```bash
-qatools split-lines ./input.xlsx \
-  -s Sheet1 -c A -r B --start-row 2 \
-  -o ./artifacts/input_split_lines.xlsx
-```
-
 法语 NBSP 恢复：
 
 ```bash
@@ -233,7 +224,6 @@ qatools xbench ./Xbench_QA_Report.xlsx \
 | `qatools line-break-check` | `python tools/line_break_checker/check_line_breaks.py` |
 | `qatools consistency-check` | `python tools/source_consistency_checker/check_source_consistency.py` |
 | `qatools chinese-check` | `python tools/chinese_target_checker/check_chinese_target.py` |
-| `qatools split-lines` | `python tools/excel_line_splitter/split_excel_lines.py` |
 | `qatools french-nbsp` | `python tools/french_nbsp_restorer/restore_french_nbsp.py` |
 | `qatools xbench` | `python tools/xbench_report_transformer/transform_xbench_report.py` |
 

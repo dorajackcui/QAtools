@@ -45,7 +45,6 @@ python -m qatools gui
 | 换行数量检查 | `qatools line-break-check` | 是 | [换行检查](tools/line_break_checker/README.md) |
 | 同源译文一致性 | `qatools consistency-check` | 是 | [一致性检查](tools/source_consistency_checker/README.md) |
 | Target 中文检查 | `qatools chinese-check` | 是 | [中文检查](tools/chinese_target_checker/README.md) |
-| Excel 分行拆列 | `qatools split-lines` | 是 | [分行拆列](tools/excel_line_splitter/README.md) |
 | 法语 NBSP 恢复 | `qatools french-nbsp` | 是 | [法语 NBSP](tools/french_nbsp_restorer/README.md) |
 | Xbench QA 转换 | `qatools xbench` | 是 | [Xbench 转换](tools/xbench_report_transformer/README.md) |
 

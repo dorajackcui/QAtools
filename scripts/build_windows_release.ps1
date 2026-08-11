@@ -149,7 +149,6 @@ try {
         "tools.line_break_checker.check_line_breaks",
         "tools.source_consistency_checker.check_source_consistency",
         "tools.chinese_target_checker.check_chinese_target",
-        "tools.excel_line_splitter.split_excel_lines",
         "tools.french_nbsp_restorer.restore_french_nbsp",
         "tools.xbench_report_transformer.transform_xbench_report"
     )

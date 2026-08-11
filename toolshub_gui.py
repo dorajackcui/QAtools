@@ -13,7 +13,6 @@ from tkinter import messagebox, ttk
 from phraseloom.gui import PhraseLoomApp
 from tools.gui_common import configure_tool_page_style
 from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
-from tools.excel_line_splitter.split_excel_lines_gui import SplitExcelLinesApp
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
 from tools.line_break_checker.check_line_breaks_gui import LineBreakCheckerApp
 from tools.source_consistency_checker.check_source_consistency_gui import SourceConsistencyCheckerApp
@@ -104,12 +103,6 @@ TOOL_GROUPS = (
     ToolGroup(
         title="文本修复",
         tools=(
-            ToolItem(
-                key="line_splitter",
-                title="分行拆列",
-                description="把单元格中的多行文本拆分到指定结果列，便于后续检查。",
-                factory=SplitExcelLinesApp,
-            ),
             ToolItem(
                 key="french_nbsp",
                 title="法语 NBSP 恢复",

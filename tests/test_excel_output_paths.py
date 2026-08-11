@@ -11,9 +11,6 @@ from tools.excel_output import find_last_value_row, load_workbook_for_editing
 from tools.chinese_target_checker.check_chinese_target import (
     build_default_output_path as build_chinese_target_output_path,
 )
-from tools.excel_line_splitter.split_excel_lines import (
-    build_default_output_path as build_split_lines_output_path,
-)
 from tools.french_nbsp_restorer.restore_french_nbsp import (
     build_default_output_path as build_french_nbsp_output_path,
 )
@@ -54,7 +51,6 @@ class ExcelOutputPathTests(unittest.TestCase):
             (build_term_pair_output_path, "term_pair_check_source.xlsx"),
             (build_tag_check_output_path, "tag_check_source.xlsx"),
             (build_chinese_target_output_path, "target_chinese_check_source.xlsx"),
-            (build_split_lines_output_path, "split_lines_source.xlsx"),
             (build_french_nbsp_output_path, "french_nbsp_restore_source.xlsx"),
         )
 

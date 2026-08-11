@@ -65,7 +65,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                 "Target 中文检查",
             ],
         )
-        self.assertEqual(grouped_tools["文本修复"], ["分行拆列", "法语 NBSP 恢复"])
+        self.assertEqual(grouped_tools["文本修复"], ["法语 NBSP 恢复"])
         self.assertEqual(grouped_tools["其他"], ["Xbench QA 转换"])
 
     def test_selecting_a_tool_updates_heading_and_visible_page(self) -> None:

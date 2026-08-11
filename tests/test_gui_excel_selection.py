@@ -9,7 +9,6 @@ from unittest.mock import patch
 from openpyxl import Workbook
 
 from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
-from tools.excel_line_splitter.split_excel_lines_gui import SplitExcelLinesApp
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
 from tools.line_break_checker.check_line_breaks_gui import LineBreakCheckerApp
 from tools.source_consistency_checker.check_source_consistency_gui import SourceConsistencyCheckerApp
@@ -99,14 +98,6 @@ class GuiSheetSelectionTests(unittest.TestCase):
         workbook.active = 0
         workbook.save(path)
 
-    def create_splitter_workbook(self, path: Path) -> None:
-        workbook = Workbook()
-        data_sheet = workbook.active
-        data_sheet.title = "Split"
-        workbook.create_sheet("Other")
-        workbook.active = 0
-        workbook.save(path)
-
     def create_xbench_report_workbook(self, path: Path) -> None:
         workbook = Workbook()
         report_sheet = workbook.active
@@ -149,15 +140,6 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.history_source_column_var = FakeVar("")
         app.history_target_column_var = FakeVar("")
         app.history_sheet_combobox = FakeCombobox()
-        return app
-
-    def build_splitter_app(self, input_path: Path) -> SplitExcelLinesApp:
-        app = SplitExcelLinesApp.__new__(SplitExcelLinesApp)
-        app.input_file_var = FakeVar(str(input_path))
-        app.output_file_var = FakeVar("")
-        app.sheet_var = FakeVar("")
-        app.sheet_combobox = FakeCombobox()
-        app.output_preview_var = FakeVar("")
         return app
 
     def build_tag_checker_app(self, input_path: Path) -> TagPlaceholderCheckerApp:
@@ -333,7 +315,6 @@ class GuiSheetSelectionTests(unittest.TestCase):
 
     def test_simple_tool_pages_preview_their_automatic_output_names(self) -> None:
         cases = (
-            (SplitExcelLinesApp, "split_lines_input.xlsx"),
             (TagPlaceholderCheckerApp, "tag_check_input.xlsx"),
             (LineBreakCheckerApp, "line_break_check_input.xlsx"),
             (
@@ -354,17 +335,6 @@ class GuiSheetSelectionTests(unittest.TestCase):
                 app.update_output_preview()
 
                 self.assertTrue(app.output_preview_var.get().endswith(expected_name))
-
-    def test_splitter_refresh_populates_sheet_choices(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            workbook_path = Path(tmp_dir) / "split.xlsx"
-            self.create_splitter_workbook(workbook_path)
-            app = self.build_splitter_app(workbook_path)
-
-            app.refresh_sheet_choices(show_error=False)
-
-            self.assertEqual(app.sheet_combobox["values"], ("Split", "Other"))
-            self.assertEqual(app.sheet_var.get(), "Split")
 
     def test_tag_checker_refresh_populates_sheet_choices_and_detects_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
