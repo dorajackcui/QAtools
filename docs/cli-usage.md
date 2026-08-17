@@ -135,6 +135,12 @@ qatools phraseloom export ./source.xlsx \
 qatools phraseloom export ./source.xlsx --group-similar
 ```
 
+默认会按换行拆分多行 Source；如需整格导出：
+
+```bash
+qatools phraseloom export ./source.xlsx --no-split-lines
+```
+
 回填翻译：
 
 ```bash

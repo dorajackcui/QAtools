@@ -74,8 +74,8 @@ source_strings.xlsx
 
 - Source 为空：忽略。
 - Target 已有内容：视为已完成，不进入翻译清单且不修改。
-- Source 单元格内有多行文本：每个非空行作为独立 Segment 导出；回填时按
-  原始顺序、空行和换行符精确合并回同一个 Target 单元格。
+- Source 单元格内有多行文本：默认将每个非空行作为独立 Segment 导出；
+  回填时按原始顺序、空行和换行符精确合并回同一个 Target 单元格。
 - 纯数字、纯符号或 Tag-only：自动将 Source 作为 Target，不进入翻译清单。
 - 完全相同的待翻译 Source：合并为一条。
 - 沿用原有 Translation Unit 清洗：数字等可变部分压缩为模板，例如
@@ -99,6 +99,15 @@ qatools phraseloom export source.xlsx `
 ```powershell
 qatools phraseloom export source.xlsx --group-similar
 ```
+
+不希望拆分多行 Source 时关闭分行：
+
+```powershell
+qatools phraseloom export source.xlsx --no-split-lines
+```
+
+此时每个多行 Source 单元格会作为一个完整 String 导出和回填。桌面 GUI 中
+可通过“按换行拆分多行 Source”复选框配置相同行为。
 
 输出工作簿包含两个可见部分：
 

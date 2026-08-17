@@ -64,6 +64,15 @@ def _export(argv: list[str]) -> int:
         action="store_true",
         help="Place structurally similar cleaned strings together at the end",
     )
+    parser.add_argument(
+        "--split-lines",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Export each non-empty line in a multiline Source cell separately "
+            "(default: enabled)"
+        ),
+    )
     args = parser.parse_args(argv)
     stats = export_strings_workbook(
         args.input,
@@ -73,6 +82,7 @@ def _export(argv: list[str]) -> int:
         context_col=args.context_col,
         group_similar=args.group_similar,
         tag_config=args.tag_config,
+        split_lines=args.split_lines,
     )
     _print_export_stats(stats)
     return 0
@@ -107,6 +117,11 @@ def _print_export_stats(stats: dict[str, int | str]) -> None:
         f"Similar groups: {stats['group_count']}"
         if stats["grouping_enabled"]
         else "Similar grouping: off"
+    )
+    print(
+        "Multiline Source splitting: on"
+        if stats["line_splitting_enabled"]
+        else "Multiline Source splitting: off"
     )
     print(f"Existing targets skipped: {stats['completed_row_count']}")
     print(

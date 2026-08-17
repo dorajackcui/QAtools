@@ -125,6 +125,68 @@ class StringsWorkflowTests(unittest.TestCase):
             finally:
                 restored.close()
 
+    def test_multiline_source_cell_can_be_exported_as_one_string(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "whole_cell.xlsx"
+            package_path = Path(tmp) / "whole_cell_strings.xlsx"
+            result_path = Path(tmp) / "whole_cell_translated.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["source", "target"])
+            worksheet.append(["\n  One\nTwo  \n", None])
+            workbook.save(source_path)
+            workbook.close()
+
+            stats = export_strings_workbook(
+                source_path,
+                package_path,
+                split_lines=False,
+            )
+
+            self.assertFalse(stats["line_splitting_enabled"])
+            self.assertEqual(stats["source_row_count"], 1)
+            self.assertEqual(stats["source_segment_count"], 1)
+            self.assertEqual(stats["pending_segment_count"], 1)
+            self.assertEqual(stats["string_count"], 1)
+
+            package = load_workbook(package_path)
+            strings = package[schema.STRINGS_SHEET]
+            headers = [cell.value for cell in strings[1]]
+            source_index = headers.index(schema.SOURCE_COLUMN) + 1
+            target_index = headers.index(schema.TARGET_COLUMN) + 1
+            self.assertEqual(
+                strings.cell(row=2, column=source_index).value,
+                "One\nTwo",
+            )
+            strings.cell(row=2, column=target_index).value = "Un\nDeux"
+
+            mapping = package[schema.STRINGS_MAP_SHEET]
+            mapping_headers = [cell.value for cell in mapping[1]]
+            mapping_record = dict(
+                zip(
+                    mapping_headers,
+                    next(mapping.iter_rows(min_row=2, values_only=True)),
+                )
+            )
+            self.assertEqual(mapping_record[schema.SEGMENT_COUNT_COLUMN], 1)
+            self.assertEqual(mapping_record[schema.SEGMENT_PREFIX_COLUMN], "\n  ")
+            self.assertEqual(mapping_record[schema.SEGMENT_SUFFIX_COLUMN], "  \n")
+            package.save(package_path)
+            package.close()
+
+            restore_stats = restore_strings_workbook(package_path, result_path)
+
+            self.assertEqual(restore_stats["restored_row_count"], 1)
+            self.assertEqual(restore_stats["issue_count"], 0)
+            restored = load_workbook(result_path, data_only=True)
+            try:
+                self.assertEqual(
+                    restored.active.cell(row=2, column=2).value,
+                    "\n  Un\nDeux  \n",
+                )
+            finally:
+                restored.close()
+
     def test_template_cleanup_does_not_drop_sibling_segment_in_same_cell(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             source_path = Path(tmp) / "multiline_template.xlsx"
@@ -1056,6 +1118,23 @@ class StringsWorkflowTests(unittest.TestCase):
         self.assertIn("2) Restore translated Strings", menu_text)
         self.assertNotIn("TM", menu_text)
         self.assertNotIn("Entity", menu_text)
+
+    def test_cli_can_disable_multiline_source_splitting(self) -> None:
+        from phraseloom.cli import _dispatch
+
+        with (
+            patch(
+                "phraseloom.cli.export_strings_workbook",
+                return_value={},
+            ) as export_mock,
+            patch("phraseloom.cli._print_export_stats"),
+        ):
+            self.assertEqual(
+                _dispatch(["export", "source.xlsx", "--no-split-lines"]),
+                0,
+            )
+
+        self.assertFalse(export_mock.call_args.kwargs["split_lines"])
 
     def test_removed_legacy_commands_are_rejected(self) -> None:
         from phraseloom.cli import main

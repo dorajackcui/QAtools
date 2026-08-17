@@ -59,6 +59,7 @@ def export_strings_workbook(
     group_similar: bool = False,
     min_group_size: int = 3,
     tag_config: str | Path | None = None,
+    split_lines: bool = True,
 ) -> dict[str, int | str]:
     input_path = Path(input_path)
     output_path = (
@@ -76,6 +77,7 @@ def export_strings_workbook(
         source_col=source_col,
         target_col=target_col,
         tag_rules=tag_rules,
+        split_lines=split_lines,
     )
     context_index = _context_column_index(input_path, context_col)
     completed_strings = [
@@ -190,6 +192,7 @@ def export_strings_workbook(
         "group_count": group_count,
         "grouped_string_count": grouped_count,
         "grouping_enabled": group_similar,
+        "line_splitting_enabled": split_lines,
     }
 
 
@@ -277,6 +280,7 @@ def _read_rows_with_optional_target(
     source_col: str | int,
     target_col: str | int,
     tag_rules: TagRules,
+    split_lines: bool,
 ) -> list[RowItem]:
     try:
         return read_source_rows(
@@ -284,6 +288,7 @@ def _read_rows_with_optional_target(
             source_col,
             target_col,
             tag_rules=tag_rules,
+            split_lines=split_lines,
         )
     except ColumnNotFoundError:
         if str(target_col).strip().lower() != schema.TARGET_COLUMN:
@@ -293,6 +298,7 @@ def _read_rows_with_optional_target(
             source_col,
             None,
             tag_rules=tag_rules,
+            split_lines=split_lines,
         )
 
 

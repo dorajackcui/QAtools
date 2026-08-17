@@ -64,6 +64,23 @@ class GuiTaskSpecTests(unittest.TestCase):
         )
         self.assertIn("--group-similar", args)
 
+    def test_export_can_disable_multiline_source_splitting(self) -> None:
+        args = build_cli_args(
+            TASK_BY_KEY["export_strings"],
+            {
+                "input": "/tmp/source.xlsx",
+                "split_lines": False,
+            },
+        )
+        self.assertIn("--no-split-lines", args)
+
+    def test_export_keeps_multiline_source_splitting_enabled_by_default(self) -> None:
+        args = build_cli_args(
+            TASK_BY_KEY["export_strings"],
+            {"input": "/tmp/source.xlsx"},
+        )
+        self.assertNotIn("--no-split-lines", args)
+
     def test_restore_only_needs_the_strings_workbook(self) -> None:
         args = build_cli_args(
             TASK_BY_KEY["restore_strings"],
@@ -141,6 +158,10 @@ class GuiLayoutTests(unittest.TestCase):
             self.assertIn("导出选项", texts)
             self.assertIn(
                 "启用相似句分组（未聚类在前，聚类内容在后）",
+                texts,
+            )
+            self.assertIn(
+                "按换行拆分多行 Source（回填时自动合并）",
                 texts,
             )
             self.assertNotIn("常用流程", texts)

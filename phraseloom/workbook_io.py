@@ -18,6 +18,7 @@ def read_source_rows(
     target_column: str | int | None,
     *,
     tag_rules: TagRules | None = None,
+    split_lines: bool = True,
 ) -> list[RowItem]:
     active_rules = tag_rules or default_tag_rules()
     workbook = load_workbook(input_path, read_only=True, data_only=True)
@@ -52,7 +53,7 @@ def read_source_rows(
             raw_target = "" if target_value is None else str(target_value).strip()
             segments = _protected_source_segments(
                 raw_source,
-                split_lines=not raw_target,
+                split_lines=split_lines and not raw_target,
                 tag_rules=active_rules,
             )
             segment_count = len(segments)
@@ -173,12 +174,14 @@ def _protected_source_segments(
 ) -> list[tuple[str, str, str, str]]:
     extraction = extract_tags(raw_source, rules=tag_rules)
     if not split_lines:
+        leading_size = len(raw_source) - len(raw_source.lstrip())
+        trailing_start = len(raw_source.rstrip())
         return [
             (
                 raw_source.strip(),
                 extraction.text.strip(),
-                "",
-                "",
+                raw_source[:leading_size],
+                raw_source[trailing_start:],
             )
         ]
 

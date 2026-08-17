@@ -33,11 +33,13 @@ def _export() -> int:
         required=True,
     )
     target_column = _find_header(headers, "target") or "target"
+    split_lines = _prompt_yes_no("Split multiline Source cells", default=True)
     group_similar = _prompt_yes_no("Group similar cleaned strings", default=False)
     stats = export_strings_workbook(
         input_path,
         source_col=source_column,
         target_col=target_column,
+        split_lines=split_lines,
         group_similar=group_similar,
     )
     _print_export_stats(stats)
@@ -106,6 +108,11 @@ def _print_export_stats(stats: dict[str, int | str]) -> None:
         f"Similar groups: {stats['group_count']}"
         if stats["grouping_enabled"]
         else "Similar grouping: off"
+    )
+    print(
+        "Multiline Source splitting: on"
+        if stats["line_splitting_enabled"]
+        else "Multiline Source splitting: off"
     )
     print(f"Existing targets skipped: {stats['completed_row_count']}")
 

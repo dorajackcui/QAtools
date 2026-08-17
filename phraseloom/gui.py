@@ -42,6 +42,7 @@ class FieldSpec:
     label: str
     kind: str = "text"
     flag: str | None = None
+    false_flag: str | None = None
     required: bool = False
     default: str | bool = ""
     file_types: tuple[tuple[str, str], ...] = EXCEL_FILE_TYPES
@@ -67,6 +68,13 @@ EXPORT_STRINGS_TASK = TaskSpec(
     "export",
     (
         _input("原始 Excel"),
+        FieldSpec(
+            "split_lines",
+            "按换行拆分多行 Source（回填时自动合并）",
+            kind="bool",
+            false_flag="--no-split-lines",
+            default=True,
+        ),
         FieldSpec(
             "group_similar",
             "启用相似句分组（未聚类在前，聚类内容在后）",
@@ -132,6 +140,8 @@ def build_cli_args(task: TaskSpec, values: Mapping[str, object]) -> list[str]:
                 missing.append(field_spec.label)
             if enabled and field_spec.flag:
                 args.append(field_spec.flag)
+            elif not enabled and field_spec.false_flag:
+                args.append(field_spec.false_flag)
             continue
 
         text = str(value or "").strip()
@@ -300,7 +310,6 @@ class PhraseLoomApp(ttk.Frame):
             input_section,
             text=(
                 "已有 Target 会视为已完成并跳过；重复 Source 只导出一次；"
-                "单元格内多行 Source 会逐行拆成 Segment，并在回填时按原换行还原；"
                 "Context 留空时自动识别同名列。"
             ),
             style=MUTED_LABEL_STYLE,
@@ -417,13 +426,21 @@ class PhraseLoomApp(ttk.Frame):
         task: TaskSpec,
     ) -> None:
         fields = {field.key: field for field in task.fields}
+        split_spec = fields["split_lines"]
+        split_var = self._make_variable(split_spec)
+        ttk.Checkbutton(
+            parent,
+            text=split_spec.label,
+            variable=split_var,
+        ).grid(row=0, column=0, columnspan=3, sticky="w")
+
         group_spec = fields["group_similar"]
         group_var = self._make_variable(group_spec)
         ttk.Checkbutton(
             parent,
             text=group_spec.label,
             variable=group_var,
-        ).grid(row=0, column=0, columnspan=3, sticky="w")
+        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
         tag_spec = fields["tag_config"]
         tag_var = self._make_variable(tag_spec)
@@ -432,14 +449,17 @@ class PhraseLoomApp(ttk.Frame):
             label=tag_spec.label,
             variable=tag_var,
             field_spec=tag_spec,
-            row=1,
+            row=2,
             pady=(12, 0),
         )
         ttk.Label(
             parent,
-            text="相似句仅调整排列；Tag 配置留空时使用内置规则。",
+            text=(
+                "关闭分行后，多行 Source 将作为一个完整 String 导出；"
+                "相似句仅调整排列；Tag 配置留空时使用内置规则。"
+            ),
             style=MUTED_LABEL_STYLE,
-        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
     def _make_variable(self, field_spec: FieldSpec) -> tk.Variable:
         value = self.export_values.get(
