@@ -5,13 +5,24 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+import ctypes
 from dataclasses import dataclass
 import sys
 import tkinter as tk
+from tkinter import font as tkfont
 from tkinter import messagebox, ttk
 
 from phraseloom.gui import PhraseLoomApp
-from tools.gui_common import configure_tool_page_style
+from tools.gui_common import (
+    APP_HOVER_BACKGROUND,
+    APP_MAIN_BACKGROUND,
+    APP_MUTED_TEXT,
+    APP_PRIMARY,
+    APP_SELECTED_BACKGROUND,
+    APP_SIDEBAR_BACKGROUND,
+    APP_TEXT,
+    configure_tool_page_style,
+)
 from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
 from tools.line_break_checker.check_line_breaks_gui import LineBreakCheckerApp
@@ -31,6 +42,22 @@ from tools.xbench_report_transformer.transform_xbench_report_gui import XbenchRe
 
 
 ToolFactory = Callable[[tk.Misc], ttk.Frame]
+
+
+def enable_high_dpi_awareness() -> None:
+    """Let Tk render at the monitor's real DPI instead of bitmap scaling."""
+
+    if sys.platform != "win32":
+        return
+    try:
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except (AttributeError, OSError):
+        pass
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except (AttributeError, OSError):
+        pass
 
 
 @dataclass(frozen=True)
@@ -151,16 +178,29 @@ class ToolshubApp:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
 
-        shell = ttk.Frame(self.root, padding=16)
+        shell = ttk.Frame(self.root, style="Toolshub.Shell.TFrame")
         shell.grid(row=0, column=0, sticky="nsew")
         shell.columnconfigure(1, weight=1)
         shell.rowconfigure(0, weight=1)
 
-        sidebar = ttk.Frame(shell, padding=(0, 0, 16, 0))
+        sidebar = ttk.Frame(
+            shell,
+            padding=(16, 20, 14, 16),
+            style="Toolshub.Sidebar.TFrame",
+        )
         sidebar.grid(row=0, column=0, sticky="nsw")
         self._build_sidebar(sidebar)
+        ttk.Separator(shell, orient="vertical").grid(
+            row=0,
+            column=0,
+            sticky="nse",
+        )
 
-        workspace = ttk.Frame(shell)
+        workspace = ttk.Frame(
+            shell,
+            padding=(24, 22, 28, 18),
+            style="Toolshub.Workspace.TFrame",
+        )
         workspace.grid(row=0, column=1, sticky="nsew")
         workspace.columnconfigure(0, weight=1)
         workspace.rowconfigure(3, weight=1)
@@ -169,14 +209,20 @@ class ToolshubApp:
             workspace,
             textvariable=self.current_tool_title,
             style="Toolshub.Title.TLabel",
-        ).grid(row=0, column=0, sticky="w")
+        ).grid(row=0, column=0, sticky="w", padx=16)
         ttk.Label(
             workspace,
             textvariable=self.current_tool_description,
             style="Toolshub.Description.TLabel",
             wraplength=760,
-        ).grid(row=1, column=0, sticky="ew", pady=(4, 12))
-        ttk.Separator(workspace).grid(row=2, column=0, sticky="ew", pady=(0, 12))
+        ).grid(row=1, column=0, sticky="ew", padx=16, pady=(5, 16))
+        ttk.Separator(workspace).grid(
+            row=2,
+            column=0,
+            sticky="ew",
+            padx=16,
+            pady=(0, 2),
+        )
 
         self.content_frame = ttk.Frame(workspace)
         self.content_frame.grid(row=3, column=0, sticky="nsew")
@@ -189,23 +235,96 @@ class ToolshubApp:
     def _configure_style(self) -> None:
         configure_tool_page_style(self.root)
         style = ttk.Style(self.root)
-        style.configure("Toolshub.AppTitle.TLabel", font=("TkDefaultFont", 15, "bold"))
-        style.configure("Toolshub.Category.TLabel", font=("TkDefaultFont", 10, "bold"))
-        style.configure("Toolshub.Title.TLabel", font=("TkDefaultFont", 16, "bold"))
-        style.configure("Toolshub.Description.TLabel", foreground="#555555")
-        style.configure("Toolshub.Nav.TRadiobutton", padding=(10, 6))
+        default_font = tkfont.nametofont("TkDefaultFont", root=self.root)
+        family = str(default_font.actual("family"))
+        native_size = abs(int(default_font.actual("size"))) or 10
+        body_size = max(native_size, 10) if sys.platform == "win32" else native_size
+
+        style.configure("Toolshub.Shell.TFrame", background=APP_MAIN_BACKGROUND)
+        style.configure("Toolshub.Sidebar.TFrame", background=APP_SIDEBAR_BACKGROUND)
+        style.configure("Toolshub.Workspace.TFrame", background=APP_MAIN_BACKGROUND)
+        style.configure(
+            "Toolshub.AppTitle.TLabel",
+            background=APP_SIDEBAR_BACKGROUND,
+            foreground=APP_TEXT,
+            font=(family, body_size + 3, "bold"),
+        )
+        style.configure(
+            "Toolshub.AppSubtitle.TLabel",
+            background=APP_SIDEBAR_BACKGROUND,
+            foreground=APP_MUTED_TEXT,
+            font=(family, max(body_size - 1, 8)),
+        )
+        style.configure(
+            "Toolshub.Category.TLabel",
+            background=APP_SIDEBAR_BACKGROUND,
+            foreground=APP_MUTED_TEXT,
+            font=(family, max(body_size - 1, 8), "bold"),
+        )
+        style.configure(
+            "Toolshub.Title.TLabel",
+            background=APP_MAIN_BACKGROUND,
+            foreground=APP_TEXT,
+            font=(family, body_size + 8, "bold"),
+        )
+        style.configure(
+            "Toolshub.Description.TLabel",
+            background=APP_MAIN_BACKGROUND,
+            foreground=APP_MUTED_TEXT,
+            font=(family, body_size),
+        )
+        style.layout(
+            "Toolshub.Nav.TRadiobutton",
+            [
+                (
+                    "Radiobutton.padding",
+                    {
+                        "sticky": "nsew",
+                        "children": [
+                            (
+                                "Radiobutton.focus",
+                                {
+                                    "sticky": "nsew",
+                                    "children": [
+                                        ("Radiobutton.label", {"sticky": "nsew"})
+                                    ],
+                                },
+                            )
+                        ],
+                    },
+                )
+            ],
+        )
+        style.configure(
+            "Toolshub.Nav.TRadiobutton",
+            anchor="w",
+            background=APP_SIDEBAR_BACKGROUND,
+            focuscolor=APP_PRIMARY,
+            focusthickness=1,
+            foreground=APP_TEXT,
+            font=(family, body_size),
+            padding=(11, 8),
+        )
+        style.map(
+            "Toolshub.Nav.TRadiobutton",
+            background=[
+                ("selected", APP_SELECTED_BACKGROUND),
+                ("active", APP_HOVER_BACKGROUND),
+            ],
+            foreground=[("disabled", APP_MUTED_TEXT), ("!disabled", APP_TEXT)],
+        )
 
     def _build_sidebar(self, parent: ttk.Frame) -> None:
         ttk.Label(
             parent,
-            text="QA 工具箱",
+            text="QAtools",
             style="Toolshub.AppTitle.TLabel",
-        ).grid(row=0, column=0, sticky="w", pady=(0, 4))
+        ).grid(row=0, column=0, sticky="w", padx=10, pady=(0, 3))
         ttk.Label(
             parent,
-            text="Toolshub",
-            style="Toolshub.Description.TLabel",
-        ).grid(row=1, column=0, sticky="w", pady=(0, 16))
+            text="本地化 QA 工作台",
+            style="Toolshub.AppSubtitle.TLabel",
+        ).grid(row=1, column=0, sticky="w", padx=10, pady=(0, 20))
 
         row = 2
         for group in self.tool_groups:
@@ -213,7 +332,13 @@ class ToolshubApp:
                 parent,
                 text=group.title,
                 style="Toolshub.Category.TLabel",
-            ).grid(row=row, column=0, sticky="w", pady=(12 if row > 2 else 0, 4))
+            ).grid(
+                row=row,
+                column=0,
+                sticky="w",
+                padx=11,
+                pady=(14 if row > 2 else 0, 5),
+            )
             row += 1
             for tool in group.tools:
                 button = ttk.Radiobutton(
@@ -224,11 +349,11 @@ class ToolshubApp:
                     command=lambda key=tool.key: self.select_tool(key),
                     style="Toolshub.Nav.TRadiobutton",
                 )
-                button.grid(row=row, column=0, sticky="ew", pady=1)
+                button.grid(row=row, column=0, sticky="ew", pady=2)
                 self.nav_buttons[tool.key] = button
                 row += 1
 
-        parent.columnconfigure(0, minsize=170)
+        parent.columnconfigure(0, minsize=204)
 
     def _get_or_create_tool_frame(self, key: str) -> ttk.Frame:
         frame = self.tool_frames.get(key)
@@ -338,6 +463,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_argument_parser().parse_args(argv)
     if args.smoke_test:
+        enable_high_dpi_awareness()
         root = tk.Tk()
         try:
             root.withdraw()
@@ -391,6 +517,7 @@ def main(argv: list[str] | None = None) -> int:
         ):
             return 0
 
+    enable_high_dpi_awareness()
     root = tk.Tk()
     app = ToolshubApp(root)
 
