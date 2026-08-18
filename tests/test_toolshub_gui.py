@@ -44,7 +44,7 @@ class ToolshubLayoutTests(unittest.TestCase):
         finally:
             root.destroy()
 
-    def test_tools_are_grouped_by_workflow_quality_text_repair_and_other(self) -> None:
+    def test_navigation_only_exposes_top_level_workflows_and_utilities(self) -> None:
         grouped_tools = {
             group.title: [tool.title for tool in group.tools]
             for group in TOOL_GROUPS
@@ -55,16 +55,7 @@ class ToolshubLayoutTests(unittest.TestCase):
             ["一键质量检查", "PhraseLoom"],
         )
         self.assertNotIn("术语处理", grouped_tools)
-        self.assertEqual(
-            grouped_tools["质量检查"],
-            [
-                "术语检查",
-                "Tag 检查",
-                "换行数量检查",
-                "同源译文一致性",
-                "Target 中文检查",
-            ],
-        )
+        self.assertNotIn("质量检查", grouped_tools)
         self.assertEqual(grouped_tools["文本修复"], ["法语 NBSP 恢复"])
         self.assertEqual(grouped_tools["其他"], ["Xbench QA 转换"])
 
@@ -82,13 +73,13 @@ class ToolshubLayoutTests(unittest.TestCase):
 
         try:
             workflow_frame = app.tool_frames["workflow"]
-            app.select_tool("tag_checker")
+            app.select_tool("french_nbsp")
             root.update()
 
-            self.assertEqual(app.selected_tool_key.get(), "tag_checker")
-            self.assertEqual(app.current_tool_title.get(), "Tag 检查")
-            self.assertIn("tag", app.current_tool_description.get().lower())
-            self.assertIs(app.current_tool_frame, app.tool_frames["tag_checker"])
+            self.assertEqual(app.selected_tool_key.get(), "french_nbsp")
+            self.assertEqual(app.current_tool_title.get(), "法语 NBSP 恢复")
+            self.assertIn("NBSP", app.current_tool_description.get())
+            self.assertIs(app.current_tool_frame, app.tool_frames["french_nbsp"])
             self.assertEqual(workflow_frame.winfo_manager(), "")
             self.assertEqual(app.current_tool_frame.winfo_manager(), "grid")
         finally:
@@ -98,13 +89,13 @@ class ToolshubLayoutTests(unittest.TestCase):
         root, app = self.make_app()
 
         try:
-            app.select_tool("tag_checker")
-            tag_frame = app.current_tool_frame
+            app.select_tool("french_nbsp")
+            nbsp_frame = app.current_tool_frame
             app.select_tool("workflow")
-            app.select_tool("tag_checker")
+            app.select_tool("french_nbsp")
 
-            self.assertIs(app.current_tool_frame, tag_frame)
-            self.assertEqual(tag_frame.winfo_manager(), "grid")
+            self.assertIs(app.current_tool_frame, nbsp_frame)
+            self.assertEqual(nbsp_frame.winfo_manager(), "grid")
             self.assertEqual(app.tool_frames["workflow"].winfo_manager(), "")
         finally:
             root.destroy()

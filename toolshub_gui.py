@@ -23,12 +23,7 @@ from tools.gui_common import (
     APP_TEXT,
     configure_tool_page_style,
 )
-from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
-from tools.line_break_checker.check_line_breaks_gui import LineBreakCheckerApp
-from tools.source_consistency_checker.check_source_consistency_gui import SourceConsistencyCheckerApp
-from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
-from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
 from tools.workflow.file_receiver import (
     FRENCH_NBSP_RESTORE_ACTION,
     QA_WORKFLOW_ACTION,
@@ -81,7 +76,7 @@ TOOL_GROUPS = (
             ToolItem(
                 key="workflow",
                 title="一键质量检查",
-                description="按顺序执行质量检查板块的全部项目，统一写入输出 Excel。",
+                description="集中执行全部质量检查项目，并统一写入输出 Excel。",
                 factory=WorkflowRunnerApp,
             ),
             ToolItem(
@@ -89,41 +84,6 @@ TOOL_GROUPS = (
                 title="PhraseLoom",
                 description="导出干净、去重的 Strings 工作簿，并在翻译后回填原始 Excel。",
                 factory=PhraseLoomApp,
-            ),
-        ),
-    ),
-    ToolGroup(
-        title="质量检查",
-        tools=(
-            ToolItem(
-                key="term_pair",
-                title="术语检查",
-                description="从可选 mark 提取新术语对，或仅用历史 TB 检查 source / target 命中。",
-                factory=ExtractTermsApp,
-            ),
-            ToolItem(
-                key="tag_checker",
-                title="Tag 检查",
-                description="检查 tag、placeholder、换行标记和数字 tag 在 source / target 中是否一致。",
-                factory=TagPlaceholderCheckerApp,
-            ),
-            ToolItem(
-                key="line_break_checker",
-                title="换行数量检查",
-                description="逐行比较 source / target 单元格中的真实换行数量是否一致。",
-                factory=LineBreakCheckerApp,
-            ),
-            ToolItem(
-                key="source_consistency_checker",
-                title="同源译文一致性",
-                description="检查完全相同的 source 是否对应多个不同 target。",
-                factory=SourceConsistencyCheckerApp,
-            ),
-            ToolItem(
-                key="chinese_target",
-                title="Target 中文检查",
-                description="扫描 target 文本中的中文字符，定位未翻译或混入中文的问题。",
-                factory=ChineseTargetCheckerApp,
             ),
         ),
     ),
