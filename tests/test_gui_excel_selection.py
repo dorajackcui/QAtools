@@ -13,6 +13,11 @@ from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestore
 from tools.line_break_checker.check_line_breaks_gui import LineBreakCheckerApp
 from tools.source_consistency_checker.check_source_consistency_gui import SourceConsistencyCheckerApp
 from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPlaceholderCheckerApp
+from tools.target_text_checker.check_target_text import (
+    ABNORMAL_PUNCTUATION_RULE,
+    CONSECUTIVE_SPACES_RULE,
+    MIXED_WIDTH_RULE,
+)
 from tools.tb_projects import TbProject
 from tools.term_pair_checker.extract_terms_gui import ExtractTermsApp
 from tools.workflow.workflow_gui import WorkflowRunnerApp
@@ -709,6 +714,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.run_line_break_check_var = FakeBoolVar(True)
         app.run_source_consistency_check_var = FakeBoolVar(True)
         app.run_chinese_target_check_var = FakeBoolVar(True)
+        app.run_target_text_check_var = FakeBoolVar(True)
         app.term_mark_style_vars = {
             "【】": FakeBoolVar(True),
             "[]": FakeBoolVar(True),
@@ -717,6 +723,11 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.square_color_var = FakeBoolVar(True)
         app.brace_var = FakeBoolVar(True)
         app.newline_var = FakeBoolVar(True)
+        app.target_text_rule_vars = {
+            ABNORMAL_PUNCTUATION_RULE: FakeBoolVar(True),
+            CONSECUTIVE_SPACES_RULE: FakeBoolVar(False),
+            MIXED_WIDTH_RULE: FakeBoolVar(True),
+        }
         app.tag_mode_var = FakeVar("standard")
         summary = SimpleNamespace(
             output_path=Path("/tmp/output.xlsx"),
@@ -729,6 +740,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
             ran_line_break_check=True,
             ran_source_consistency_check=True,
             ran_chinese_target_check=True,
+            ran_target_text_check=True,
             term_count=3,
             term_problem_count=0,
             term_problem_rows=0,
@@ -738,6 +750,8 @@ class GuiSheetSelectionTests(unittest.TestCase):
             source_consistency_problem_count=0,
             source_consistency_problem_rows=0,
             chinese_target_problem_count=0,
+            target_text_problem_count=0,
+            target_text_problem_rows=0,
         )
 
         with (
@@ -757,6 +771,11 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertTrue(run_workflow_mock.call_args.kwargs["run_line_break_check"])
         self.assertTrue(run_workflow_mock.call_args.kwargs["run_source_consistency_check"])
         self.assertTrue(run_workflow_mock.call_args.kwargs["run_chinese_target_check"])
+        self.assertTrue(run_workflow_mock.call_args.kwargs["run_target_text_check"])
+        self.assertEqual(
+            run_workflow_mock.call_args.kwargs["target_text_rules"],
+            (ABNORMAL_PUNCTUATION_RULE, MIXED_WIDTH_RULE),
+        )
 
     def test_workflow_defaults_to_all_quality_checks(self) -> None:
         app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
@@ -776,8 +795,11 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertTrue(app.run_line_break_check_var.get())
         self.assertTrue(app.run_source_consistency_check_var.get())
         self.assertTrue(app.run_chinese_target_check_var.get())
+        self.assertTrue(app.run_target_text_check_var.get())
+        self.assertTrue(all(var.get() for var in app.target_text_rule_vars.values()))
         self.assertFalse(app.term_settings_expanded)
         self.assertFalse(app.tag_settings_expanded)
+        self.assertFalse(app.target_text_settings_expanded)
 
     def test_workflow_apply_revisions_uses_selected_report_and_output(self) -> None:
         app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
@@ -831,14 +853,19 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.run_line_break_check_var = FakeBoolVar(True)
         app.run_source_consistency_check_var = FakeBoolVar(True)
         app.run_chinese_target_check_var = FakeBoolVar(True)
+        app.run_target_text_check_var = FakeBoolVar(True)
         app.term_settings_expanded = True
         app.tag_settings_expanded = True
+        app.target_text_settings_expanded = True
         app.term_settings_button_text_var = FakeVar("收起设置")
         app.tag_settings_button_text_var = FakeVar("收起设置")
+        app.target_text_settings_button_text_var = FakeVar("收起设置")
         app.term_settings_button = FakeWidget()
         app.tag_settings_button = FakeWidget()
+        app.target_text_settings_button = FakeWidget()
         app.term_settings_frame = FakeWidget()
         app.tag_settings_frame = FakeWidget()
+        app.target_text_settings_frame = FakeWidget()
         app.tag_mode_var = FakeVar("standard")
         app.standard_tag_checkbuttons = []
 
@@ -847,16 +874,20 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertFalse(any(variable.get() for variable in app.task_vars()))
         self.assertFalse(app.term_settings_expanded)
         self.assertFalse(app.tag_settings_expanded)
+        self.assertFalse(app.target_text_settings_expanded)
         self.assertEqual(app.term_settings_button.state, "disabled")
         self.assertEqual(app.tag_settings_button.state, "disabled")
+        self.assertEqual(app.target_text_settings_button.state, "disabled")
 
         app.select_all_tasks()
 
         self.assertTrue(all(variable.get() for variable in app.task_vars()))
         self.assertFalse(app.term_settings_expanded)
         self.assertFalse(app.tag_settings_expanded)
+        self.assertFalse(app.target_text_settings_expanded)
         self.assertEqual(app.term_settings_button.state, "normal")
         self.assertEqual(app.tag_settings_button.state, "normal")
+        self.assertEqual(app.target_text_settings_button.state, "normal")
 
     def test_workflow_output_preview_uses_automatic_output_name(self) -> None:
         app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
@@ -875,10 +906,12 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.run_tag_check_var = FakeBoolVar(True)
         app.term_settings_expanded = True
         app.tag_settings_expanded = False
+        app.target_text_settings_expanded = False
         app.term_settings_button_text_var = FakeVar("收起设置")
         app.tag_settings_button_text_var = FakeVar("展开设置")
         app.term_settings_frame = FakeWidget()
         app.tag_settings_frame = FakeWidget()
+        app.target_text_settings_frame = FakeWidget()
 
         app.toggle_tag_settings()
 

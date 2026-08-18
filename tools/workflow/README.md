@@ -6,7 +6,8 @@ workflow 会按顺序执行质量检查板块中选中的项目，并将结果�
 
 ## CLI 快速开始
 
-默认运行全部五项质量检查：
+默认运行全部六项质量检查：术语、Tag、换行数量、同源译文一致性、
+Target 中文和 Target 文本规范检查。
 
 ```bash
 qatools qa input.xlsx -s Sheet1 -c A -t B
@@ -19,6 +20,21 @@ qatools qa input.xlsx -c A -t B \
   --check tag \
   --check consistency
 ```
+
+Target 文本规范检查默认启用全部三条规则，也可以单独选择：
+
+```bash
+qatools qa input.xlsx -c A -t B \
+  --check text \
+  --text-rule abnormal-punctuation \
+  --text-rule consecutive-spaces
+```
+
+可选文本规则为：
+
+- `abnormal-punctuation`：检查异常省略号及重复逗号、句号、冒号、分号等；`...`、`…`、连续感叹号和问号放行。
+- `consecutive-spaces`：文本内容之间出现 2 个及以上普通空格。
+- `mixed-width`：同类字符或标点在一个 Target 中混用全角和半角形式。
 
 完整参数见 [`../../docs/cli-usage.md`](../../docs/cli-usage.md)。
 
@@ -44,7 +60,7 @@ qatools qa input.xlsx -c A -t B \
 
 同一原始行命中多个检查时只出现一行，检查项和问题描述会合并。各检查问题表中的专项字段也会合并进问题描述，包括术语来源、Tag 问题类型、换行数量、同组行号和命中字符。点击行号会跳转到原数据工作表对应的 target 单元格。
 
-workflow 报告不保留五类检查各自的问题工作表。最终可见工作表为原业务工作表、可选的 `术语表`、`问题处理` 和 `质量检查汇总`。
+workflow 报告不保留六类检查各自的问题工作表。最终可见工作表为原业务工作表、可选的 `术语表`、`问题处理` 和 `质量检查汇总`。
 
 `修改后target`填写内容表示需要修改，留空表示忽略。该工作表不再需要额外的处理状态。
 

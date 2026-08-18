@@ -17,6 +17,11 @@ from tools.gui_common import (
 )
 from tools.tb_project_ui import TbProjectControls
 from tools.tb_projects import TbProject
+from tools.target_text_checker.check_target_text import (
+    ABNORMAL_PUNCTUATION_RULE,
+    CONSECUTIVE_SPACES_RULE,
+    MIXED_WIDTH_RULE,
+)
 from tools.term_pair_checker.extract_terms_from_excel import (
     TERM_SHEET_NAME,
     detect_history_tb_columns,
@@ -47,13 +52,16 @@ class WorkflowRunnerApp(ttk.Frame):
         self.run_line_break_check_var = tk.BooleanVar(value=True)
         self.run_source_consistency_check_var = tk.BooleanVar(value=True)
         self.run_chinese_target_check_var = tk.BooleanVar(value=True)
+        self.run_target_text_check_var = tk.BooleanVar(value=True)
         self.output_preview_var = tk.StringVar(value="输出文件：选择输入 Excel 后自动生成")
         self.term_settings_button_text_var = tk.StringVar(value="展开设置")
         self.tag_settings_button_text_var = tk.StringVar(value="展开设置")
+        self.target_text_settings_button_text_var = tk.StringVar(value="展开设置")
         self.tag_mode_var = tk.StringVar(value="standard")
         self.tag_angle_config_file_var = tk.StringVar()
         self.term_settings_expanded = False
         self.tag_settings_expanded = False
+        self.target_text_settings_expanded = False
         self.last_workflow_output_path = ""
         self.term_mark_style_vars = {
             "【】": tk.BooleanVar(value=True),
@@ -63,6 +71,11 @@ class WorkflowRunnerApp(ttk.Frame):
         self.square_color_var = tk.BooleanVar(value=True)
         self.brace_var = tk.BooleanVar(value=True)
         self.newline_var = tk.BooleanVar(value=True)
+        self.target_text_rule_vars = {
+            ABNORMAL_PUNCTUATION_RULE: tk.BooleanVar(value=True),
+            CONSECUTIVE_SPACES_RULE: tk.BooleanVar(value=True),
+            MIXED_WIDTH_RULE: tk.BooleanVar(value=True),
+        }
 
         self._build_ui()
 
@@ -215,6 +228,22 @@ class WorkflowRunnerApp(ttk.Frame):
             text="Target 中文检查",
             variable=self.run_chinese_target_check_var,
         ).grid(row=2, column=1, sticky="w", pady=(8, 0))
+
+        target_text_item = ttk.Frame(task_frame)
+        target_text_item.grid(row=2, column=2, sticky="w", pady=(8, 0))
+        ttk.Checkbutton(
+            target_text_item,
+            text="Target 文本规范检查",
+            variable=self.run_target_text_check_var,
+            command=self.handle_target_text_check_toggled,
+        ).grid(row=0, column=0, sticky="w")
+        self.target_text_settings_button = ttk.Button(
+            target_text_item,
+            textvariable=self.target_text_settings_button_text_var,
+            command=self.toggle_target_text_settings,
+            width=8,
+        )
+        self.target_text_settings_button.grid(row=0, column=1, padx=(8, 0))
 
         self.term_settings_frame = ttk.LabelFrame(
             self.scroll_content,
@@ -386,6 +415,47 @@ class WorkflowRunnerApp(ttk.Frame):
         self.tag_settings_frame.columnconfigure(2, weight=1)
         self.tag_settings_frame.grid_remove()
 
+        self.target_text_settings_frame = ttk.LabelFrame(
+            self.scroll_content,
+            text="Target 文本规范检查设置",
+            padding=12,
+            style=SECTION_FRAME_STYLE,
+        )
+        self.target_text_settings_frame.grid(
+            row=4,
+            column=0,
+            sticky="ew",
+            pady=(0, 10),
+        )
+        ttk.Label(self.target_text_settings_frame, text="检查规则").grid(
+            row=0,
+            column=0,
+            sticky="w",
+        )
+        target_text_rule_frame = ttk.Frame(self.target_text_settings_frame)
+        target_text_rule_frame.grid(row=0, column=1, sticky="w", padx=(12, 0))
+        for column, (rule, label) in enumerate(
+            (
+                (
+                    ABNORMAL_PUNCTUATION_RULE,
+                    "异常标点符号（.. / ,, / 。。等）",
+                ),
+                (CONSECUTIVE_SPACES_RULE, "连续空格（2 个及以上）"),
+                (MIXED_WIDTH_RULE, "全半角混用"),
+            )
+        ):
+            ttk.Checkbutton(
+                target_text_rule_frame,
+                text=label,
+                variable=self.target_text_rule_vars[rule],
+            ).grid(
+                row=0,
+                column=column,
+                sticky="w",
+                padx=(0 if column == 0 else 16, 0),
+            )
+        self.target_text_settings_frame.grid_remove()
+
         action_frame = ttk.Frame(self)
         action_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         action_frame.columnconfigure(0, weight=3)
@@ -448,6 +518,7 @@ class WorkflowRunnerApp(ttk.Frame):
             self.run_line_break_check_var,
             self.run_source_consistency_check_var,
             self.run_chinese_target_check_var,
+            self.run_target_text_check_var,
         )
 
     def select_all_tasks(self) -> None:
@@ -455,12 +526,14 @@ class WorkflowRunnerApp(ttk.Frame):
             variable.set(True)
         self.handle_term_check_toggled()
         self.handle_tag_check_toggled()
+        self.handle_target_text_check_toggled()
 
     def clear_all_tasks(self) -> None:
         for variable in self.task_vars():
             variable.set(False)
         self.handle_term_check_toggled()
         self.handle_tag_check_toggled()
+        self.handle_target_text_check_toggled()
 
     def set_term_settings_expanded(self, expanded: bool) -> None:
         self.term_settings_expanded = expanded
@@ -479,6 +552,8 @@ class WorkflowRunnerApp(ttk.Frame):
             expanded = not self.term_settings_expanded
             if expanded and self.tag_settings_expanded:
                 self.set_tag_settings_expanded(False)
+            if expanded and self.target_text_settings_expanded:
+                self.set_target_text_settings_expanded(False)
             self.set_term_settings_expanded(expanded)
 
     def set_tag_settings_expanded(self, expanded: bool) -> None:
@@ -498,7 +573,34 @@ class WorkflowRunnerApp(ttk.Frame):
             expanded = not self.tag_settings_expanded
             if expanded and self.term_settings_expanded:
                 self.set_term_settings_expanded(False)
+            if expanded and self.target_text_settings_expanded:
+                self.set_target_text_settings_expanded(False)
             self.set_tag_settings_expanded(expanded)
+
+    def set_target_text_settings_expanded(self, expanded: bool) -> None:
+        self.target_text_settings_expanded = expanded
+        self.target_text_settings_button_text_var.set(
+            "收起设置" if expanded else "展开设置"
+        )
+        if expanded:
+            self.target_text_settings_frame.grid()
+            if hasattr(self, "scroll_canvas"):
+                self.after_idle(
+                    lambda: self.reveal_settings_frame(
+                        self.target_text_settings_frame
+                    )
+                )
+        else:
+            self.target_text_settings_frame.grid_remove()
+
+    def toggle_target_text_settings(self) -> None:
+        if self.run_target_text_check_var.get():
+            expanded = not self.target_text_settings_expanded
+            if expanded and self.term_settings_expanded:
+                self.set_term_settings_expanded(False)
+            if expanded and self.tag_settings_expanded:
+                self.set_tag_settings_expanded(False)
+            self.set_target_text_settings_expanded(expanded)
 
     def handle_term_check_toggled(self) -> None:
         enabled = self.run_term_pair_var.get()
@@ -512,6 +614,14 @@ class WorkflowRunnerApp(ttk.Frame):
         if not enabled:
             self.set_tag_settings_expanded(False)
         self.handle_tag_mode_changed()
+
+    def handle_target_text_check_toggled(self) -> None:
+        enabled = self.run_target_text_check_var.get()
+        self.target_text_settings_button.configure(
+            state="normal" if enabled else "disabled"
+        )
+        if not enabled:
+            self.set_target_text_settings_expanded(False)
 
     def handle_tag_mode_changed(self) -> None:
         standard_enabled = (
@@ -729,6 +839,13 @@ class WorkflowRunnerApp(ttk.Frame):
             token_types.append("newline")
         return tuple(token_types)
 
+    def get_selected_target_text_rules(self) -> tuple[str, ...]:
+        return tuple(
+            rule
+            for rule, variable in self.target_text_rule_vars.items()
+            if variable.get()
+        )
+
     def apply_revisions(self) -> None:
         candidate_path = self.last_workflow_output_path or self.input_file_var.get().strip()
         candidate = Path(candidate_path).expanduser() if candidate_path else None
@@ -792,8 +909,10 @@ class WorkflowRunnerApp(ttk.Frame):
         run_line_break_check = self.run_line_break_check_var.get()
         run_source_consistency_check = self.run_source_consistency_check_var.get()
         run_chinese_target_check = self.run_chinese_target_check_var.get()
+        run_target_text_check = self.run_target_text_check_var.get()
         term_mark_styles = self.get_selected_term_mark_styles()
         tag_token_types = self.get_selected_tag_token_types()
+        target_text_rules = self.get_selected_target_text_rules()
         tag_angle_config_var = getattr(self, "tag_angle_config_file_var", None)
         tag_angle_config_file = (
             tag_angle_config_var.get().strip()
@@ -815,6 +934,7 @@ class WorkflowRunnerApp(ttk.Frame):
                 run_line_break_check,
                 run_source_consistency_check,
                 run_chinese_target_check,
+                run_target_text_check,
             )
         ):
             messagebox.showerror("缺少任务", "请至少选择一个质量检查项目。")
@@ -827,6 +947,12 @@ class WorkflowRunnerApp(ttk.Frame):
             return
         if run_tag_check and not tag_token_types:
             messagebox.showerror("缺少检查类型", "Tag检查至少需要一种检查类型。")
+            return
+        if run_target_text_check and not target_text_rules:
+            messagebox.showerror(
+                "缺少检查规则",
+                "Target 文本规范检查至少需要选择一项规则。",
+            )
             return
 
         try:
@@ -870,6 +996,8 @@ class WorkflowRunnerApp(ttk.Frame):
                 run_line_break_check=run_line_break_check,
                 run_source_consistency_check=run_source_consistency_check,
                 run_chinese_target_check=run_chinese_target_check,
+                run_target_text_check=run_target_text_check,
+                target_text_rules=target_text_rules,
             )
         except Exception as exc:
             messagebox.showerror("处理失败", str(exc))
@@ -901,6 +1029,10 @@ class WorkflowRunnerApp(ttk.Frame):
             )
         if summary.ran_chinese_target_check:
             lines.append(f"Target 中文问题行数: {summary.chinese_target_problem_count}")
+        if summary.ran_target_text_check:
+            lines.append(
+                f"Target 文本规范问题行数: {summary.target_text_problem_rows}"
+            )
         lines.append(f"输出文件: {summary.output_path}")
         messagebox.showinfo("处理完成", "\n".join(lines))
 

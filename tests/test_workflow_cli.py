@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from tools.workflow.cli import build_parser, main
 from tools.workflow.workflow_runner import WorkflowSummary
+from tools.target_text_checker.check_target_text import ABNORMAL_PUNCTUATION_RULE
 
 
 class WorkflowCliTests(unittest.TestCase):
@@ -32,6 +33,7 @@ class WorkflowCliTests(unittest.TestCase):
             ran_line_break_check=False,
             ran_source_consistency_check=False,
             ran_chinese_target_check=True,
+            ran_target_text_check=True,
             term_count=0,
             term_problem_count=0,
             term_problem_rows=0,
@@ -41,6 +43,8 @@ class WorkflowCliTests(unittest.TestCase):
             source_consistency_problem_count=0,
             source_consistency_problem_rows=0,
             chinese_target_problem_count=3,
+            target_text_problem_count=2,
+            target_text_problem_rows=1,
         )
 
         with (
@@ -63,6 +67,10 @@ class WorkflowCliTests(unittest.TestCase):
                     "tag",
                     "--check",
                     "chinese",
+                    "--check",
+                    "text",
+                    "--text-rule",
+                    ABNORMAL_PUNCTUATION_RULE,
                     "--tag-token-type",
                     "angle",
                     "-o",
@@ -78,6 +86,8 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertFalse(kwargs["run_line_break_check"])
         self.assertFalse(kwargs["run_source_consistency_check"])
         self.assertTrue(kwargs["run_chinese_target_check"])
+        self.assertTrue(kwargs["run_target_text_check"])
+        self.assertEqual(kwargs["target_text_rules"], [ABNORMAL_PUNCTUATION_RULE])
         self.assertEqual(kwargs["tag_token_types"], ["angle"])
         self.assertIn("质量检查完成", output.getvalue())
 
@@ -93,6 +103,7 @@ class WorkflowCliTests(unittest.TestCase):
             ran_line_break_check=False,
             ran_source_consistency_check=False,
             ran_chinese_target_check=False,
+            ran_target_text_check=False,
             term_count=0,
             term_problem_count=0,
             term_problem_rows=0,
@@ -102,6 +113,8 @@ class WorkflowCliTests(unittest.TestCase):
             source_consistency_problem_count=0,
             source_consistency_problem_rows=0,
             chinese_target_problem_count=0,
+            target_text_problem_count=0,
+            target_text_problem_rows=0,
         )
 
         with (

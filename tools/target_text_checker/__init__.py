@@ -1,0 +1,2 @@
+"""Target text convention checks."""
+

@@ -10,6 +10,10 @@ from openpyxl import Workbook, load_workbook
 from tools.chinese_target_checker.check_chinese_target import (
     PROBLEM_SHEET_NAME as CHINESE_PROBLEM_SHEET_NAME,
 )
+from tools.target_text_checker.check_target_text import (
+    ABNORMAL_PUNCTUATION_RULE,
+    PROBLEM_SHEET_NAME as TARGET_TEXT_PROBLEM_SHEET_NAME,
+)
 from tools.workflow.workflow_runner import (
     WORKFLOW_SUMMARY_SHEET_NAME,
     WORKFLOW_TERM_PROBLEM_SHEET_NAME,
@@ -76,6 +80,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertTrue(summary.ran_line_break_check)
             self.assertTrue(summary.ran_source_consistency_check)
             self.assertTrue(summary.ran_chinese_target_check)
+            self.assertTrue(summary.ran_target_text_check)
             self.assertEqual(summary.term_problem_count, 1)
             self.assertEqual(summary.term_problem_rows, 1)
             self.assertEqual(summary.tag_problem_count, 1)
@@ -84,6 +89,8 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(summary.source_consistency_problem_count, 1)
             self.assertEqual(summary.source_consistency_problem_rows, 2)
             self.assertEqual(summary.chinese_target_problem_count, 4)
+            self.assertEqual(summary.target_text_problem_count, 0)
+            self.assertEqual(summary.target_text_problem_rows, 0)
 
             workbook = load_workbook(summary.output_path)
             self.assertEqual(
@@ -102,6 +109,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertNotIn("换行数量问题", workbook.sheetnames)
             self.assertNotIn("同源译文不一致", workbook.sheetnames)
             self.assertNotIn(CHINESE_PROBLEM_SHEET_NAME, workbook.sheetnames)
+            self.assertNotIn(TARGET_TEXT_PROBLEM_SHEET_NAME, workbook.sheetnames)
             self.assertEqual(workbook["Data"]["C1"].value, "note")
             self.assertEqual(workbook["Data"]["C3"].value, "keep me")
             summary_sheet = workbook[WORKFLOW_SUMMARY_SHEET_NAME]
@@ -114,6 +122,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                     ("换行数量检查", 1),
                     ("同源译文一致性", 2),
                     ("Target 中文检查", 4),
+                    ("Target 文本规范检查", 0),
                 ],
             )
             review_sheet = workbook[WORKFLOW_REVIEW_SHEET_NAME]
@@ -192,6 +201,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                 run_line_break_check=False,
                 run_source_consistency_check=False,
                 run_chinese_target_check=False,
+                run_target_text_check=False,
             )
 
             self.assertEqual(summary.tag_problem_count, 1)
@@ -226,6 +236,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                 run_line_break_check=False,
                 run_source_consistency_check=False,
                 run_chinese_target_check=False,
+                run_target_text_check=False,
             )
 
             self.assertEqual(summary.tag_problem_count, 0)
@@ -361,6 +372,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                 run_line_break_check=False,
                 run_source_consistency_check=False,
                 run_chinese_target_check=True,
+                run_target_text_check=False,
             )
 
             self.assertEqual(
@@ -390,6 +402,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                 run_line_break_check=False,
                 run_source_consistency_check=False,
                 run_chinese_target_check=True,
+                run_target_text_check=False,
             )
 
             report_workbook = load_workbook(report_path)
@@ -436,6 +449,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                     run_line_break_check=False,
                     run_source_consistency_check=False,
                     run_chinese_target_check=False,
+                    run_target_text_check=False,
                 )
 
     def test_run_workflow_passes_history_tb_to_term_pair_check(self) -> None:
@@ -477,6 +491,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                 run_line_break_check=False,
                 run_source_consistency_check=False,
                 run_chinese_target_check=False,
+                run_target_text_check=False,
             )
 
             self.assertEqual(summary.term_count, 1)
@@ -525,6 +540,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                 run_line_break_check=False,
                 run_source_consistency_check=False,
                 run_chinese_target_check=False,
+                run_target_text_check=False,
             )
 
             self.assertEqual(summary.term_count, 1)
@@ -557,12 +573,53 @@ class WorkflowRunnerTests(unittest.TestCase):
                 run_line_break_check=False,
                 run_source_consistency_check=True,
                 run_chinese_target_check=False,
+                run_target_text_check=False,
             )
 
             self.assertEqual(summary.source_consistency_problem_count, 1)
             self.assertEqual(summary.source_consistency_problem_rows, 2)
             output_workbook = load_workbook(summary.output_path)
             self.assertEqual(output_workbook["Data"]["D1"].value, "source")
+
+    def test_run_workflow_integrates_selected_target_text_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(["row 2", "Wait..  now,，"])
+            workbook.save(input_path)
+
+            summary = run_workflow(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                run_term_pair_check=False,
+                run_tag_check=False,
+                run_line_break_check=False,
+                run_source_consistency_check=False,
+                run_chinese_target_check=False,
+                run_target_text_check=True,
+                target_text_rules=(ABNORMAL_PUNCTUATION_RULE,),
+            )
+
+            self.assertTrue(summary.ran_target_text_check)
+            self.assertEqual(summary.target_text_problem_count, 1)
+            self.assertEqual(summary.target_text_problem_rows, 1)
+            output_workbook = load_workbook(summary.output_path)
+            review_sheet = output_workbook[WORKFLOW_REVIEW_SHEET_NAME]
+            self.assertEqual(review_sheet["F2"].value, "Target 文本规范检查")
+            self.assertIn("异常标点符号", review_sheet["E2"].value)
+            self.assertNotIn("连续空格", review_sheet["E2"].value)
+            self.assertEqual(
+                list(output_workbook[WORKFLOW_SUMMARY_SHEET_NAME].values),
+                [
+                    ("检查项", "问题行数"),
+                    ("Target 文本规范检查", 1),
+                ],
+            )
 
 if __name__ == "__main__":
     unittest.main()

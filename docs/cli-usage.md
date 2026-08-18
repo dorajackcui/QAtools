@@ -66,7 +66,7 @@ qatools tag-check --help
 
 ## 一键质量检查
 
-默认运行术语、Tag、换行数量、同源译文一致性和 Target 中文检查：
+默认运行术语、Tag、换行数量、同源译文一致性、Target 中文和 Target 文本规范检查：
 
 ```bash
 qatools qa ./input.xlsx \
@@ -94,6 +94,17 @@ tag
 line-break
 consistency
 chinese
+text
+```
+
+Target 文本规范检查支持单独选择规则；不传 `--text-rule` 时默认运行全部三项：
+
+```bash
+qatools qa ./input.xlsx -c A -t B \
+  --check text \
+  --text-rule abnormal-punctuation \
+  --text-rule consecutive-spaces \
+  --text-rule mixed-width
 ```
 
 术语和 Tag 的高级参数：

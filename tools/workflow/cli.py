@@ -6,11 +6,14 @@ from collections.abc import Sequence
 from tools.tag_placeholder_checker.check_tags_and_placeholders import (
     SUPPORTED_TOKEN_TYPES,
 )
+from tools.target_text_checker.check_target_text import (
+    SUPPORTED_RULE_INPUTS as TARGET_TEXT_RULES,
+)
 from tools.term_pair_checker.term_marks import SUPPORTED_MARKS
 from tools.workflow.workflow_runner import WorkflowSummary, run_workflow
 
 
-CHECKS = ("term", "tag", "line-break", "consistency", "chinese")
+CHECKS = ("term", "tag", "line-break", "consistency", "chinese", "text")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -76,6 +79,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Tag 检查类型，可重复传入",
     )
     parser.add_argument("--tag-angle-config", help="尖括号 Tag 过滤配置")
+    parser.add_argument(
+        "--text-rule",
+        action="append",
+        choices=TARGET_TEXT_RULES,
+        help="Target 文本规范规则，可重复传入；默认运行全部规则",
+    )
     return parser
 
 
@@ -107,6 +116,12 @@ def _print_summary(summary: WorkflowSummary) -> None:
         )
     if summary.ran_chinese_target_check:
         print(f"Target 中文检查: {summary.chinese_target_problem_count} 个问题行")
+    if summary.ran_target_text_check:
+        print(
+            "Target 文本规范检查: "
+            f"{summary.target_text_problem_rows} 个问题行，"
+            f"{summary.target_text_problem_count} 个问题"
+        )
     print(f"输出文件: {summary.output_path}")
 
 
@@ -134,6 +149,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         run_line_break_check="line-break" in checks,
         run_source_consistency_check="consistency" in checks,
         run_chinese_target_check="chinese" in checks,
+        run_target_text_check="text" in checks,
+        target_text_rules=args.text_rule,
     )
     _print_summary(summary)
     return 0
