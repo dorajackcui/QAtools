@@ -59,12 +59,21 @@ class ToolshubLayoutTests(unittest.TestCase):
         self.assertEqual(grouped_tools["文本修复"], ["法语 NBSP 恢复"])
         self.assertEqual(grouped_tools["其他"], ["Xbench QA 转换"])
 
-    def test_only_initial_tool_page_is_created_at_startup(self) -> None:
+    def test_all_tool_pages_are_created_at_startup(self) -> None:
         root, app = self.make_app()
 
         try:
-            self.assertEqual(set(app.tool_frames), {"workflow"})
-            self.assertEqual(app.current_tool_frame.winfo_manager(), "grid")
+            self.assertEqual(
+                set(app.tool_frames),
+                {
+                    "workflow",
+                    "phraseloom",
+                    "french_nbsp",
+                    "xbench_report",
+                },
+            )
+            for frame in app.tool_frames.values():
+                self.assertEqual(frame.winfo_manager(), "grid")
         finally:
             root.destroy()
 
@@ -80,7 +89,7 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertEqual(app.current_tool_title.get(), "法语 NBSP 恢复")
             self.assertIn("NBSP", app.current_tool_description.get())
             self.assertIs(app.current_tool_frame, app.tool_frames["french_nbsp"])
-            self.assertEqual(workflow_frame.winfo_manager(), "")
+            self.assertEqual(workflow_frame.winfo_manager(), "grid")
             self.assertEqual(app.current_tool_frame.winfo_manager(), "grid")
         finally:
             root.destroy()
@@ -96,7 +105,7 @@ class ToolshubLayoutTests(unittest.TestCase):
 
             self.assertIs(app.current_tool_frame, nbsp_frame)
             self.assertEqual(nbsp_frame.winfo_manager(), "grid")
-            self.assertEqual(app.tool_frames["workflow"].winfo_manager(), "")
+            self.assertEqual(app.tool_frames["workflow"].winfo_manager(), "grid")
         finally:
             root.destroy()
 
