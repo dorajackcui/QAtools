@@ -17,6 +17,7 @@ from toolshub_gui import (
     main,
 )
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
+from tools.gui_common import APP_MAIN_BACKGROUND
 
 
 class ToolshubLayoutTests(unittest.TestCase):
@@ -42,12 +43,16 @@ class ToolshubLayoutTests(unittest.TestCase):
             (1286, 688),
         )
 
-    def test_smoke_test_initializes_tk_without_building_the_app(self) -> None:
+    def test_smoke_test_builds_complete_app_without_showing_window(self) -> None:
         root = Mock()
-        with patch("toolshub_gui.tk.Tk", return_value=root):
+        with (
+            patch("toolshub_gui.tk.Tk", return_value=root),
+            patch("toolshub_gui.ToolshubApp") as app_class,
+        ):
             self.assertEqual(main(["--smoke-test"]), 0)
 
         root.withdraw.assert_called_once_with()
+        app_class.assert_called_once_with(root, show_window=False)
         root.update_idletasks.assert_called_once_with()
         root.destroy.assert_called_once_with()
 
@@ -70,6 +75,18 @@ class ToolshubLayoutTests(unittest.TestCase):
             content = root.winfo_children()[0]
             self.assertGreaterEqual(root.winfo_width(), content.winfo_reqwidth())
             self.assertGreaterEqual(root.winfo_height(), content.winfo_reqheight())
+        finally:
+            root.destroy()
+
+    def test_minimum_width_keeps_the_requested_layout_visible(self) -> None:
+        root, _ = self.make_app()
+
+        try:
+            root.update_idletasks()
+            content = root.winfo_children()[0]
+            minimum_width, _ = root.minsize()
+
+            self.assertGreaterEqual(minimum_width, content.winfo_reqwidth())
         finally:
             root.destroy()
 
@@ -175,6 +192,21 @@ class ToolshubLayoutTests(unittest.TestCase):
 
             self.assertNotIn("输出 Excel", widget_texts)
             self.assertNotIn("另存为", widget_texts)
+        finally:
+            root.destroy()
+
+    def test_scroll_canvases_use_the_application_background(self) -> None:
+        root, app = self.make_app()
+
+        try:
+            self.assertEqual(
+                app.tool_frames["workflow"].scroll_canvas.cget("background"),
+                APP_MAIN_BACKGROUND,
+            )
+            self.assertEqual(
+                app.tool_frames["phraseloom"].scroll_canvas.cget("background"),
+                APP_MAIN_BACKGROUND,
+            )
         finally:
             root.destroy()
 

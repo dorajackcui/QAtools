@@ -9,6 +9,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
 from tools.gui_common import (
+    APP_MAIN_BACKGROUND,
     MUTED_LABEL_STYLE,
     PRIMARY_BUTTON_STYLE,
     SECTION_FRAME_STYLE,
@@ -81,14 +82,11 @@ class WorkflowRunnerApp(ttk.Frame):
 
     def _build_ui(self) -> None:
         configure_tool_page_style(self)
-        style = ttk.Style(self)
-
-        canvas_background = style.lookup("TFrame", "background") or "#f0f0f0"
         self.scroll_canvas = tk.Canvas(
             self,
             width=900,
             height=480,
-            background=canvas_background,
+            background=APP_MAIN_BACKGROUND,
             borderwidth=0,
             highlightthickness=0,
             yscrollincrement=16,

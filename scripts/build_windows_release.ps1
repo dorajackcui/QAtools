@@ -169,8 +169,9 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\QAtools-CLI.cmd") -Destination $releaseDir
     Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\README-Windows.txt") -Destination $releaseDir
 
-    # Verify the frozen programs, including a real Tcl/Tk initialization. The
-    # hidden smoke test does not build or show the full application window.
+    # Verify the frozen programs, including the complete hidden GUI. This loads
+    # the Sun Valley Tcl/PNG resources and constructs every tool page without
+    # showing the application window.
     Remove-Item Env:TCL_LIBRARY -ErrorAction SilentlyContinue
     Remove-Item Env:TK_LIBRARY -ErrorAction SilentlyContinue
     $smokeTemp = Join-Path $buildRoot "smoke-temp"

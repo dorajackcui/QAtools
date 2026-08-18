@@ -37,6 +37,8 @@ ToolFactory = Callable[[tk.Misc], ttk.Frame]
 
 DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 800
+MINIMUM_WINDOW_WIDTH = 980
+MINIMUM_WINDOW_HEIGHT = 680
 WINDOW_HORIZONTAL_BREATHING_ROOM = 96
 WINDOW_VERTICAL_BREATHING_ROOM = 72
 
@@ -115,7 +117,7 @@ TOOL_GROUPS = (
 
 
 class ToolshubApp:
-    def __init__(self, root: tk.Tk) -> None:
+    def __init__(self, root: tk.Tk, *, show_window: bool = True) -> None:
         self.root = root
         self.root.withdraw()
         self.root.title("Toolshub")
@@ -133,7 +135,7 @@ class ToolshubApp:
         self.nav_buttons: dict[str, ttk.Radiobutton] = {}
         self.current_tool_frame: ttk.Frame | None = None
         self._build_ui()
-        self._fit_window_to_content()
+        self._fit_window_to_content(show_window=show_window)
 
     def _build_ui(self) -> None:
         self._configure_style()
@@ -358,21 +360,27 @@ class ToolshubApp:
         except tk.TclError:
             pass
 
-    def _fit_window_to_content(self) -> None:
+    def _fit_window_to_content(self, *, show_window: bool = True) -> None:
         self.root.update_idletasks()
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
+        requested_width = self.root.winfo_reqwidth()
+        requested_height = self.root.winfo_reqheight()
         width, height = calculate_initial_window_size(
-            requested_width=self.root.winfo_reqwidth(),
-            requested_height=self.root.winfo_reqheight(),
+            requested_width=requested_width,
+            requested_height=requested_height,
             screen_width=screen_width,
             screen_height=screen_height,
         )
         x = max((self.root.winfo_screenwidth() - width) // 2, 0)
         y = max((self.root.winfo_screenheight() - height) // 2, 30)
         self.root.geometry(f"{width}x{height}+{x}+{y}")
-        self.root.minsize(min(width, 980), min(height, 680))
-        self.root.deiconify()
+        self.root.minsize(
+            min(width, max(requested_width, MINIMUM_WINDOW_WIDTH)),
+            min(height, MINIMUM_WINDOW_HEIGHT),
+        )
+        if show_window:
+            self.root.deiconify()
 
 
 def calculate_initial_window_size(
@@ -431,6 +439,7 @@ def main(argv: list[str] | None = None) -> int:
         root = tk.Tk()
         try:
             root.withdraw()
+            ToolshubApp(root, show_window=False)
             root.update_idletasks()
         finally:
             root.destroy()

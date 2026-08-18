@@ -58,6 +58,59 @@ QUICK_ACTION_NAME = QA_QUICK_ACTION.name
 QUICK_ACTION_BUNDLE_NAME = QA_QUICK_ACTION.bundle_name
 
 
+def project_venv_python(project_root: Path) -> Path:
+    """Return the stable Python path used by installed Finder actions."""
+
+    return project_root / ".venv" / "bin" / "python"
+
+
+def prepare_python_runtime(
+    *,
+    project_root: Path,
+    requested_python: Path | None,
+) -> Path:
+    """Resolve an explicit runtime or create the repository virtualenv."""
+
+    if requested_python is not None:
+        return requested_python.expanduser().absolute()
+
+    python_executable = project_venv_python(project_root)
+    if not python_executable.is_file():
+        print(f"正在创建 Python 环境：{python_executable.parent}")
+        subprocess.run(
+            [sys.executable, "-m", "venv", str(python_executable.parent)],
+            check=True,
+        )
+    return python_executable
+
+
+def sync_project_environment(
+    *,
+    python_executable: Path,
+    project_root: Path,
+    launcher: Path,
+) -> None:
+    """Install current dependencies and verify the complete hidden GUI."""
+
+    print("正在同步 QAtools 与依赖…")
+    subprocess.run(
+        [
+            str(python_executable),
+            "-m",
+            "pip",
+            "install",
+            "-e",
+            str(project_root),
+        ],
+        check=True,
+    )
+    print("正在验证主题与工具页面…")
+    subprocess.run(
+        [str(python_executable), str(launcher), "--smoke-test"],
+        check=True,
+    )
+
+
 def build_shell_command(
     *,
     python_executable: Path,
@@ -197,7 +250,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--action",
         choices=("qa", "nbsp", "all"),
-        default="qa",
+        default="all",
         help="安装 QA workflow、NBSP restore，或同时安装两者。",
     )
     parser.add_argument(
@@ -210,14 +263,19 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "--python",
         dest="python_executable",
         type=Path,
-        default=Path(sys.executable),
-        help="启动 Toolshub 使用的 Python。",
+        default=None,
+        help="启动 Toolshub 使用的 Python；默认创建或复用仓库 .venv。",
     )
     parser.add_argument(
         "--launcher",
         type=Path,
         default=project_root / "toolshub_gui.py",
         help="toolshub_gui.py 的路径。",
+    )
+    parser.add_argument(
+        "--skip-environment-sync",
+        action="store_true",
+        help="不安装依赖、不执行完整 GUI 启动校验。",
     )
     parser.add_argument(
         "--no-refresh",
@@ -230,16 +288,37 @@ def build_argument_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_argument_parser().parse_args(argv)
     launcher = args.launcher.expanduser().absolute()
-    python_executable = args.python_executable.expanduser().absolute()
+    project_root = Path(__file__).resolve().parents[1]
     if sys.platform != "darwin":
         print("该安装器仅支持 macOS。", file=sys.stderr)
         return 2
     if not launcher.is_file():
         print(f"找不到 Toolshub 入口：{launcher}", file=sys.stderr)
         return 2
+    try:
+        python_executable = prepare_python_runtime(
+            project_root=project_root,
+            requested_python=args.python_executable,
+        )
+    except subprocess.CalledProcessError as exc:
+        print(f"创建 Python 环境失败（退出码 {exc.returncode}）。", file=sys.stderr)
+        return 1
     if not python_executable.is_file():
         print(f"找不到 Python：{python_executable}", file=sys.stderr)
         return 2
+    if not args.skip_environment_sync:
+        try:
+            sync_project_environment(
+                python_executable=python_executable,
+                project_root=project_root,
+                launcher=launcher,
+            )
+        except subprocess.CalledProcessError as exc:
+            print(
+                f"QAtools 环境同步或启动校验失败（退出码 {exc.returncode}）。",
+                file=sys.stderr,
+            )
+            return 1
 
     specs = {
         "qa": (QA_QUICK_ACTION,),

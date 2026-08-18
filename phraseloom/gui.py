@@ -25,6 +25,7 @@ else:
     )
 
 from tools.gui_common import (
+    APP_MAIN_BACKGROUND,
     MUTED_LABEL_STYLE,
     PRIMARY_BUTTON_STYLE,
     configure_tool_page_style,
@@ -211,13 +212,11 @@ class PhraseLoomApp(ttk.Frame):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
 
-        style = ttk.Style(self)
-        canvas_background = style.lookup("TFrame", "background") or "#f0f0f0"
         self.scroll_canvas = tk.Canvas(
             self,
             width=900,
             height=480,
-            background=canvas_background,
+            background=APP_MAIN_BACKGROUND,
             borderwidth=0,
             highlightthickness=0,
             yscrollincrement=16,
