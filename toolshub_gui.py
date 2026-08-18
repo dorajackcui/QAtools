@@ -14,11 +14,8 @@ from tkinter import messagebox, ttk
 
 from phraseloom.gui import PhraseLoomApp
 from tools.gui_common import (
-    APP_HOVER_BACKGROUND,
     APP_MAIN_BACKGROUND,
     APP_MUTED_TEXT,
-    APP_PRIMARY,
-    APP_SELECTED_BACKGROUND,
     APP_SIDEBAR_BACKGROUND,
     APP_TEXT,
     configure_tool_page_style,
@@ -37,6 +34,11 @@ from tools.xbench_report_transformer.transform_xbench_report_gui import XbenchRe
 
 
 ToolFactory = Callable[[tk.Misc], ttk.Frame]
+
+DEFAULT_WINDOW_WIDTH = 1200
+DEFAULT_WINDOW_HEIGHT = 800
+WINDOW_HORIZONTAL_BREATHING_ROOM = 96
+WINDOW_VERTICAL_BREATHING_ROOM = 72
 
 
 def enable_high_dpi_awareness() -> None:
@@ -236,43 +238,17 @@ class ToolshubApp:
         )
         style.layout(
             "Toolshub.Nav.TRadiobutton",
-            [
-                (
-                    "Radiobutton.padding",
-                    {
-                        "sticky": "nsew",
-                        "children": [
-                            (
-                                "Radiobutton.focus",
-                                {
-                                    "sticky": "nsew",
-                                    "children": [
-                                        ("Radiobutton.label", {"sticky": "nsew"})
-                                    ],
-                                },
-                            )
-                        ],
-                    },
-                )
-            ],
+            style.layout("Toggle.TButton"),
         )
         style.configure(
             "Toolshub.Nav.TRadiobutton",
             anchor="w",
-            background=APP_SIDEBAR_BACKGROUND,
-            focuscolor=APP_PRIMARY,
-            focusthickness=1,
-            foreground=APP_TEXT,
             font=(family, body_size),
             padding=(11, 8),
         )
         style.map(
             "Toolshub.Nav.TRadiobutton",
-            background=[
-                ("selected", APP_SELECTED_BACKGROUND),
-                ("active", APP_HOVER_BACKGROUND),
-            ],
-            foreground=[("disabled", APP_MUTED_TEXT), ("!disabled", APP_TEXT)],
+            foreground=style.map("Toggle.TButton", "foreground"),
         )
 
     def _build_sidebar(self, parent: ttk.Frame) -> None:
@@ -386,13 +362,45 @@ class ToolshubApp:
         self.root.update_idletasks()
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        width = min(max(self.root.winfo_reqwidth(), 1080), max(screen_width - 80, 900))
-        height = min(max(self.root.winfo_reqheight(), 720), max(screen_height - 80, 640))
+        width, height = calculate_initial_window_size(
+            requested_width=self.root.winfo_reqwidth(),
+            requested_height=self.root.winfo_reqheight(),
+            screen_width=screen_width,
+            screen_height=screen_height,
+        )
         x = max((self.root.winfo_screenwidth() - width) // 2, 0)
         y = max((self.root.winfo_screenheight() - height) // 2, 30)
         self.root.geometry(f"{width}x{height}+{x}+{y}")
         self.root.minsize(min(width, 980), min(height, 680))
         self.root.deiconify()
+
+
+def calculate_initial_window_size(
+    *,
+    requested_width: int,
+    requested_height: int,
+    screen_width: int,
+    screen_height: int,
+) -> tuple[int, int]:
+    """Add breathing room to the requested layout while respecting the screen."""
+
+    available_width = max(screen_width - 80, 900)
+    available_height = max(screen_height - 80, 640)
+    width = min(
+        max(
+            requested_width + WINDOW_HORIZONTAL_BREATHING_ROOM,
+            DEFAULT_WINDOW_WIDTH,
+        ),
+        available_width,
+    )
+    height = min(
+        max(
+            requested_height + WINDOW_VERTICAL_BREATHING_ROOM,
+            DEFAULT_WINDOW_HEIGHT,
+        ),
+        available_height,
+    )
+    return width, height
 
 
 def build_argument_parser() -> argparse.ArgumentParser:

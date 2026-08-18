@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+from tkinter import ttk
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,11 +9,39 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from phraseloom.gui import PhraseLoomApp
-from toolshub_gui import TOOL_GROUPS, ToolshubApp, build_argument_parser, main
+from toolshub_gui import (
+    TOOL_GROUPS,
+    ToolshubApp,
+    build_argument_parser,
+    calculate_initial_window_size,
+    main,
+)
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
 
 
 class ToolshubLayoutTests(unittest.TestCase):
+    def test_initial_window_size_adds_breathing_room(self) -> None:
+        self.assertEqual(
+            calculate_initial_window_size(
+                requested_width=1238,
+                requested_height=725,
+                screen_width=1920,
+                screen_height=1080,
+            ),
+            (1334, 800),
+        )
+
+    def test_initial_window_size_stays_within_available_screen(self) -> None:
+        self.assertEqual(
+            calculate_initial_window_size(
+                requested_width=1500,
+                requested_height=900,
+                screen_width=1366,
+                screen_height=768,
+            ),
+            (1286, 688),
+        )
+
     def test_smoke_test_initializes_tk_without_building_the_app(self) -> None:
         root = Mock()
         with patch("toolshub_gui.tk.Tk", return_value=root):
@@ -41,6 +70,21 @@ class ToolshubLayoutTests(unittest.TestCase):
             content = root.winfo_children()[0]
             self.assertGreaterEqual(root.winfo_width(), content.winfo_reqwidth())
             self.assertGreaterEqual(root.winfo_height(), content.winfo_reqheight())
+        finally:
+            root.destroy()
+
+    def test_sun_valley_dark_theme_and_toggle_navigation_are_active(self) -> None:
+        root, _ = self.make_app()
+
+        try:
+            style = ttk.Style(root)
+
+            self.assertEqual(style.theme_use(), "sun-valley-dark")
+            self.assertEqual(
+                style.layout("Toolshub.Nav.TRadiobutton"),
+                style.layout("Toggle.TButton"),
+            )
+            self.assertIn("Checkbutton.indicator", repr(style.layout("TCheckbutton")))
         finally:
             root.destroy()
 

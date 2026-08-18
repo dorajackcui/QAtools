@@ -129,6 +129,7 @@ try {
         "--distpath", $exeDir,
         "--workpath", $workDir,
         "--specpath", $specDir,
+        "--collect-data", "sv_ttk",
         "--add-data", "$tagRulesPath;phraseloom"
     )
 
