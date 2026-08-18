@@ -68,10 +68,20 @@ class ToolshubLayoutTests(unittest.TestCase):
         self.assertEqual(grouped_tools["文本修复"], ["法语 NBSP 恢复"])
         self.assertEqual(grouped_tools["其他"], ["Xbench QA 转换"])
 
+    def test_only_initial_tool_page_is_created_at_startup(self) -> None:
+        root, app = self.make_app()
+
+        try:
+            self.assertEqual(set(app.tool_frames), {"workflow"})
+            self.assertEqual(app.current_tool_frame.winfo_manager(), "grid")
+        finally:
+            root.destroy()
+
     def test_selecting_a_tool_updates_heading_and_visible_page(self) -> None:
         root, app = self.make_app()
 
         try:
+            workflow_frame = app.tool_frames["workflow"]
             app.select_tool("tag_checker")
             root.update()
 
@@ -79,6 +89,23 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertEqual(app.current_tool_title.get(), "Tag 检查")
             self.assertIn("tag", app.current_tool_description.get().lower())
             self.assertIs(app.current_tool_frame, app.tool_frames["tag_checker"])
+            self.assertEqual(workflow_frame.winfo_manager(), "")
+            self.assertEqual(app.current_tool_frame.winfo_manager(), "grid")
+        finally:
+            root.destroy()
+
+    def test_selecting_an_existing_tool_page_reuses_its_frame(self) -> None:
+        root, app = self.make_app()
+
+        try:
+            app.select_tool("tag_checker")
+            tag_frame = app.current_tool_frame
+            app.select_tool("workflow")
+            app.select_tool("tag_checker")
+
+            self.assertIs(app.current_tool_frame, tag_frame)
+            self.assertEqual(tag_frame.winfo_manager(), "grid")
+            self.assertEqual(app.tool_frames["workflow"].winfo_manager(), "")
         finally:
             root.destroy()
 

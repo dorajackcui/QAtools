@@ -182,7 +182,6 @@ class ToolshubApp:
         self.content_frame.grid(row=3, column=0, sticky="nsew")
         self.content_frame.columnconfigure(0, weight=1)
         self.content_frame.rowconfigure(0, weight=1)
-        self._build_tool_pages()
 
         first_tool = self.tool_groups[0].tools[0]
         self.select_tool(first_tool.key)
@@ -231,16 +230,21 @@ class ToolshubApp:
 
         parent.columnconfigure(0, minsize=170)
 
-    def _build_tool_pages(self) -> None:
-        for group in self.tool_groups:
-            for tool in group.tools:
-                frame = tool.factory(self.content_frame)
-                frame.grid(row=0, column=0, sticky="nsew")
-                self.tool_frames[tool.key] = frame
+    def _get_or_create_tool_frame(self, key: str) -> ttk.Frame:
+        frame = self.tool_frames.get(key)
+        if frame is None:
+            tool = self.tools_by_key[key]
+            frame = tool.factory(self.content_frame)
+            self.tool_frames[key] = frame
+        return frame
 
     def select_tool(self, key: str) -> None:
         tool = self.tools_by_key[key]
-        frame = self.tool_frames[key]
+        frame = self._get_or_create_tool_frame(key)
+        if self.current_tool_frame is not None and self.current_tool_frame is not frame:
+            self.current_tool_frame.grid_remove()
+
+        frame.grid(row=0, column=0, sticky="nsew")
         self.selected_tool_key.set(key)
         self.current_tool_title.set(tool.title)
         self.current_tool_description.set(tool.description)
@@ -254,7 +258,7 @@ class ToolshubApp:
             file_path,
             action_name="QA workflow",
         )
-        workflow_frame = self.tool_frames["workflow"]
+        workflow_frame = self._get_or_create_tool_frame("workflow")
         if not isinstance(workflow_frame, WorkflowRunnerApp):
             raise RuntimeError("一键质量检查页面未正确加载。")
 
@@ -274,7 +278,7 @@ class ToolshubApp:
             file_path,
             action_name="NBSP restore",
         )
-        restorer_frame = self.tool_frames["french_nbsp"]
+        restorer_frame = self._get_or_create_tool_frame("french_nbsp")
         if not isinstance(restorer_frame, FrenchNbspRestorerApp):
             raise RuntimeError("法语 NBSP 恢复页面未正确加载。")
 
