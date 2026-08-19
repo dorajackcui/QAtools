@@ -13,7 +13,9 @@ from tools.gui_common import (
     MUTED_LABEL_STYLE,
     PRIMARY_BUTTON_STYLE,
     SECTION_FRAME_STYLE,
+    add_optional_status_label,
     configure_tool_page_style,
+    create_file_path_display,
     parse_positive_int,
 )
 from tools.tb_project_ui import TbProjectControls
@@ -48,7 +50,7 @@ class ExtractTermsApp(ttk.Frame):
         self.target_column_var = tk.StringVar(value="B")
         self.sheet_var = tk.StringVar()
         self.start_row_var = tk.StringVar(value="2")
-        self.output_preview_var = tk.StringVar(value="输出文件：选择输入 Excel 后自动生成")
+        self.output_preview_var = tk.StringVar()
         self.history_details_button_text_var = tk.StringVar(value="展开详情")
         self.history_details_expanded = False
         self.mark_style_vars = {
@@ -96,13 +98,15 @@ class ExtractTermsApp(ttk.Frame):
             style=SECTION_FRAME_STYLE,
         )
         input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        input_frame.columnconfigure(1, weight=1)
+        input_frame.columnconfigure(1, weight=0)
 
         ttk.Label(input_frame, text="输入 Excel").grid(row=0, column=0, sticky="w")
-        input_entry = ttk.Entry(input_frame, textvariable=self.input_file_var, width=56)
-        input_entry.grid(row=0, column=1, sticky="ew", padx=(12, 8))
-        input_entry.bind("<FocusOut>", self.handle_input_file_focus_out)
-        ttk.Button(input_frame, text="选择", command=self.choose_input_file).grid(
+        self.input_file_display = create_file_path_display(
+            input_frame,
+            variable=self.input_file_var,
+        )
+        self.input_file_display.grid(row=0, column=1, sticky="w", padx=(12, 8))
+        ttk.Button(input_frame, text="选择文件", command=self.choose_input_file).grid(
             row=0, column=2, sticky="ew"
         )
 
@@ -141,7 +145,7 @@ class ExtractTermsApp(ttk.Frame):
             style=SECTION_FRAME_STYLE,
         )
         source_frame.grid(row=1, column=0, sticky="ew")
-        source_frame.columnconfigure(1, weight=1)
+        source_frame.columnconfigure(1, weight=0)
         ttk.Label(source_frame, text="术语标记").grid(row=0, column=0, sticky="w")
         mark_frame = ttk.Frame(source_frame)
         mark_frame.grid(row=0, column=1, columnspan=2, sticky="w", padx=(12, 0))
@@ -172,18 +176,16 @@ class ExtractTermsApp(ttk.Frame):
         ttk.Label(source_frame, text="历史 TB（可选）").grid(
             row=2, column=0, sticky="w", pady=(12, 0)
         )
-        history_entry = ttk.Entry(
+        history_entry = create_file_path_display(
             source_frame,
-            textvariable=self.history_tb_file_var,
-            width=48,
+            variable=self.history_tb_file_var,
         )
-        history_entry.grid(row=2, column=1, sticky="ew", padx=(12, 8), pady=(12, 0))
-        history_entry.bind("<FocusOut>", self.handle_history_file_focus_out)
+        history_entry.grid(row=2, column=1, sticky="w", padx=(12, 8), pady=(12, 0))
         history_buttons = ttk.Frame(source_frame)
         history_buttons.grid(row=2, column=2, sticky="e", pady=(12, 0))
         ttk.Button(
             history_buttons,
-            text="选择",
+            text="选择文件",
             command=self.choose_history_tb_file,
         ).grid(row=0, column=0)
         ttk.Button(
@@ -270,11 +272,12 @@ class ExtractTermsApp(ttk.Frame):
             command=self.run_extraction,
             style=PRIMARY_BUTTON_STYLE,
         ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
-        ttk.Label(
+        self.output_preview_label = add_optional_status_label(
             self,
-            textvariable=self.output_preview_var,
-            style=MUTED_LABEL_STYLE,
-        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
+            variable=self.output_preview_var,
+            row=2,
+            columnspan=2,
+        )
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
@@ -330,7 +333,7 @@ class ExtractTermsApp(ttk.Frame):
     def update_output_preview(self) -> None:
         input_file = self.input_file_var.get().strip()
         if not input_file:
-            self.output_preview_var.set("输出文件：选择输入 Excel 后自动生成")
+            self.output_preview_var.set("")
             return
         output_name = build_default_output_path(input_file).name
         self.output_preview_var.set(f"输出文件：{output_name}")

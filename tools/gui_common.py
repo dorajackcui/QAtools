@@ -15,6 +15,7 @@ import sv_ttk
 PRIMARY_BUTTON_STYLE = "Accent.TButton"
 SECTION_FRAME_STYLE = "Tool.Section.TLabelframe"
 MUTED_LABEL_STYLE = "Tool.Muted.TLabel"
+FILE_PATH_DISPLAY_WIDTH = 38
 
 # Sun Valley dark theme palette. Custom colors are limited to the application
 # shell; standard controls are rendered by sv-ttk itself.
@@ -26,6 +27,53 @@ APP_TEXT = "#fafafa"
 APP_MUTED_TEXT = "#9e9e9e"
 APP_SELECTION_BACKGROUND = "#2f60d8"
 APP_SELECTION_TEXT = "#ffffff"
+
+
+def _preferred_ui_font_family(widget: tk.Misc) -> str:
+    available_families = {
+        str(family).casefold(): str(family)
+        for family in tkfont.families(root=widget)
+    }
+    if sys.platform == "win32":
+        candidates = ("Microsoft YaHei UI", "Segoe UI", "Arial")
+    elif sys.platform == "darwin":
+        candidates = ("PingFang SC", "Helvetica Neue", "Arial")
+    else:
+        candidates = ("Noto Sans CJK SC", "Noto Sans", "DejaVu Sans")
+
+    for candidate in candidates:
+        matched_family = available_families.get(candidate.casefold())
+        if matched_family is not None:
+            return matched_family
+
+    default_font = tkfont.nametofont("TkDefaultFont", root=widget)
+    return str(default_font.actual("family"))
+
+
+def _configure_ui_fonts(widget: tk.Misc) -> None:
+    """Replace unavailable Sun Valley fonts with a native CJK UI family."""
+
+    family = _preferred_ui_font_family(widget)
+    font_specs = {
+        "SunValleyCaptionFont": (9, "normal"),
+        "SunValleyBodyFont": (10, "normal"),
+        "SunValleyBodyStrongFont": (10, "bold"),
+        "SunValleyBodyLargeFont": (12, "normal"),
+        "SunValleySubtitleFont": (14, "bold"),
+        "SunValleyTitleFont": (18, "bold"),
+        "SunValleyTitleLargeFont": (24, "bold"),
+        "SunValleyDisplayFont": (36, "bold"),
+    }
+    for font_name, (size, weight) in font_specs.items():
+        theme_font = tkfont.nametofont(font_name, root=widget)
+        theme_font.configure(family=family, size=size, weight=weight)
+
+    for font_name in ("TkDefaultFont", "TkTextFont", "TkMenuFont"):
+        system_font = tkfont.nametofont(font_name, root=widget)
+        font_options: dict[str, object] = {"family": family}
+        if sys.platform == "win32":
+            font_options["size"] = 10
+        system_font.configure(**font_options)
 
 
 def _font_specs(widget: tk.Misc) -> dict[str, tuple[str, int, str]]:
@@ -57,6 +105,7 @@ def configure_tool_page_style(widget: tk.Misc) -> None:
 
     tk_root = widget._root()
     _apply_sun_valley_theme(tk_root)
+    _configure_ui_fonts(tk_root)
 
     style = ttk.Style(widget)
     fonts = _font_specs(widget)
@@ -106,27 +155,140 @@ def create_section(
     return section
 
 
+def _selected_file_name(value: object) -> str:
+    """Return a short picker status while keeping the full path in its variable."""
+
+    path_text = str(value or "").strip()
+    if not path_text:
+        return "未选择文件"
+    return path_text.replace("\\", "/").rsplit("/", 1)[-1] or path_text
+
+
+def create_file_path_display(
+    parent: tk.Misc,
+    *,
+    variable: tk.Variable,
+    width: int = FILE_PATH_DISPLAY_WIDTH,
+) -> ttk.Label:
+    """Create a muted, non-editable filename display for a file picker."""
+
+    display_variable = tk.StringVar(master=parent)
+
+    def sync_display(*_args: object) -> None:
+        display_variable.set(_selected_file_name(variable.get()))
+
+    sync_display()
+    trace_id = variable.trace_add("write", sync_display)
+    label = ttk.Label(
+        parent,
+        textvariable=display_variable,
+        width=width,
+        anchor="w",
+        style=MUTED_LABEL_STYLE,
+    )
+    # The source variable retains the complete path used by the tool.
+    label._file_path_source_variable = variable  # type: ignore[attr-defined]
+    label._file_path_display_variable = display_variable  # type: ignore[attr-defined]
+    label._file_path_trace_id = trace_id  # type: ignore[attr-defined]
+
+    def remove_trace(event: tk.Event) -> None:
+        if event.widget is not label:
+            return
+        try:
+            variable.trace_remove("write", trace_id)
+        except tk.TclError:
+            pass
+
+    label.bind("<Destroy>", remove_trace, add="+")
+    return label
+
+
+def refresh_top_aligned_scroll_region(canvas: tk.Canvas) -> None:
+    """Keep short canvas content pinned to the top of its viewport."""
+
+    content_bounds = canvas.bbox("all")
+    if not content_bounds:
+        return
+
+    left, top, right, bottom = content_bounds
+    viewport_width = max(canvas.winfo_width(), 1)
+    viewport_height = max(canvas.winfo_height(), 1)
+    content_height = bottom - top
+    canvas.configure(
+        scrollregion=(
+            min(left, 0),
+            min(top, 0),
+            max(right, viewport_width),
+            max(bottom, viewport_height),
+        )
+    )
+    if content_height <= viewport_height:
+        canvas.yview_moveto(0.0)
+
+
+def add_optional_status_label(
+    parent: tk.Misc,
+    *,
+    variable: tk.Variable,
+    row: int,
+    column: int = 0,
+    columnspan: int = 1,
+    pady: tuple[int, int] = (8, 0),
+) -> ttk.Label:
+    """Show a muted status row only while its variable contains text."""
+
+    label = ttk.Label(
+        parent,
+        textvariable=variable,
+        style=MUTED_LABEL_STYLE,
+    )
+    label.grid(
+        row=row,
+        column=column,
+        columnspan=columnspan,
+        sticky="w",
+        pady=pady,
+    )
+
+    def sync_visibility(*_args: object) -> None:
+        if str(variable.get()).strip():
+            label.grid()
+        else:
+            label.grid_remove()
+
+    sync_visibility()
+    trace_id = variable.trace_add("write", sync_visibility)
+
+    def remove_trace(event: tk.Event) -> None:
+        if event.widget is not label:
+            return
+        try:
+            variable.trace_remove("write", trace_id)
+        except tk.TclError:
+            pass
+
+    label.bind("<Destroy>", remove_trace, add="+")
+    return label
+
+
 def add_file_picker_row(
     parent: tk.Misc,
     *,
     label: str,
     variable,
     command,
-    focus_out_command=None,
-) -> ttk.Entry:
-    """Add the common full-width file picker row to a section."""
+) -> ttk.Label:
+    """Add a button-driven picker with a non-editable filename status."""
     ttk.Label(parent, text=label).grid(row=0, column=0, sticky="w")
-    entry = ttk.Entry(parent, textvariable=variable, width=56)
-    entry.grid(row=0, column=1, sticky="ew", padx=(12, 8))
-    if focus_out_command is not None:
-        entry.bind("<FocusOut>", focus_out_command)
-    ttk.Button(parent, text="选择", command=command).grid(
+    path_display = create_file_path_display(parent, variable=variable)
+    path_display.grid(row=0, column=1, sticky="w", padx=(12, 8))
+    ttk.Button(parent, text="选择文件", command=command).grid(
         row=0,
         column=2,
         sticky="ew",
     )
-    parent.columnconfigure(1, weight=1)
-    return entry
+    parent.columnconfigure(1, weight=0)
+    return path_display
 
 
 class OutputPreviewMixin:
@@ -141,7 +303,7 @@ class OutputPreviewMixin:
     def update_output_preview(self) -> None:
         input_file = self.input_file_var.get().strip()
         if not input_file:
-            self.output_preview_var.set("输出文件：选择输入 Excel 后自动生成")
+            self.output_preview_var.set("")
             return
         if self.output_path_builder is None:
             raise RuntimeError("未配置默认输出路径生成器。")

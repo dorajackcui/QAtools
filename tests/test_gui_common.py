@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from tools import gui_common
 from tools.gui_common import parse_positive_int, set_combobox_values
@@ -35,6 +35,40 @@ class GuiCommonTests(unittest.TestCase):
 
         set_theme.assert_called_once_with("dark", root=root)
         self.assertTrue(root._toolshub_sun_valley_theme_applied)
+
+    def test_macos_system_fonts_keep_their_native_size(self) -> None:
+        font_names = (
+            "SunValleyCaptionFont",
+            "SunValleyBodyFont",
+            "SunValleyBodyStrongFont",
+            "SunValleyBodyLargeFont",
+            "SunValleySubtitleFont",
+            "SunValleyTitleFont",
+            "SunValleyTitleLargeFont",
+            "SunValleyDisplayFont",
+            "TkDefaultFont",
+            "TkTextFont",
+            "TkMenuFont",
+        )
+        fonts = {name: Mock() for name in font_names}
+
+        with (
+            patch.object(gui_common.sys, "platform", "darwin"),
+            patch.object(
+                gui_common,
+                "_preferred_ui_font_family",
+                return_value="PingFang SC",
+            ),
+            patch.object(
+                gui_common.tkfont,
+                "nametofont",
+                side_effect=lambda name, root: fonts[name],
+            ),
+        ):
+            gui_common._configure_ui_fonts(SimpleNamespace())
+
+        for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont"):
+            fonts[name].configure.assert_called_once_with(family="PingFang SC")
 
     def test_parse_positive_int_accepts_blank_default(self) -> None:
         self.assertEqual(parse_positive_int("", default=2, field_name="开始行"), 2)

@@ -28,8 +28,11 @@ from tools.gui_common import (
     APP_MAIN_BACKGROUND,
     MUTED_LABEL_STYLE,
     PRIMARY_BUTTON_STYLE,
+    add_optional_status_label,
     configure_tool_page_style,
+    create_file_path_display,
     create_section,
+    refresh_top_aligned_scroll_region,
 )
 
 
@@ -188,12 +191,7 @@ class PhraseLoomApp(ttk.Frame):
         _ = standalone
         self.root = self.winfo_toplevel()
         self.current_title = tk.StringVar(value=EXPORT_STRINGS_TASK.label)
-        self.current_description = tk.StringVar(
-            value=EXPORT_STRINGS_TASK.description
-        )
-        self.output_preview_var = tk.StringVar(
-            value="输出文件：选择输入 Excel 后自动生成"
-        )
+        self.output_preview_var = tk.StringVar()
         self.status_var = tk.StringVar(value="请选择输入文件")
         self.last_result_text = ""
         self.export_values = {
@@ -260,9 +258,7 @@ class PhraseLoomApp(ttk.Frame):
         self._refresh_scroll_region()
 
     def _refresh_scroll_region(self) -> None:
-        content_bounds = self.scroll_canvas.bbox("all")
-        if content_bounds:
-            self.scroll_canvas.configure(scrollregion=content_bounds)
+        refresh_top_aligned_scroll_region(self.scroll_canvas)
 
     def _bind_mousewheel(self, _event=None) -> None:
         self.bind_all("<MouseWheel>", self._handle_mousewheel)
@@ -284,7 +280,6 @@ class PhraseLoomApp(ttk.Frame):
     def _render_task(self) -> None:
         task = EXPORT_STRINGS_TASK
         self.current_title.set(task.label)
-        self.current_description.set(task.description)
         for child in self.content_frame.winfo_children():
             child.destroy()
         self.field_vars = {}
@@ -302,18 +297,8 @@ class PhraseLoomApp(ttk.Frame):
             variable=input_var,
             field_spec=input_spec,
             row=0,
-            focus_out_command=self._handle_input_focus_out,
         )
         self._build_column_settings(input_section, task)
-        ttk.Label(
-            input_section,
-            text=(
-                "已有 Target 会视为已完成并跳过；重复 Source 只导出一次；"
-                "Context 留空时自动识别同名列。"
-            ),
-            style=MUTED_LABEL_STYLE,
-            wraplength=760,
-        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         options = create_section(
             self.content_frame,
@@ -352,16 +337,11 @@ class PhraseLoomApp(ttk.Frame):
         )
 
         self._update_output_preview()
-        ttk.Label(
+        self.output_preview_label = add_optional_status_label(
             self,
-            textvariable=self.output_preview_var,
-            style=MUTED_LABEL_STYLE,
-        ).grid(
+            variable=self.output_preview_var,
             row=2,
-            column=0,
             columnspan=2,
-            sticky="w",
-            pady=(8, 0),
         )
 
         self.status_frame = ttk.Frame(self)
@@ -451,14 +431,6 @@ class PhraseLoomApp(ttk.Frame):
             row=2,
             pady=(12, 0),
         )
-        ttk.Label(
-            parent,
-            text=(
-                "关闭分行后，多行 Source 将作为一个完整 String 导出；"
-                "相似句仅调整排列；Tag 配置留空时使用内置规则。"
-            ),
-            style=MUTED_LABEL_STYLE,
-        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
     def _make_variable(self, field_spec: FieldSpec) -> tk.Variable:
         value = self.export_values.get(
@@ -485,7 +457,6 @@ class PhraseLoomApp(ttk.Frame):
         variable: tk.StringVar,
         field_spec: FieldSpec,
         row: int,
-        focus_out_command=None,
         pady: tuple[int, int] = (0, 0),
     ) -> None:
         ttk.Label(parent, text=label).grid(
@@ -494,22 +465,31 @@ class PhraseLoomApp(ttk.Frame):
             sticky="w",
             pady=pady,
         )
-        entry = ttk.Entry(parent, textvariable=variable, width=56)
-        entry.grid(
+        path_display = create_file_path_display(
+            parent,
+            variable=variable,
+        )
+        path_display.grid(
             row=row,
             column=1,
-            sticky="ew",
+            sticky="w",
             padx=(12, 8),
             pady=pady,
         )
-        if focus_out_command is not None:
-            entry.bind("<FocusOut>", focus_out_command)
+        actions = ttk.Frame(parent)
+        actions.grid(row=row, column=2, sticky="ew", pady=pady)
         ttk.Button(
-            parent,
-            text="选择",
+            actions,
+            text="选择文件",
             command=lambda: self._choose_path(field_spec, variable),
-        ).grid(row=row, column=2, sticky="ew", pady=pady)
-        parent.columnconfigure(1, weight=1)
+        ).grid(row=0, column=0)
+        if not field_spec.required:
+            ttk.Button(
+                actions,
+                text="清空",
+                command=lambda: variable.set(""),
+            ).grid(row=0, column=1, padx=(6, 0))
+        parent.columnconfigure(1, weight=0)
 
     def _choose_path(self, field_spec: FieldSpec, variable: tk.StringVar) -> None:
         value = filedialog.askopenfilename(
@@ -530,7 +510,7 @@ class PhraseLoomApp(ttk.Frame):
         input_var = self.field_vars.get("input")
         input_text = str(input_var.get()).strip() if input_var else ""
         if not input_text:
-            self.output_preview_var.set("输出文件：选择输入 Excel 后自动生成")
+            self.output_preview_var.set("")
             return
         input_path = Path(input_text).expanduser()
         output_path = default_strings_output_path(input_path)

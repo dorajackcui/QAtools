@@ -36,7 +36,7 @@ from tools.xbench_report_transformer.transform_xbench_report_gui import XbenchRe
 ToolFactory = Callable[[tk.Misc], ttk.Frame]
 
 DEFAULT_WINDOW_WIDTH = 1200
-DEFAULT_WINDOW_HEIGHT = 800
+DEFAULT_WINDOW_HEIGHT = 840
 MINIMUM_WINDOW_WIDTH = 980
 MINIMUM_WINDOW_HEIGHT = 680
 WINDOW_HORIZONTAL_BREATHING_ROOM = 96
@@ -63,7 +63,6 @@ def enable_high_dpi_awareness() -> None:
 class ToolItem:
     key: str
     title: str
-    description: str
     factory: ToolFactory
 
 
@@ -80,13 +79,11 @@ TOOL_GROUPS = (
             ToolItem(
                 key="workflow",
                 title="一键质量检查",
-                description="集中执行全部质量检查项目，并统一写入输出 Excel。",
                 factory=WorkflowRunnerApp,
             ),
             ToolItem(
                 key="phraseloom",
                 title="PhraseLoom",
-                description="导出干净、去重的 Strings 工作簿，并在翻译后回填原始 Excel。",
                 factory=PhraseLoomApp,
             ),
         ),
@@ -97,7 +94,6 @@ TOOL_GROUPS = (
             ToolItem(
                 key="french_nbsp",
                 title="法语 NBSP 恢复",
-                description="恢复法语标点前的 NBSP，修正常见空格丢失问题。",
                 factory=FrenchNbspRestorerApp,
             ),
         ),
@@ -108,7 +104,6 @@ TOOL_GROUPS = (
             ToolItem(
                 key="xbench_report",
                 title="Xbench QA 转换",
-                description="把 Xbench QA Report 整理为按 key/source 聚合的行级 Excel。",
                 factory=XbenchReportTransformerApp,
             ),
         ),
@@ -130,7 +125,6 @@ class ToolshubApp:
         }
         self.selected_tool_key = tk.StringVar()
         self.current_tool_title = tk.StringVar()
-        self.current_tool_description = tk.StringVar()
         self.tool_frames: dict[str, ttk.Frame] = {}
         self.nav_buttons: dict[str, ttk.Radiobutton] = {}
         self.current_tool_frame: ttk.Frame | None = None
@@ -167,29 +161,23 @@ class ToolshubApp:
         )
         workspace.grid(row=0, column=1, sticky="nsew")
         workspace.columnconfigure(0, weight=1)
-        workspace.rowconfigure(3, weight=1)
+        workspace.rowconfigure(2, weight=1)
 
         ttk.Label(
             workspace,
             textvariable=self.current_tool_title,
             style="Toolshub.Title.TLabel",
         ).grid(row=0, column=0, sticky="w", padx=16)
-        ttk.Label(
-            workspace,
-            textvariable=self.current_tool_description,
-            style="Toolshub.Description.TLabel",
-            wraplength=760,
-        ).grid(row=1, column=0, sticky="ew", padx=16, pady=(5, 16))
         ttk.Separator(workspace).grid(
-            row=2,
+            row=1,
             column=0,
             sticky="ew",
             padx=16,
-            pady=(0, 2),
+            pady=(10, 2),
         )
 
         self.content_frame = ttk.Frame(workspace)
-        self.content_frame.grid(row=3, column=0, sticky="nsew")
+        self.content_frame.grid(row=2, column=0, sticky="nsew")
         self.content_frame.columnconfigure(0, weight=1)
         self.content_frame.rowconfigure(0, weight=1)
 
@@ -215,12 +203,6 @@ class ToolshubApp:
             font=(family, body_size + 3, "bold"),
         )
         style.configure(
-            "Toolshub.AppSubtitle.TLabel",
-            background=APP_SIDEBAR_BACKGROUND,
-            foreground=APP_MUTED_TEXT,
-            font=(family, max(body_size - 1, 8)),
-        )
-        style.configure(
             "Toolshub.Category.TLabel",
             background=APP_SIDEBAR_BACKGROUND,
             foreground=APP_MUTED_TEXT,
@@ -231,12 +213,6 @@ class ToolshubApp:
             background=APP_MAIN_BACKGROUND,
             foreground=APP_TEXT,
             font=(family, body_size + 8, "bold"),
-        )
-        style.configure(
-            "Toolshub.Description.TLabel",
-            background=APP_MAIN_BACKGROUND,
-            foreground=APP_MUTED_TEXT,
-            font=(family, body_size),
         )
         style.layout(
             "Toolshub.Nav.TRadiobutton",
@@ -258,14 +234,9 @@ class ToolshubApp:
             parent,
             text="QAtools",
             style="Toolshub.AppTitle.TLabel",
-        ).grid(row=0, column=0, sticky="w", padx=10, pady=(0, 3))
-        ttk.Label(
-            parent,
-            text="本地化 QA 工作台",
-            style="Toolshub.AppSubtitle.TLabel",
-        ).grid(row=1, column=0, sticky="w", padx=10, pady=(0, 20))
+        ).grid(row=0, column=0, sticky="w", padx=10, pady=(0, 20))
 
-        row = 2
+        row = 1
         for group in self.tool_groups:
             ttk.Label(
                 parent,
@@ -276,7 +247,7 @@ class ToolshubApp:
                 column=0,
                 sticky="w",
                 padx=11,
-                pady=(14 if row > 2 else 0, 5),
+                pady=(14 if row > 1 else 0, 5),
             )
             row += 1
             for tool in group.tools:
@@ -306,7 +277,6 @@ class ToolshubApp:
         frame = self.tool_frames[key]
         self.selected_tool_key.set(key)
         self.current_tool_title.set(tool.title)
-        self.current_tool_description.set(tool.description)
         self.current_tool_frame = frame
         frame.tkraise()
 

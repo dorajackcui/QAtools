@@ -13,8 +13,11 @@ from tools.gui_common import (
     MUTED_LABEL_STYLE,
     PRIMARY_BUTTON_STYLE,
     SECTION_FRAME_STYLE,
+    add_optional_status_label,
     configure_tool_page_style,
+    create_file_path_display,
     parse_positive_int,
+    refresh_top_aligned_scroll_region,
 )
 from tools.tb_project_ui import TbProjectControls
 from tools.tb_projects import TbProject
@@ -54,7 +57,7 @@ class WorkflowRunnerApp(ttk.Frame):
         self.run_source_consistency_check_var = tk.BooleanVar(value=True)
         self.run_chinese_target_check_var = tk.BooleanVar(value=True)
         self.run_target_text_check_var = tk.BooleanVar(value=True)
-        self.output_preview_var = tk.StringVar(value="输出文件：选择输入 Excel 后自动生成")
+        self.output_preview_var = tk.StringVar()
         self.term_settings_button_text_var = tk.StringVar(value="展开设置")
         self.tag_settings_button_text_var = tk.StringVar(value="展开设置")
         self.target_text_settings_button_text_var = tk.StringVar(value="展开设置")
@@ -119,13 +122,15 @@ class WorkflowRunnerApp(ttk.Frame):
             style=SECTION_FRAME_STYLE,
         )
         input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        input_frame.columnconfigure(1, weight=1)
+        input_frame.columnconfigure(1, weight=0)
 
         ttk.Label(input_frame, text="输入 Excel").grid(row=0, column=0, sticky="w")
-        input_entry = ttk.Entry(input_frame, textvariable=self.input_file_var, width=56)
-        input_entry.grid(row=0, column=1, sticky="ew", padx=(12, 8))
-        input_entry.bind("<FocusOut>", self.handle_input_file_focus_out)
-        ttk.Button(input_frame, text="选择", command=self.choose_input_file).grid(
+        self.input_file_display = create_file_path_display(
+            input_frame,
+            variable=self.input_file_var,
+        )
+        self.input_file_display.grid(row=0, column=1, sticky="w", padx=(12, 8))
+        ttk.Button(input_frame, text="选择文件", command=self.choose_input_file).grid(
             row=0, column=2, sticky="ew"
         )
 
@@ -250,7 +255,7 @@ class WorkflowRunnerApp(ttk.Frame):
             style=SECTION_FRAME_STYLE,
         )
         self.term_settings_frame.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        self.term_settings_frame.columnconfigure(1, weight=1)
+        self.term_settings_frame.columnconfigure(1, weight=0)
         ttk.Label(self.term_settings_frame, text="术语标记").grid(
             row=0, column=0, sticky="w"
         )
@@ -283,16 +288,15 @@ class WorkflowRunnerApp(ttk.Frame):
         ttk.Label(self.term_settings_frame, text="历史 TB（可选）").grid(
             row=2, column=0, sticky="w", pady=(12, 0)
         )
-        ttk.Entry(
+        create_file_path_display(
             self.term_settings_frame,
-            textvariable=self.term_history_tb_file_var,
-            width=48,
-        ).grid(row=2, column=1, sticky="ew", padx=(12, 8), pady=(12, 0))
+            variable=self.term_history_tb_file_var,
+        ).grid(row=2, column=1, sticky="w", padx=(12, 8), pady=(12, 0))
         history_buttons = ttk.Frame(self.term_settings_frame)
         history_buttons.grid(row=2, column=2, sticky="e", pady=(12, 0))
         ttk.Button(
             history_buttons,
-            text="选择",
+            text="选择文件",
             command=self.choose_term_history_tb_file,
         ).grid(row=0, column=0)
         ttk.Button(
@@ -391,26 +395,33 @@ class WorkflowRunnerApp(ttk.Frame):
         ttk.Label(self.tag_settings_frame, text="尖括号过滤配置").grid(
             row=2, column=0, sticky="w", pady=(12, 0)
         )
-        self.tag_angle_config_entry = ttk.Entry(
+        self.tag_angle_config_entry = create_file_path_display(
             self.tag_settings_frame,
-            textvariable=self.tag_angle_config_file_var,
-            width=56,
+            variable=self.tag_angle_config_file_var,
         )
         self.tag_angle_config_entry.grid(
             row=2,
             column=1,
             columnspan=2,
-            sticky="ew",
+            sticky="w",
             padx=(12, 8),
             pady=(12, 0),
         )
+        tag_config_actions = ttk.Frame(self.tag_settings_frame)
+        tag_config_actions.grid(row=2, column=3, sticky="ew", pady=(12, 0))
         self.tag_angle_config_button = ttk.Button(
-            self.tag_settings_frame,
-            text="选择",
+            tag_config_actions,
+            text="选择文件",
             command=self.choose_tag_angle_config_file,
         )
-        self.tag_angle_config_button.grid(row=2, column=3, sticky="ew", pady=(12, 0))
-        self.tag_settings_frame.columnconfigure(2, weight=1)
+        self.tag_angle_config_button.grid(row=0, column=0)
+        self.tag_angle_config_clear_button = ttk.Button(
+            tag_config_actions,
+            text="清空",
+            command=self.clear_tag_angle_config_file,
+        )
+        self.tag_angle_config_clear_button.grid(row=0, column=1, padx=(6, 0))
+        self.tag_settings_frame.columnconfigure(2, weight=0)
         self.tag_settings_frame.grid_remove()
 
         self.target_text_settings_frame = ttk.LabelFrame(
@@ -469,11 +480,12 @@ class WorkflowRunnerApp(ttk.Frame):
             text="应用修订",
             command=self.apply_revisions,
         ).grid(row=0, column=1, sticky="ew", padx=(8, 0))
-        ttk.Label(
+        self.output_preview_label = add_optional_status_label(
             self,
-            textvariable=self.output_preview_var,
-            style=MUTED_LABEL_STYLE,
-        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
+            variable=self.output_preview_var,
+            row=2,
+            columnspan=2,
+        )
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
@@ -487,9 +499,7 @@ class WorkflowRunnerApp(ttk.Frame):
         self.refresh_scroll_region()
 
     def refresh_scroll_region(self) -> None:
-        content_bounds = self.scroll_canvas.bbox("all")
-        if content_bounds:
-            self.scroll_canvas.configure(scrollregion=content_bounds)
+        refresh_top_aligned_scroll_region(self.scroll_canvas)
 
     def bind_workflow_mousewheel(self, _event: object | None = None) -> None:
         self.bind_all("<MouseWheel>", self.handle_workflow_mousewheel)
@@ -628,7 +638,11 @@ class WorkflowRunnerApp(ttk.Frame):
         state = "normal" if standard_enabled else "disabled"
         for checkbutton in getattr(self, "standard_tag_checkbuttons", ()):
             checkbutton.configure(state=state)
-        for widget_name in ("tag_angle_config_entry", "tag_angle_config_button"):
+        for widget_name in (
+            "tag_angle_config_entry",
+            "tag_angle_config_button",
+            "tag_angle_config_clear_button",
+        ):
             widget = getattr(self, widget_name, None)
             if widget is not None:
                 widget.configure(state=state)
@@ -636,7 +650,7 @@ class WorkflowRunnerApp(ttk.Frame):
     def update_output_preview(self) -> None:
         input_file = self.input_file_var.get().strip()
         if not input_file:
-            self.output_preview_var.set("输出文件：选择输入 Excel 后自动生成")
+            self.output_preview_var.set("")
             return
         output_name = build_default_output_path(input_file).name
         self.output_preview_var.set(f"输出文件：{output_name}")
@@ -680,6 +694,9 @@ class WorkflowRunnerApp(ttk.Frame):
         )
         if file_path:
             self.tag_angle_config_file_var.set(file_path)
+
+    def clear_tag_angle_config_file(self) -> None:
+        self.tag_angle_config_file_var.set("")
 
     def clear_term_history_tb_file(self) -> None:
         if hasattr(self, "tb_project_controls"):

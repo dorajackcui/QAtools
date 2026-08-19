@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import runpy
 import tkinter as tk
+from tkinter import ttk
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -156,6 +157,14 @@ class GuiLayoutTests(unittest.TestCase):
             self.assertIn("回填译文…", texts)
             self.assertIn("输入与范围", texts)
             self.assertIn("导出选项", texts)
+            self.assertNotIn(
+                "已有 Target 会视为已完成并跳过；重复 Source 只导出一次；Context 留空时自动识别同名列。",
+                texts,
+            )
+            self.assertNotIn(
+                "关闭分行后，多行 Source 将作为一个完整 String 导出；相似句仅调整排列；Tag 配置留空时使用内置规则。",
+                texts,
+            )
             self.assertIn(
                 "启用相似句分组（未聚类在前，聚类内容在后）",
                 texts,
@@ -196,6 +205,26 @@ class GuiLayoutTests(unittest.TestCase):
         finally:
             root.destroy()
 
+    def test_short_content_stays_at_the_top_of_a_tall_viewport(self) -> None:
+        root, app = self.make_app()
+        try:
+            root.geometry("1200x900")
+            root.deiconify()
+            root.update()
+
+            scroll_region = tuple(
+                float(value) for value in app.scroll_canvas.cget("scrollregion").split()
+            )
+            region_height = scroll_region[3] - scroll_region[1]
+            self.assertGreaterEqual(region_height, app.scroll_canvas.winfo_height())
+            self.assertEqual(app.scroll_canvas.canvasy(0), 0.0)
+            self.assertEqual(
+                app.content_frame.winfo_rooty(),
+                app.scroll_canvas.winfo_rooty(),
+            )
+        finally:
+            root.destroy()
+
     def test_restore_is_a_secondary_action_not_a_separate_workspace(self) -> None:
         root, app = self.make_app()
         try:
@@ -206,6 +235,42 @@ class GuiLayoutTests(unittest.TestCase):
             self.assertIn("回填译文…", texts)
             self.assertNotIn("开始回填", texts)
             self.assertNotIn("翻译完成的 Strings 工作簿", texts)
+        finally:
+            root.destroy()
+
+    def test_optional_tag_config_can_be_cleared_after_selection(self) -> None:
+        root, app = self.make_app()
+        try:
+            root.update()
+            tag_config_var = app.field_vars["tag_config"]
+            tag_config_var.set(r"C:\configs\tags.toml")
+
+            path_displays = [
+                widget
+                for widget in self._collect_widgets(app)
+                if getattr(widget, "_file_path_source_variable", None)
+                is tag_config_var
+            ]
+            clear_buttons = [
+                widget
+                for widget in self._collect_widgets(app)
+                if isinstance(widget, ttk.Button)
+                and str(widget.cget("text")) == "清空"
+            ]
+            self.assertEqual(len(path_displays), 1)
+            self.assertEqual(len(clear_buttons), 1)
+            self.assertEqual(
+                path_displays[0]._file_path_display_variable.get(),
+                "tags.toml",
+            )
+
+            clear_buttons[0].invoke()
+
+            self.assertEqual(tag_config_var.get(), "")
+            self.assertEqual(
+                path_displays[0]._file_path_display_variable.get(),
+                "未选择文件",
+            )
         finally:
             root.destroy()
 
@@ -230,6 +295,13 @@ class GuiLayoutTests(unittest.TestCase):
                 texts.add(str(text))
             texts.update(self._collect_widget_texts(child))
         return texts
+
+    def _collect_widgets(self, widget: tk.Misc) -> list[tk.Misc]:
+        widgets: list[tk.Misc] = []
+        for child in widget.winfo_children():
+            widgets.append(child)
+            widgets.extend(self._collect_widgets(child))
+        return widgets
 
 
 if __name__ == "__main__":

@@ -11,8 +11,10 @@ from tools.gui_common import (
     MUTED_LABEL_STYLE,
     PRIMARY_BUTTON_STYLE,
     OutputPreviewMixin,
+    add_optional_status_label,
     add_file_picker_row,
     configure_tool_page_style,
+    create_file_path_display,
     create_section,
     parse_positive_int,
 )
@@ -39,9 +41,7 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
         self.newline_var = tk.BooleanVar(value=True)
         self.tag_mode_var = tk.StringVar(value="standard")
         self.angle_config_file_var = tk.StringVar()
-        self.output_preview_var = tk.StringVar(
-            value="输出文件：选择输入 Excel 后自动生成"
-        )
+        self.output_preview_var = tk.StringVar()
         self.standard_tag_checkbuttons: list[ttk.Checkbutton] = []
         self._build_ui()
 
@@ -53,7 +53,6 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
             label="输入 Excel",
             variable=self.input_file_var,
             command=self.choose_input_file,
-            focus_out_command=self.handle_input_file_focus_out,
         )
 
         scope_frame = ttk.Frame(input_frame)
@@ -137,26 +136,33 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
         ttk.Label(settings_frame, text="尖括号过滤配置").grid(
             row=2, column=0, sticky="w", pady=(12, 0)
         )
-        self.angle_config_entry = ttk.Entry(
+        self.angle_config_entry = create_file_path_display(
             settings_frame,
-            textvariable=self.angle_config_file_var,
-            width=56,
+            variable=self.angle_config_file_var,
         )
         self.angle_config_entry.grid(
             row=2,
             column=1,
             columnspan=3,
-            sticky="ew",
+            sticky="w",
             padx=(12, 8),
             pady=(12, 0),
         )
+        angle_config_actions = ttk.Frame(settings_frame)
+        angle_config_actions.grid(row=2, column=4, sticky="ew", pady=(12, 0))
         self.angle_config_button = ttk.Button(
-            settings_frame,
-            text="选择",
+            angle_config_actions,
+            text="选择文件",
             command=self.choose_angle_config_file,
         )
-        self.angle_config_button.grid(row=2, column=4, sticky="ew", pady=(12, 0))
-        settings_frame.columnconfigure(3, weight=1)
+        self.angle_config_button.grid(row=0, column=0)
+        self.angle_config_clear_button = ttk.Button(
+            angle_config_actions,
+            text="清空",
+            command=self.clear_angle_config_file,
+        )
+        self.angle_config_clear_button.grid(row=0, column=1, padx=(6, 0))
+        settings_frame.columnconfigure(3, weight=0)
 
         ttk.Label(
             settings_frame,
@@ -171,18 +177,22 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
             command=self.run_check,
             style=PRIMARY_BUTTON_STYLE,
         ).grid(row=2, column=0, sticky="ew")
-        ttk.Label(
+        self.output_preview_label = add_optional_status_label(
             self,
-            textvariable=self.output_preview_var,
-            style=MUTED_LABEL_STYLE,
-        ).grid(row=3, column=0, sticky="w", pady=(8, 0))
+            variable=self.output_preview_var,
+            row=3,
+        )
         self.columnconfigure(0, weight=1)
 
     def handle_tag_mode_changed(self) -> None:
         state = "normal" if self.tag_mode_var.get() == "standard" else "disabled"
         for checkbutton in self.standard_tag_checkbuttons:
             checkbutton.configure(state=state)
-        for widget_name in ("angle_config_entry", "angle_config_button"):
+        for widget_name in (
+            "angle_config_entry",
+            "angle_config_button",
+            "angle_config_clear_button",
+        ):
             widget = getattr(self, widget_name, None)
             if widget is not None:
                 widget.configure(state=state)
@@ -194,6 +204,9 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
         )
         if file_path:
             self.angle_config_file_var.set(file_path)
+
+    def clear_angle_config_file(self) -> None:
+        self.angle_config_file_var.set("")
 
     def choose_input_file(self) -> None:
         file_path = filedialog.askopenfilename(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+from tkinter import font as tkfont
 from tkinter import ttk
 import tempfile
 import unittest
@@ -16,6 +17,7 @@ from toolshub_gui import (
     calculate_initial_window_size,
     main,
 )
+from tools.gui_common import FILE_PATH_DISPLAY_WIDTH
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
 from tools.gui_common import APP_MAIN_BACKGROUND
 
@@ -29,7 +31,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                 screen_width=1920,
                 screen_height=1080,
             ),
-            (1334, 800),
+            (1334, 840),
         )
 
     def test_initial_window_size_stays_within_available_screen(self) -> None:
@@ -102,6 +104,63 @@ class ToolshubLayoutTests(unittest.TestCase):
                 style.layout("Toggle.TButton"),
             )
             self.assertIn("Checkbutton.indicator", repr(style.layout("TCheckbutton")))
+            body_font = tkfont.nametofont("SunValleyBodyFont", root=root)
+            default_font = tkfont.nametofont("TkDefaultFont", root=root)
+            self.assertEqual(body_font.actual("family"), default_font.actual("family"))
+            self.assertEqual(body_font.actual("size"), 10)
+        finally:
+            root.destroy()
+
+    def test_workflow_file_picker_is_button_driven_and_non_editable(self) -> None:
+        root, app = self.make_app()
+
+        try:
+            workflow_frame = app.tool_frames["workflow"]
+            variable_name = str(workflow_frame.input_file_var)
+            matching_entries = [
+                widget
+                for widget in self.collect_widgets(workflow_frame)
+                if isinstance(widget, ttk.Entry)
+                and str(widget.cget("textvariable")) == variable_name
+            ]
+
+            self.assertEqual(matching_entries, [])
+
+            path_display = workflow_frame.input_file_display
+            self.assertIsInstance(path_display, ttk.Label)
+            self.assertEqual(int(path_display.cget("width")), FILE_PATH_DISPLAY_WIDTH)
+            self.assertEqual(str(path_display.grid_info()["sticky"]), "w")
+            self.assertEqual(
+                path_display._file_path_display_variable.get(),
+                "未选择文件",
+            )
+
+            workflow_frame.input_file_var.set(r"C:\very\long\folder\sample.xlsx")
+            self.assertEqual(
+                path_display._file_path_display_variable.get(),
+                "sample.xlsx",
+            )
+        finally:
+            root.destroy()
+
+    def test_workflow_optional_tag_config_can_be_cleared(self) -> None:
+        root, app = self.make_app()
+
+        try:
+            workflow = app.tool_frames["workflow"]
+            workflow.tag_angle_config_file_var.set(r"C:\configs\tags.json")
+            self.assertEqual(
+                workflow.tag_angle_config_entry._file_path_display_variable.get(),
+                "tags.json",
+            )
+
+            workflow.tag_angle_config_clear_button.invoke()
+
+            self.assertEqual(workflow.tag_angle_config_file_var.get(), "")
+            self.assertEqual(
+                workflow.tag_angle_config_entry._file_path_display_variable.get(),
+                "未选择文件",
+            )
         finally:
             root.destroy()
 
@@ -148,7 +207,6 @@ class ToolshubLayoutTests(unittest.TestCase):
 
             self.assertEqual(app.selected_tool_key.get(), "french_nbsp")
             self.assertEqual(app.current_tool_title.get(), "法语 NBSP 恢复")
-            self.assertIn("NBSP", app.current_tool_description.get())
             self.assertIs(app.current_tool_frame, app.tool_frames["french_nbsp"])
             self.assertEqual(workflow_frame.winfo_manager(), "grid")
             self.assertEqual(app.current_tool_frame.winfo_manager(), "grid")
@@ -179,7 +237,27 @@ class ToolshubLayoutTests(unittest.TestCase):
 
             self.assertIsInstance(app.current_tool_frame, PhraseLoomApp)
             self.assertEqual(app.current_tool_title.get(), "PhraseLoom")
-            self.assertIn("Strings", app.current_tool_description.get())
+        finally:
+            root.destroy()
+
+    def test_redundant_shell_copy_and_empty_output_hint_are_hidden(self) -> None:
+        root, app = self.make_app()
+
+        try:
+            root.update()
+            widget_texts = self.collect_widget_texts(root)
+            for redundant_text in (
+                "本地化 QA 工作台",
+                "集中执行全部质量检查项目，并统一写入输出 Excel。",
+                "导出干净、去重的 Strings 工作簿，并在翻译后回填原始 Excel。",
+                "输出文件：选择输入 Excel 后自动生成",
+            ):
+                self.assertNotIn(redundant_text, widget_texts)
+
+            workflow = app.tool_frames["workflow"]
+            self.assertEqual(workflow.output_preview_label.winfo_manager(), "")
+            workflow.output_preview_var.set("输出文件：result.xlsx")
+            self.assertEqual(workflow.output_preview_label.winfo_manager(), "grid")
         finally:
             root.destroy()
 
@@ -206,6 +284,36 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertEqual(
                 app.tool_frames["phraseloom"].scroll_canvas.cget("background"),
                 APP_MAIN_BACKGROUND,
+            )
+        finally:
+            root.destroy()
+
+    def test_workflow_short_content_stays_at_the_top_of_a_tall_viewport(self) -> None:
+        try:
+            root = tk.Tk()
+        except tk.TclError as exc:
+            self.skipTest(f"Tk display is unavailable: {exc}")
+
+        try:
+            app = ToolshubApp(root, show_window=False)
+            root.geometry("1334x900")
+            root.deiconify()
+            root.update()
+
+            workflow = app.tool_frames["workflow"]
+            scroll_region = tuple(
+                float(value)
+                for value in workflow.scroll_canvas.cget("scrollregion").split()
+            )
+            region_height = scroll_region[3] - scroll_region[1]
+            self.assertGreaterEqual(
+                region_height,
+                workflow.scroll_canvas.winfo_height(),
+            )
+            self.assertEqual(workflow.scroll_canvas.canvasy(0), 0.0)
+            self.assertEqual(
+                workflow.scroll_content.winfo_rooty(),
+                workflow.scroll_canvas.winfo_rooty(),
             )
         finally:
             root.destroy()
@@ -260,6 +368,13 @@ class ToolshubLayoutTests(unittest.TestCase):
                 texts.add(str(text))
             texts.update(self.collect_widget_texts(child))
         return texts
+
+    def collect_widgets(self, widget: tk.Misc) -> list[tk.Misc]:
+        widgets: list[tk.Misc] = []
+        for child in widget.winfo_children():
+            widgets.append(child)
+            widgets.extend(self.collect_widgets(child))
+        return widgets
 
 
 if __name__ == "__main__":

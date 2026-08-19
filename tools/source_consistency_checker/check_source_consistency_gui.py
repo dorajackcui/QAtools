@@ -11,6 +11,7 @@ from tools.gui_common import (
     MUTED_LABEL_STYLE,
     PRIMARY_BUTTON_STYLE,
     OutputPreviewMixin,
+    add_optional_status_label,
     add_file_picker_row,
     configure_tool_page_style,
     create_section,
@@ -33,9 +34,7 @@ class SourceConsistencyCheckerApp(OutputPreviewMixin, ttk.Frame):
         self.source_column_var = tk.StringVar(value="A")
         self.target_column_var = tk.StringVar(value="B")
         self.start_row_var = tk.StringVar(value="2")
-        self.output_preview_var = tk.StringVar(
-            value="输出文件：选择输入 Excel 后自动生成"
-        )
+        self.output_preview_var = tk.StringVar()
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -46,7 +45,6 @@ class SourceConsistencyCheckerApp(OutputPreviewMixin, ttk.Frame):
             label="输入 Excel",
             variable=self.input_file_var,
             command=self.choose_input_file,
-            focus_out_command=self.handle_input_file_focus_out,
         )
 
         scope_frame = ttk.Frame(input_frame)
@@ -88,11 +86,11 @@ class SourceConsistencyCheckerApp(OutputPreviewMixin, ttk.Frame):
             command=self.run_check,
             style=PRIMARY_BUTTON_STYLE,
         ).grid(row=1, column=0, sticky="ew")
-        ttk.Label(
+        self.output_preview_label = add_optional_status_label(
             self,
-            textvariable=self.output_preview_var,
-            style=MUTED_LABEL_STYLE,
-        ).grid(row=2, column=0, sticky="w", pady=(8, 0))
+            variable=self.output_preview_var,
+            row=2,
+        )
         self.columnconfigure(0, weight=1)
 
     def choose_input_file(self) -> None:
