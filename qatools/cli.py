@@ -90,6 +90,14 @@ COMMANDS: tuple[CommandSpec, ...] = (
         legacy_entry="python tools/french_nbsp_restorer/restore_french_nbsp.py",
     ),
     CommandSpec(
+        name="batch",
+        summary="按行拆分 Excel batch，并在处理后复原",
+        module="tools.excel_batcher.excel_batcher",
+        mode="argv",
+        aliases=("excel-batch",),
+        legacy_entry="python tools/excel_batcher/excel_batcher.py",
+    ),
+    CommandSpec(
         name="xbench",
         summary="把 Xbench QA Report 转换为行级问题表",
         module="tools.xbench_report_transformer.transform_xbench_report",

@@ -24,6 +24,7 @@ from tools.gui_common import (
     create_application_root,
 )
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
+from tools.excel_batcher.excel_batcher_gui import ExcelBatcherApp
 from tools.workflow.file_receiver import (
     FRENCH_NBSP_RESTORE_ACTION,
     QA_WORKFLOW_ACTION,
@@ -88,6 +89,11 @@ TOOL_GROUPS = (
     ToolGroup(
         title="其他",
         tools=(
+            ToolItem(
+                key="excel_batcher",
+                title="Batch 拆分",
+                factory=ExcelBatcherApp,
+            ),
             ToolItem(
                 key="xbench_report",
                 title="Xbench QA 转换",

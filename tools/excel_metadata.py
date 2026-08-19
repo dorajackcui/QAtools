@@ -5,9 +5,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from xml.etree import ElementTree
+from zipfile import BadZipFile, ZipFile
 
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
+from openpyxl.utils.exceptions import InvalidFileException
 
 
 @dataclass(frozen=True)
@@ -35,13 +38,39 @@ def normalize_header(value: object) -> str:
 
 def list_workbook_sheets(input_file: str | Path) -> WorkbookSheetChoices:
     workbook_path = resolve_workbook_path(input_file)
-    workbook = load_workbook(workbook_path, read_only=True)
-
     try:
-        default_sheet = workbook.active.title if workbook.sheetnames else None
-        return WorkbookSheetChoices(sheet_names=tuple(workbook.sheetnames), default_sheet=default_sheet)
-    finally:
-        workbook.close()
+        with ZipFile(workbook_path) as archive:
+            workbook_xml = archive.read("xl/workbook.xml")
+    except (BadZipFile, KeyError) as exc:
+        raise InvalidFileException(
+            f"无法读取 Excel 工作簿结构: {workbook_path}"
+        ) from exc
+
+    namespace = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    root = ElementTree.fromstring(workbook_xml)
+    sheet_nodes = root.findall(f"{namespace}sheets/{namespace}sheet")
+    sheet_names = tuple(node.attrib.get("name", "") for node in sheet_nodes)
+    visible_indexes = [
+        index
+        for index, node in enumerate(sheet_nodes)
+        if node.attrib.get("state", "visible") == "visible"
+    ]
+    view = root.find(f"{namespace}bookViews/{namespace}workbookView")
+    try:
+        active_index = int(view.attrib.get("activeTab", "0")) if view is not None else 0
+    except ValueError:
+        active_index = 0
+    if active_index not in visible_indexes:
+        active_index = visible_indexes[0] if visible_indexes else 0
+    default_sheet = (
+        sheet_names[active_index]
+        if sheet_names and 0 <= active_index < len(sheet_names)
+        else None
+    )
+    return WorkbookSheetChoices(
+        sheet_names=sheet_names,
+        default_sheet=default_sheet,
+    )
 
 
 def detect_source_target_columns(

@@ -177,7 +177,10 @@ class ToolshubLayoutTests(unittest.TestCase):
         self.assertNotIn("术语处理", grouped_tools)
         self.assertNotIn("质量检查", grouped_tools)
         self.assertEqual(grouped_tools["文本修复"], ["法语 NBSP 恢复"])
-        self.assertEqual(grouped_tools["其他"], ["Xbench QA 转换"])
+        self.assertEqual(
+            grouped_tools["其他"],
+            ["Batch 拆分", "Xbench QA 转换"],
+        )
 
     def test_all_tool_pages_are_created_at_startup(self) -> None:
         root, app = self.make_app()
@@ -189,6 +192,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                     "workflow",
                     "phraseloom",
                     "french_nbsp",
+                    "excel_batcher",
                     "xbench_report",
                 },
             )

@@ -9,6 +9,7 @@ from unittest.mock import patch
 from openpyxl import Workbook
 
 from tools.chinese_target_checker.check_chinese_target_gui import ChineseTargetCheckerApp
+from tools.excel_batcher.excel_batcher_gui import ExcelBatcherApp
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
 from tools.line_break_checker.check_line_breaks_gui import LineBreakCheckerApp
 from tools.source_consistency_checker.check_source_consistency_gui import SourceConsistencyCheckerApp
@@ -224,6 +225,21 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.input_file_var = FakeVar(str(input_path))
         app.sheet_var = FakeVar("")
         app.sheet_combobox = FakeCombobox()
+        return app
+
+    def build_excel_batcher_app(self, input_path: Path) -> ExcelBatcherApp:
+        app = ExcelBatcherApp.__new__(ExcelBatcherApp)
+        app.split_input_file_var = FakeVar(str(input_path))
+        app.split_sheet_var = FakeVar("")
+        app.split_sheet_combobox = FakeCombobox()
+        app.batch_size_var = FakeVar("1000")
+        app.header_rows_var = FakeVar("1")
+        app.split_output_dir_var = FakeVar("")
+        app.split_output_preview_var = FakeVar("")
+        app.split_status_var = FakeVar("")
+        app.restore_batch_dir_var = FakeVar("")
+        app.restore_output_file_var = FakeVar("")
+        app.restore_status_var = FakeVar("")
         return app
 
     def test_term_pair_refresh_populates_sheet_choices_and_detects_columns(self) -> None:
@@ -623,6 +639,50 @@ class GuiSheetSelectionTests(unittest.TestCase):
             input_file="/tmp/input.xlsx",
             sheet="Xbench QA",
             output_file=None,
+        )
+
+    def test_excel_batcher_refresh_populates_sheet_choices(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "batch.xlsx"
+            self.create_tag_checker_workbook(workbook_path)
+            app = self.build_excel_batcher_app(workbook_path)
+
+            app.refresh_sheet_choices(show_error=False)
+
+            self.assertEqual(app.split_sheet_combobox["values"], ("Tags", "Archive"))
+            self.assertEqual(app.split_sheet_var.get(), "Tags")
+
+    def test_excel_batcher_run_split_passes_selected_options(self) -> None:
+        app = self.build_excel_batcher_app(Path("/tmp/input.xlsx"))
+        app.split_sheet_var.set("Data")
+        app.batch_size_var.set("250")
+        app.header_rows_var.set("2")
+        app.split_output_dir_var.set("/tmp/output-batches")
+        with patch.object(app, "_start_split_worker") as start_mock:
+            app.run_split()
+
+        start_mock.assert_called_once_with(
+            {
+                "input_file": str(Path("/tmp/input.xlsx")),
+                "sheet": "Data",
+                "batch_size": 250,
+                "header_rows": 2,
+                "output_dir": "/tmp/output-batches",
+            }
+        )
+
+    def test_excel_batcher_run_restore_passes_directory_and_output(self) -> None:
+        app = self.build_excel_batcher_app(Path(""))
+        app.restore_batch_dir_var.set("/tmp/input-batches")
+        app.restore_output_file_var.set("/tmp/restored.xlsx")
+        with patch.object(app, "_start_restore_worker") as start_mock:
+            app.run_restore()
+
+        start_mock.assert_called_once_with(
+            {
+                "manifest_or_directory": "/tmp/input-batches",
+                "output_file": "/tmp/restored.xlsx",
+            }
         )
 
     def test_term_pair_ignores_invalid_history_start_without_history_file(self) -> None:

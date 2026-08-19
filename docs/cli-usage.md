@@ -45,6 +45,7 @@ qatools tag-check --help
 | `qatools consistency-check` | 同源译文一致性检查 |
 | `qatools chinese-check` | Target 中文字符与中文标点检查 |
 | `qatools french-nbsp` | 法语 NBSP 恢复 |
+| `qatools batch` | 按行拆分 Excel batch，并在处理后复原 |
 | `qatools xbench` | Xbench QA Report 转换 |
 
 可用别名：
@@ -53,6 +54,7 @@ qatools tag-check --help
 - `qatools strings` → `qatools phraseloom`
 - `qatools source-consistency` → `qatools consistency-check`
 - `qatools target-chinese` → `qatools chinese-check`
+- `qatools excel-batch` → `qatools batch`
 - `qatools xbench-transform` → `qatools xbench`
 
 ## 自动化调用约定
@@ -228,6 +230,27 @@ qatools xbench ./Xbench_QA_Report.xlsx \
   -o ./artifacts/xbench_flat.xlsx
 ```
 
+Excel batch 拆分：
+
+```bash
+qatools batch split ./input.xlsx \
+  --sheet Sheet1 \
+  --batch-size 1000 \
+  --header-rows 1 \
+  --output-dir ./artifacts/input_batches
+```
+
+完成分批作业后复原：
+
+```bash
+qatools batch restore ./artifacts/input_batches \
+  --output ./artifacts/input_restored.xlsx
+```
+
+拆分目录中的 `batch_manifest.json` 和 `_qatools_restore_source_*` 模板是复原所需
+文件，应与 batch 一起保留。完整规则见
+[Excel batch 工具](../tools/excel_batcher/README.md)。
+
 ## 兼容入口
 
 统一 CLI 是新文档和新自动化的首选入口。以下旧入口继续可用：
@@ -242,6 +265,7 @@ qatools xbench ./Xbench_QA_Report.xlsx \
 | `qatools consistency-check` | `python tools/source_consistency_checker/check_source_consistency.py` |
 | `qatools chinese-check` | `python tools/chinese_target_checker/check_chinese_target.py` |
 | `qatools french-nbsp` | `python tools/french_nbsp_restorer/restore_french_nbsp.py` |
+| `qatools batch` | `python tools/excel_batcher/excel_batcher.py` |
 | `qatools xbench` | `python tools/xbench_report_transformer/transform_xbench_report.py` |
 
 `qatools qa` 是统一新增的一键检查 CLI；此前该流程只有 GUI。
