@@ -15,6 +15,7 @@ from tools.gui_common import (
     SECTION_FRAME_STYLE,
     add_optional_status_label,
     configure_tool_page_style,
+    create_application_root,
     create_file_path_display,
     parse_positive_int,
     refresh_top_aligned_scroll_region,
@@ -1053,7 +1054,7 @@ class WorkflowRunnerApp(ttk.Frame):
 
 
 def main() -> None:
-    root = tk.Tk()
+    root = create_application_root()
     root.title("一键质量检查")
     root.resizable(True, True)
     app = WorkflowRunnerApp(root)

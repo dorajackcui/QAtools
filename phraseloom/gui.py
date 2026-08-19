@@ -30,6 +30,7 @@ from tools.gui_common import (
     PRIMARY_BUTTON_STYLE,
     add_optional_status_label,
     configure_tool_page_style,
+    create_application_root,
     create_file_path_display,
     create_section,
     refresh_top_aligned_scroll_region,
@@ -643,7 +644,7 @@ class PhraseLoomGUI(PhraseLoomApp):
 
 
 def main() -> int:
-    root = tk.Tk()
+    root = create_application_root()
     PhraseLoomGUI(root)
     root.mainloop()
     return 0

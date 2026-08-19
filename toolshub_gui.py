@@ -5,11 +5,9 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
-import ctypes
 from dataclasses import dataclass
 import sys
 import tkinter as tk
-from tkinter import font as tkfont
 from tkinter import messagebox, ttk
 
 from phraseloom.gui import PhraseLoomApp
@@ -18,7 +16,12 @@ from tools.gui_common import (
     APP_MUTED_TEXT,
     APP_SIDEBAR_BACKGROUND,
     APP_TEXT,
+    BODY_FONT,
+    BRAND_FONT,
+    CATEGORY_FONT,
+    TITLE_FONT,
     configure_tool_page_style,
+    create_application_root,
 )
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
 from tools.workflow.file_receiver import (
@@ -41,22 +44,6 @@ MINIMUM_WINDOW_WIDTH = 980
 MINIMUM_WINDOW_HEIGHT = 680
 WINDOW_HORIZONTAL_BREATHING_ROOM = 96
 WINDOW_VERTICAL_BREATHING_ROOM = 72
-
-
-def enable_high_dpi_awareness() -> None:
-    """Let Tk render at the monitor's real DPI instead of bitmap scaling."""
-
-    if sys.platform != "win32":
-        return
-    try:
-        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
-            return
-    except (AttributeError, OSError):
-        pass
-    try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    except (AttributeError, OSError):
-        pass
 
 
 @dataclass(frozen=True)
@@ -188,10 +175,6 @@ class ToolshubApp:
     def _configure_style(self) -> None:
         configure_tool_page_style(self.root)
         style = ttk.Style(self.root)
-        default_font = tkfont.nametofont("TkDefaultFont", root=self.root)
-        family = str(default_font.actual("family"))
-        native_size = abs(int(default_font.actual("size"))) or 10
-        body_size = max(native_size, 10) if sys.platform == "win32" else native_size
 
         style.configure("Toolshub.Shell.TFrame", background=APP_MAIN_BACKGROUND)
         style.configure("Toolshub.Sidebar.TFrame", background=APP_SIDEBAR_BACKGROUND)
@@ -200,19 +183,19 @@ class ToolshubApp:
             "Toolshub.AppTitle.TLabel",
             background=APP_SIDEBAR_BACKGROUND,
             foreground=APP_TEXT,
-            font=(family, body_size + 3, "bold"),
+            font=BRAND_FONT,
         )
         style.configure(
             "Toolshub.Category.TLabel",
             background=APP_SIDEBAR_BACKGROUND,
             foreground=APP_MUTED_TEXT,
-            font=(family, max(body_size - 1, 8), "bold"),
+            font=CATEGORY_FONT,
         )
         style.configure(
             "Toolshub.Title.TLabel",
             background=APP_MAIN_BACKGROUND,
             foreground=APP_TEXT,
-            font=(family, body_size + 8, "bold"),
+            font=TITLE_FONT,
         )
         style.layout(
             "Toolshub.Nav.TRadiobutton",
@@ -221,7 +204,7 @@ class ToolshubApp:
         style.configure(
             "Toolshub.Nav.TRadiobutton",
             anchor="w",
-            font=(family, body_size),
+            font=BODY_FONT,
             padding=(11, 8),
         )
         style.map(
@@ -405,8 +388,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_argument_parser().parse_args(argv)
     if args.smoke_test:
-        enable_high_dpi_awareness()
-        root = tk.Tk()
+        root = create_application_root()
         try:
             root.withdraw()
             ToolshubApp(root, show_window=False)
@@ -460,8 +442,7 @@ def main(argv: list[str] | None = None) -> int:
         ):
             return 0
 
-    enable_high_dpi_awareness()
-    root = tk.Tk()
+    root = create_application_root()
     app = ToolshubApp(root)
 
     def handle_file_request(request: ToolFileRequest) -> None:

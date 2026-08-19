@@ -48,7 +48,7 @@ class ToolshubLayoutTests(unittest.TestCase):
     def test_smoke_test_builds_complete_app_without_showing_window(self) -> None:
         root = Mock()
         with (
-            patch("toolshub_gui.tk.Tk", return_value=root),
+            patch("toolshub_gui.create_application_root", return_value=root),
             patch("toolshub_gui.ToolshubApp") as app_class,
         ):
             self.assertEqual(main(["--smoke-test"]), 0)

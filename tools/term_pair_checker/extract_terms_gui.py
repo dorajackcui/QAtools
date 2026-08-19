@@ -15,6 +15,7 @@ from tools.gui_common import (
     SECTION_FRAME_STYLE,
     add_optional_status_label,
     configure_tool_page_style,
+    create_application_root,
     create_file_path_display,
     parse_positive_int,
 )
@@ -616,7 +617,7 @@ class ExtractTermsApp(ttk.Frame):
 
 
 def main() -> None:
-    root = tk.Tk()
+    root = create_application_root()
     root.title("Excel 术语检查")
     root.resizable(True, True)
     app = ExtractTermsApp(root)

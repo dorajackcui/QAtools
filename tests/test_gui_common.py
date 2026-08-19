@@ -36,8 +36,15 @@ class GuiCommonTests(unittest.TestCase):
         set_theme.assert_called_once_with("dark", root=root)
         self.assertTrue(root._toolshub_sun_valley_theme_applied)
 
-    def test_macos_system_fonts_keep_their_native_size(self) -> None:
+    def test_typography_is_derived_from_the_native_base_size(self) -> None:
         font_names = (
+            gui_common.BODY_FONT,
+            gui_common.SMALL_FONT,
+            gui_common.CATEGORY_FONT,
+            gui_common.LABEL_FONT,
+            gui_common.SECTION_FONT,
+            gui_common.TITLE_FONT,
+            gui_common.BRAND_FONT,
             "SunValleyCaptionFont",
             "SunValleyBodyFont",
             "SunValleyBodyStrongFont",
@@ -51,9 +58,9 @@ class GuiCommonTests(unittest.TestCase):
             "TkMenuFont",
         )
         fonts = {name: Mock() for name in font_names}
+        fonts["TkDefaultFont"].actual.return_value = 13
 
         with (
-            patch.object(gui_common.sys, "platform", "darwin"),
             patch.object(
                 gui_common,
                 "_preferred_ui_font_family",
@@ -65,10 +72,53 @@ class GuiCommonTests(unittest.TestCase):
                 side_effect=lambda name, root: fonts[name],
             ),
         ):
-            gui_common._configure_ui_fonts(SimpleNamespace())
+            gui_common._configure_ui_typography(SimpleNamespace())
 
         for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont"):
             fonts[name].configure.assert_called_once_with(family="PingFang SC")
+        fonts[gui_common.BODY_FONT].configure.assert_called_once_with(
+            family="PingFang SC",
+            size=13,
+            weight="normal",
+        )
+        fonts[gui_common.TITLE_FONT].configure.assert_called_once_with(
+            family="PingFang SC",
+            size=21,
+            weight="bold",
+        )
+
+    def test_windows_uses_one_system_dpi_scale(self) -> None:
+        dpi_api = Mock()
+        fake_windll = SimpleNamespace(
+            shcore=SimpleNamespace(SetProcessDpiAwareness=dpi_api)
+        )
+
+        with (
+            patch.object(gui_common.sys, "platform", "win32"),
+            patch.object(gui_common.ctypes, "windll", fake_windll, create=True),
+        ):
+            gui_common.configure_system_dpi_awareness()
+
+        dpi_api.assert_called_once_with(1)
+
+    def test_application_root_applies_dpi_policy_before_creating_tk(self) -> None:
+        calls: list[str] = []
+        root = object()
+        with (
+            patch.object(
+                gui_common,
+                "configure_system_dpi_awareness",
+                side_effect=lambda: calls.append("dpi"),
+            ),
+            patch.object(
+                gui_common.tk,
+                "Tk",
+                side_effect=lambda: calls.append("tk") or root,
+            ),
+        ):
+            self.assertIs(gui_common.create_application_root(), root)
+
+        self.assertEqual(calls, ["dpi", "tk"])
 
     def test_parse_positive_int_accepts_blank_default(self) -> None:
         self.assertEqual(parse_positive_int("", default=2, field_name="开始行"), 2)

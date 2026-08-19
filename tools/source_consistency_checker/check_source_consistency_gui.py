@@ -14,6 +14,7 @@ from tools.gui_common import (
     add_optional_status_label,
     add_file_picker_row,
     configure_tool_page_style,
+    create_application_root,
     create_section,
     parse_positive_int,
 )
@@ -188,7 +189,7 @@ class SourceConsistencyCheckerApp(OutputPreviewMixin, ttk.Frame):
 
 
 def main() -> None:
-    root = tk.Tk()
+    root = create_application_root()
     root.title("相同 Source 译文一致性检查")
     root.resizable(True, True)
     app = SourceConsistencyCheckerApp(root)

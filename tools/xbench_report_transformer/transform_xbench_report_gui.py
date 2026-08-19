@@ -14,6 +14,7 @@ from tools.gui_common import (
     add_optional_status_label,
     add_file_picker_row,
     configure_tool_page_style,
+    create_application_root,
     create_section,
 )
 
@@ -142,7 +143,7 @@ class XbenchReportTransformerApp(OutputPreviewMixin, ttk.Frame):
 
 
 def main() -> None:
-    root = tk.Tk()
+    root = create_application_root()
     root.title("Xbench QA Report 转换")
     root.resizable(True, True)
     app = XbenchReportTransformerApp(root)

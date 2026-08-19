@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ctypes
 from pathlib import Path
 import sys
 import tkinter as tk
@@ -16,6 +17,13 @@ PRIMARY_BUTTON_STYLE = "Accent.TButton"
 SECTION_FRAME_STYLE = "Tool.Section.TLabelframe"
 MUTED_LABEL_STYLE = "Tool.Muted.TLabel"
 FILE_PATH_DISPLAY_WIDTH = 38
+BODY_FONT = "Tool.Body.Font"
+SMALL_FONT = "Tool.Small.Font"
+CATEGORY_FONT = "Tool.Category.Font"
+LABEL_FONT = "Tool.Label.Font"
+SECTION_FONT = "Tool.Section.Font"
+TITLE_FONT = "Tool.Title.Font"
+BRAND_FONT = "Tool.Brand.Font"
 
 # Sun Valley dark theme palette. Custom colors are limited to the application
 # shell; standard controls are rendered by sv-ttk itself.
@@ -27,6 +35,24 @@ APP_TEXT = "#fafafa"
 APP_MUTED_TEXT = "#9e9e9e"
 APP_SELECTION_BACKGROUND = "#2f60d8"
 APP_SELECTION_TEXT = "#ffffff"
+
+
+def configure_system_dpi_awareness() -> None:
+    """Use one Windows DPI scale for the process; Tk handles that scale."""
+
+    if sys.platform != "win32":
+        return
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except (AttributeError, OSError):
+        pass
+
+
+def create_application_root() -> tk.Tk:
+    """Create a Tk root after applying the process-wide DPI policy."""
+
+    configure_system_dpi_awareness()
+    return tk.Tk()
 
 
 def _preferred_ui_font_family(widget: tk.Misc) -> str:
@@ -50,45 +76,60 @@ def _preferred_ui_font_family(widget: tk.Misc) -> str:
     return str(default_font.actual("family"))
 
 
-def _configure_ui_fonts(widget: tk.Misc) -> None:
-    """Replace unavailable Sun Valley fonts with a native CJK UI family."""
+def _configure_named_font(
+    widget: tk.Misc,
+    *,
+    name: str,
+    family: str,
+    size: int,
+    weight: str,
+) -> tkfont.Font:
+    try:
+        named_font = tkfont.nametofont(name, root=widget)
+    except tk.TclError:
+        named_font = tkfont.Font(root=widget, name=name)
+    named_font.configure(family=family, size=max(size, 8), weight=weight)
+    return named_font
 
+
+def _configure_ui_typography(widget: tk.Misc) -> None:
+    """Derive all application font roles once from Tk's native UI font."""
+
+    default_font = tkfont.nametofont("TkDefaultFont", root=widget)
     family = _preferred_ui_font_family(widget)
-    font_specs = {
-        "SunValleyCaptionFont": (9, "normal"),
-        "SunValleyBodyFont": (10, "normal"),
-        "SunValleyBodyStrongFont": (10, "bold"),
-        "SunValleyBodyLargeFont": (12, "normal"),
-        "SunValleySubtitleFont": (14, "bold"),
-        "SunValleyTitleFont": (18, "bold"),
-        "SunValleyTitleLargeFont": (24, "bold"),
-        "SunValleyDisplayFont": (36, "bold"),
-    }
-    for font_name, (size, weight) in font_specs.items():
-        theme_font = tkfont.nametofont(font_name, root=widget)
-        theme_font.configure(family=family, size=size, weight=weight)
+    native_size = abs(int(default_font.actual("size"))) or 10
+    body_size = max(native_size, 10)
 
     for font_name in ("TkDefaultFont", "TkTextFont", "TkMenuFont"):
-        system_font = tkfont.nametofont(font_name, root=widget)
-        font_options: dict[str, object] = {"family": family}
-        if sys.platform == "win32":
-            font_options["size"] = 10
-        system_font.configure(**font_options)
+        tkfont.nametofont(font_name, root=widget).configure(family=family)
 
-
-def _font_specs(widget: tk.Misc) -> dict[str, tuple[str, int, str]]:
-    default_font = tkfont.nametofont("TkDefaultFont", root=widget)
-    family = str(default_font.actual("family"))
-    native_size = abs(int(default_font.actual("size"))) or 10
-    body_size = max(native_size, 10) if sys.platform == "win32" else native_size
-    return {
-        "body": (family, body_size, "normal"),
-        "small": (family, max(body_size - 1, 8), "normal"),
-        "label": (family, body_size, "bold"),
-        "section": (family, body_size + 1, "bold"),
-        "title": (family, body_size + 8, "bold"),
-        "brand": (family, body_size + 3, "bold"),
+    font_roles = {
+        BODY_FONT: (0, "normal"),
+        SMALL_FONT: (-1, "normal"),
+        CATEGORY_FONT: (-1, "bold"),
+        LABEL_FONT: (0, "bold"),
+        SECTION_FONT: (1, "bold"),
+        TITLE_FONT: (8, "bold"),
+        BRAND_FONT: (3, "bold"),
+        "SunValleyCaptionFont": (-1, "normal"),
+        "SunValleyBodyFont": (0, "normal"),
+        "SunValleyBodyStrongFont": (0, "bold"),
+        "SunValleyBodyLargeFont": (2, "normal"),
+        "SunValleySubtitleFont": (4, "bold"),
+        "SunValleyTitleFont": (8, "bold"),
+        "SunValleyTitleLargeFont": (14, "bold"),
+        "SunValleyDisplayFont": (26, "bold"),
     }
+    configured_fonts = {}
+    for name, (size_offset, weight) in font_roles.items():
+        configured_fonts[name] = _configure_named_font(
+            widget,
+            name=name,
+            family=family,
+            size=body_size + size_offset,
+            weight=weight,
+        )
+    setattr(widget, "_toolshub_named_fonts", configured_fonts)
 
 
 def _apply_sun_valley_theme(root: tk.Tk) -> None:
@@ -101,25 +142,26 @@ def _apply_sun_valley_theme(root: tk.Tk) -> None:
 
 
 def configure_tool_page_style(widget: tk.Misc) -> None:
-    """Apply Sun Valley dark and the small set of shared app styles."""
+    """Initialize the shared theme and typography once per Tk interpreter."""
 
     tk_root = widget._root()
     _apply_sun_valley_theme(tk_root)
-    _configure_ui_fonts(tk_root)
-
-    style = ttk.Style(widget)
-    fonts = _font_specs(widget)
     window = widget.winfo_toplevel()
     window.configure(background=APP_WINDOW_BACKGROUND)
+    if getattr(tk_root, "_toolshub_shared_styles_configured", False):
+        return
+
+    _configure_ui_typography(tk_root)
+    style = ttk.Style(widget)
     window.option_add("*selectBackground", APP_SELECTION_BACKGROUND)
     window.option_add("*selectForeground", APP_SELECTION_TEXT)
     window.option_add("*TCombobox*Listbox.background", APP_INPUT_BACKGROUND)
     window.option_add("*TCombobox*Listbox.foreground", APP_TEXT)
 
-    style.configure(".", font=fonts["body"])
+    style.configure(".", font=BODY_FONT)
     style.configure(
         PRIMARY_BUTTON_STYLE,
-        font=fonts["label"],
+        font=LABEL_FONT,
         padding=(16, 8),
     )
     style.configure(
@@ -128,13 +170,14 @@ def configure_tool_page_style(widget: tk.Misc) -> None:
     )
     style.configure(
         f"{SECTION_FRAME_STYLE}.Label",
-        font=fonts["section"],
+        font=SECTION_FONT,
     )
     style.configure(
         MUTED_LABEL_STYLE,
         foreground=APP_MUTED_TEXT,
-        font=fonts["small"],
+        font=SMALL_FONT,
     )
+    setattr(tk_root, "_toolshub_shared_styles_configured", True)
 
 
 def create_section(
