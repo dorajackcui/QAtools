@@ -175,10 +175,6 @@ class ToolshubApp:
         self.content_frame.rowconfigure(0, weight=1)
 
         self._build_tool_pages()
-        # Pre-layout every page while the root is still withdrawn. This keeps
-        # page switches immediate on macOS without leaving every native widget
-        # tree mapped and repainting during window moves on Windows.
-        self.root.update_idletasks()
         first_tool = self.tool_groups[0].tools[0]
         self.select_tool(first_tool.key)
 
@@ -268,14 +264,6 @@ class ToolshubApp:
     def select_tool(self, key: str) -> None:
         tool = self.tools_by_key[key]
         frame = self.tool_frames[key]
-        if self.current_tool_frame is None:
-            for other_frame in self.tool_frames.values():
-                if other_frame is not frame:
-                    other_frame.grid_remove()
-        elif self.current_tool_frame is not frame:
-            self.current_tool_frame.grid_remove()
-
-        frame.grid(row=0, column=0, sticky="nsew")
         self.selected_tool_key.set(key)
         self.current_tool_title.set(tool.title)
         self.current_tool_frame = frame
