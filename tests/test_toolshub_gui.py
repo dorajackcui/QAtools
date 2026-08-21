@@ -182,7 +182,7 @@ class ToolshubLayoutTests(unittest.TestCase):
             ["Batch 拆分", "Xbench QA 转换"],
         )
 
-    def test_all_tool_pages_are_created_at_startup(self) -> None:
+    def test_all_tool_pages_are_preloaded_but_only_initial_page_is_mapped(self) -> None:
         root, app = self.make_app()
 
         try:
@@ -196,8 +196,10 @@ class ToolshubLayoutTests(unittest.TestCase):
                     "xbench_report",
                 },
             )
-            for frame in app.tool_frames.values():
-                self.assertEqual(frame.winfo_manager(), "grid")
+            self.assertEqual(app.tool_frames["workflow"].winfo_manager(), "grid")
+            for key, frame in app.tool_frames.items():
+                if key != "workflow":
+                    self.assertEqual(frame.winfo_manager(), "")
         finally:
             root.destroy()
 
@@ -212,7 +214,7 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertEqual(app.selected_tool_key.get(), "french_nbsp")
             self.assertEqual(app.current_tool_title.get(), "法语 NBSP 恢复")
             self.assertIs(app.current_tool_frame, app.tool_frames["french_nbsp"])
-            self.assertEqual(workflow_frame.winfo_manager(), "grid")
+            self.assertEqual(workflow_frame.winfo_manager(), "")
             self.assertEqual(app.current_tool_frame.winfo_manager(), "grid")
         finally:
             root.destroy()
@@ -228,7 +230,7 @@ class ToolshubLayoutTests(unittest.TestCase):
 
             self.assertIs(app.current_tool_frame, nbsp_frame)
             self.assertEqual(nbsp_frame.winfo_manager(), "grid")
-            self.assertEqual(app.tool_frames["workflow"].winfo_manager(), "grid")
+            self.assertEqual(app.tool_frames["workflow"].winfo_manager(), "")
         finally:
             root.destroy()
 

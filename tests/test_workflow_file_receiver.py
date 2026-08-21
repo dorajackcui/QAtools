@@ -75,6 +75,7 @@ class WorkflowFileReceiverTests(unittest.TestCase):
                 second_receiver.close()
                 first_receiver.close()
 
+    @unittest.skipIf(os.name == "nt", "Finder file forwarding requires fcntl")
     def test_receiver_preserves_nbsp_restore_action(self) -> None:
         with tempfile.TemporaryDirectory(dir="/tmp") as tmp_dir:
             temp_path = Path(tmp_dir)
