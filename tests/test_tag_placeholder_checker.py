@@ -50,9 +50,24 @@ class ExtractTokensTests(unittest.TestCase):
 
         self.assertEqual(
             extract_tokens(text, token_types=("memoq", "brace")),
-            ["{1}", "{2>", "<3}", "{name}"],
+            ["{1}", "{2>", "{2>Glace du Néant<3}", "<3}", "{name}"],
         )
-        self.assertEqual(extract_tokens(text, token_types=("brace",)), ["{name}"])
+        self.assertEqual(
+            extract_tokens(text, token_types=("brace",)),
+            ["{1}", "{2>Glace du Néant<3}", "{name}"],
+        )
+        self.assertEqual(
+            extract_tokens(text, token_types=("memoq",)),
+            ["{1}", "{2>", "<3}"],
+        )
+
+    def test_default_standard_tags_do_not_capture_memoq_half_markers(self) -> None:
+        text = "{1}{2>Glace du Néant<3} <text>"
+
+        self.assertEqual(
+            extract_tokens(text),
+            ["{1}", "{2>Glace du Néant<3}", "<text>"],
+        )
 
     def test_extract_tokens_supports_square_color_tags(self) -> None:
         text = "保留 [color=red]、[color = #fff] 和 [/color]，忽略 [stage1]"
@@ -204,14 +219,17 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(summary_values["source列"], "A")
             self.assertEqual(summary_values["target列"], "B")
             self.assertEqual(summary_values["开始行"], 2)
-            self.assertEqual(summary_values["检查类型"], r"尖括号tag、花括号placeholder、\n mark、memoQ tag")
+            self.assertEqual(
+                summary_values["检查类型"],
+                r"尖括号tag、花括号placeholder、\n mark、memoQ marker",
+            )
             self.assertEqual(summary_values["总行数"], 6)
             self.assertEqual(summary_values["命中检查类型行数"], 6)
             self.assertEqual(summary_values["含尖括号tag行数"], 3)
             self.assertEqual(summary_values["含方括号color tag行数"], 0)
             self.assertEqual(summary_values["含花括号placeholder行数"], 3)
             self.assertEqual(summary_values[r"含\n mark行数"], 1)
-            self.assertEqual(summary_values["含memoQ tag行数"], 0)
+            self.assertEqual(summary_values["含memoQ marker行数"], 0)
             self.assertEqual(summary_values["问题行数"], 5)
             self.assertEqual(summary_values["问题条数"], 5)
 
@@ -269,6 +287,36 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet.max_row, 2)
             self.assertEqual(problem_sheet["E2"].value, r"\n mark不一致")
 
+    def test_process_excel_default_treats_numeric_braces_as_standard_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(["保留 {1}", "缺少数字 placeholder"])
+            worksheet.append(["保留 {2>文字<3}", "缺少完整包络 placeholder"])
+            workbook.save(input_path)
+
+            summary = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+            )
+
+            self.assertEqual(
+                summary.selected_token_types,
+                ("angle", "square_color", "brace", "newline"),
+            )
+            self.assertEqual(summary.brace_rows, 2)
+            self.assertEqual(summary.memoq_rows, 0)
+            self.assertEqual(summary.problem_rows, 2)
+            problem_sheet = load_workbook(summary.output_path)["标签占位问题"]
+            self.assertEqual(problem_sheet["E2"].value, "花括号placeholder不一致")
+            self.assertIn("target缺少={1}", problem_sheet["D2"].value)
+            self.assertEqual(problem_sheet["E3"].value, "花括号placeholder不一致")
+            self.assertIn("target缺少={2>文字<3}", problem_sheet["D3"].value)
+
     def test_process_excel_reports_memoq_tag_mismatches_separately(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
@@ -286,7 +334,7 @@ class ProcessExcelTests(unittest.TestCase):
                 source_column="A",
                 target_column="B",
                 start_row=2,
-                token_types=("memoq", "brace"),
+                token_types=("memoq",),
             )
 
             self.assertEqual(summary.rows_with_selected_tokens, 1)
@@ -298,7 +346,7 @@ class ProcessExcelTests(unittest.TestCase):
 
             workbook = load_workbook(summary.output_path)
             problem_sheet = workbook["标签占位问题"]
-            self.assertEqual(problem_sheet["E2"].value, "memoQ tag不一致")
+            self.assertEqual(problem_sheet["E2"].value, "memoQ marker不一致")
             self.assertIn("target缺少=<3}", str(problem_sheet["D2"].value))
             self.assertIn("target多出=<4}", str(problem_sheet["D2"].value))
 
@@ -333,11 +381,11 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(summary.problem_rows, 2)
             self.assertEqual(summary.problem_count, 2)
             problem_sheet = load_workbook(summary.output_path)["标签占位问题"]
-            self.assertEqual(problem_sheet["E2"].value, "memoQ tag不一致")
+            self.assertEqual(problem_sheet["E2"].value, "memoQ marker不一致")
             self.assertIn("source={1} x2", problem_sheet["D2"].value)
             self.assertIn("target={1}", problem_sheet["D2"].value)
             self.assertIn("target缺少={1}", problem_sheet["D2"].value)
-            self.assertEqual(problem_sheet["E3"].value, "memoQ tag不一致")
+            self.assertEqual(problem_sheet["E3"].value, "memoQ marker不一致")
             self.assertIn("source={1} x2", problem_sheet["D3"].value)
             self.assertIn("target={1} x3", problem_sheet["D3"].value)
             self.assertIn("target多出={1}", problem_sheet["D3"].value)

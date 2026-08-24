@@ -54,7 +54,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         name="tag-check",
-        summary="检查 Tag、Placeholder、换行标记和 memoQ Tag",
+        summary="检查常规 Tag、Placeholder、换行标记和 memoQ Marker",
         module="tools.tag_placeholder_checker.check_tags_and_placeholders",
         mode="legacy",
         legacy_entry="python tools/tag_placeholder_checker/check_tags_and_placeholders.py",

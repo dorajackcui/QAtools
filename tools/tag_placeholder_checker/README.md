@@ -2,7 +2,7 @@
 
 统一 CLI：`qatools tag-check --help`。下文中的脚本路径作为兼容入口保留。
 
-用于读取一份双语 Excel，逐行检查 `source` / `target` 中的 `<...>`、`[color=...]` / `[/color]`、`{...}` / `{{...}}`、`\n` 和 memoQ tag 是否一致，并输出新的检查结果 Excel。
+用于读取一份双语 Excel，逐行检查 `source` / `target` 中的常规 Tag 或 memoQ Marker 是否一致，并输出新的检查结果 Excel。
 
 处理完成后会生成新的检查结果 Excel，并新增两个工作表：
 
@@ -14,16 +14,17 @@
 ## 规则
 
 - 输入为一份双语 Excel：`source` / `target`
-- 默认同时检查五类片段：
+- 默认使用“常规 Tag”模式，检查四类片段：
   - `<...>`：按 tag 处理
   - `[color=...]`、`[/color]`：按方括号 color tag 处理
-  - `{...}`、`{{...}}`：按 placeholder 处理
+  - `{...}`、`{{...}}`：按 placeholder 处理，包括 `{1}`
   - `\n`：按独立 mark 处理
-  - `{n}`、`{n>`、`<n}`：按 memoQ tag 处理，其中 `n` 为数字
+- “memoQ Marker”模式只检查 `{n}`、`{n>`、`<n}`，其中 `n` 为数字
 - 逐行比较 source / target 中的片段集合
 - `<...>` 会识别引号属性中的 `>`；尖括号内侧首尾带空白的普通比较表达式（如 `value < 10 and count > 0`）不作为 tag
-- `{1}{2>Glace du Néant<3}` 会识别为 memoQ tag `{1}`、`{2>`、`<3}`，不会把整段 `{2>Glace du Néant<3}` 当成普通 `{...}` placeholder
-- `memoq` 是独立检查类型；旧的 `numeric` 参数仍兼容，但不推荐继续使用
+- 常规模式会识别 `{1}`，也会把整段 `{2>Glace du Néant<3}` 作为一个花括号 placeholder，但不会单独捕获 `{2>`、`<3}`
+- memoQ 模式会把 `{1}{2>Glace du Néant<3}` 识别为 `{1}`、`{2>`、`<3}`
+- `memoq` 是独立检查类型；显式同时选择 `brace` 和 `memoq` 时，纯数字 `{n}` 只归入 `memoq`，避免重复报告；旧的 `numeric` 参数仍兼容，但不推荐继续使用
 - 会检查：
   - target 缺少 source 中已有的片段
   - target 多出 source 中没有的片段
@@ -69,9 +70,9 @@ GUI 支持：
 - 自动读取工作表列表，用下拉框选择工作表
 - 自动识别第 1 行表头中的 `source` / `target` 列并回填
 - 默认输出为新的 Excel 文件，也可手动指定输出路径
-- 可单独勾选 `<...>`、`[color=...]` / `[/color]`、`{...}`、`\n` 或 memoQ tag 类型进行检查
+- 常规模式可单独勾选 `<...>`、`[color=...]` / `[/color]`、`{...}` 或 `\n` 类型
 - 可选择尖括号 tag 过滤 JSON，与 CLI 的 `--angle-config` 规则一致
-- GUI 默认使用“全部 Tag”模式，同时检查所选常规类型和 memoQ 数字占位符；也可切换为“仅 memoQ Tag”
+- GUI 默认使用“常规 Tag”模式，也可切换为互斥的“memoQ Marker”模式
 
 ## 常用参数
 
@@ -107,6 +108,6 @@ GUI 支持：
 - 含方括号 color tag 行数
 - 含花括号 placeholder 行数
 - 含 `\n` mark 行数
-- 含 memoQ tag 行数
+- 含 memoQ marker 行数
 - 问题行数
 - 问题条数

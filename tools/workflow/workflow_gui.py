@@ -357,14 +357,14 @@ class WorkflowRunnerApp(ttk.Frame):
         )
         ttk.Radiobutton(
             self.tag_settings_frame,
-            text="全部 Tag",
+            text="常规 Tag",
             variable=self.tag_mode_var,
             value="standard",
             command=self.handle_tag_mode_changed,
         ).grid(row=0, column=1, sticky="w", padx=(12, 0))
         ttk.Radiobutton(
             self.tag_settings_frame,
-            text="仅 memoQ Tag",
+            text="memoQ Marker",
             variable=self.tag_mode_var,
             value="memoq",
             command=self.handle_tag_mode_changed,
@@ -852,7 +852,6 @@ class WorkflowRunnerApp(ttk.Frame):
             token_types.append("brace")
         if self.newline_var.get():
             token_types.append("newline")
-        token_types.append("memoq")
         return tuple(token_types)
 
     def get_selected_target_text_rules(self) -> tuple[str, ...]:

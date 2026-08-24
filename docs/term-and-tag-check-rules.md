@@ -13,7 +13,7 @@
 | `【】` | `【术语】` |
 | `[]` | `[术语]`、`［术语］` |
 
-`<...>` 和 `{...}` 不作为术语 mark；它们分别交给普通 tag / placeholder 检查和 memoQ tag 检查。
+`<...>` 和 `{...}` 不作为术语 mark；它们交给常规 Tag 或 memoQ Marker 检查。
 
 ### 默认选择
 
@@ -61,25 +61,26 @@ Tag 检查用于逐行比较 source / target 中 tag、placeholder 和 mark toke
 | --- | --- | --- |
 | `angle` | `<...> tag` | `<...>` |
 | `square_color` | `[color=...] tag` | `[color=...]`、`[/color]` |
-| `brace` | `{...} placeholder` | `{name}`、`{{name}}`、`{count}` 等花括号 placeholder |
+| `brace` | `{...} placeholder` | `{name}`、`{{name}}`、`{count}`、`{1}` 等花括号 placeholder |
 | `newline` | `\n mark` | 字面量 `\n` |
-| `memoq` | memoQ tag | `{1}`、`{2>`、`<3}` |
+| `memoq` | memoQ marker | `{1}`、`{2>`、`<3}` |
 
 ### 默认选择
 
 | 入口 | 默认检查类型 |
 | --- | --- |
-| CLI / `process_excel()` 未显式传参 | `angle`、`square_color`、`brace`、`newline`、`memoq` |
-| Tag 检查 GUI | `angle`、`square_color`、`brace`、`newline`、`memoq` |
-| Workflow GUI | `angle`、`square_color`、`brace`、`newline`、`memoq` |
+| CLI / `process_excel()` 未显式传参 | 常规 Tag：`angle`、`square_color`、`brace`、`newline` |
+| Tag 检查 GUI | 常规 Tag：`angle`、`square_color`、`brace`、`newline` |
+| Workflow GUI | 常规 Tag：`angle`、`square_color`、`brace`、`newline` |
 
-GUI 默认使用“全部 Tag”模式，同时检查所选常规类型和 memoQ 数字占位符；也可以切换为“仅 memoQ Tag”。Tag 独立 GUI 和 Workflow GUI 都可选择尖括号过滤 JSON；CLI / `process_excel()` 保持可显式组合，方便脚本按需调用。
+GUI 提供互斥的“常规 Tag”和“memoQ Marker”两种模式。常规模式检查所选的四类常规 token；memoQ 模式只检查 memoQ marker。Tag 独立 GUI 和 Workflow GUI 都可选择尖括号过滤 JSON；CLI / `process_excel()` 仍可显式组合类型。
 
 ### Tag token 过滤
 
 - `angle` 默认检查 `<...>`，能跳过引号属性中的 `>`；尖括号内侧首尾带空白的普通比较表达式不作为 tag。
 - `square_color` 只检查 `[color=...]` 和 `[/color]`，不会把普通 `[stage1]` 或术语 mark `[]` 都当成 tag。
-- `{1}`、`{2>...<3}` 这类 memoQ protected marker 不会作为普通 `{...}` placeholder 检查，会交给 `memoq` 类型处理。
+- 常规模式会把 `{1}` 和完整的 `{2>...<3}` 包络分别当作一个花括号 placeholder，但不会单独捕获 `{2>`、`<3}` 两侧半 marker。
+- memoQ 模式会提取 `{1}`、`{2>`、`<3}`。显式同时选择 `brace` 和 `memoq` 时，纯数字 `{1}` 只归入 `memoq`，避免重复报告。
 - 普通文本里的 `<apple>` 也会作为 `<...>` tag 检查。
 
 ### 比对方式
@@ -98,4 +99,4 @@ Workflow 同时运行术语检查和 Tag 检查时，顺序是：
 1. 先运行术语检查，写入 `术语表` 和 `问题列`。
 2. 再运行 Tag 检查，写入 `标签占位问题` 和 `检查汇总`。
 
-两类检查不会共享术语结果，也不会互相修改 source / target 原文。术语检查不再使用 `<...>` 作为术语 mark；普通 tag / placeholder 与 memoQ tag 在 Tag 检查中作为独立检查类型选择。
+两类检查不会共享术语结果，也不会互相修改 source / target 原文。术语检查不再使用 `<...>` 作为术语 mark；常规 Tag 与 memoQ Marker 在 GUI 中作为互斥模式选择。

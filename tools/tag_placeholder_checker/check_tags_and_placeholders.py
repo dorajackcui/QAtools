@@ -32,16 +32,17 @@ from tools.excel_output import (
 PROBLEM_SHEET_NAME = "标签占位问题"
 SUMMARY_SHEET_NAME = "检查汇总"
 CANONICAL_TOKEN_TYPES = ("angle", "square_color", "brace", "newline", "memoq")
+STANDARD_TOKEN_TYPES = ("angle", "square_color", "brace", "newline")
 LEGACY_TOKEN_TYPE_ALIASES = {"numeric": "memoq"}
 SUPPORTED_TOKEN_TYPES = CANONICAL_TOKEN_TYPES + tuple(LEGACY_TOKEN_TYPE_ALIASES)
-DEFAULT_TOKEN_TYPES = CANONICAL_TOKEN_TYPES
+DEFAULT_TOKEN_TYPES = STANDARD_TOKEN_TYPES
 TOKEN_LABELS = {
     "angle": "尖括号tag",
     "square_color": "方括号color tag",
     "brace": "花括号placeholder",
     "newline": r"\n mark",
-    "memoq": "memoQ tag",
-    "numeric": "memoQ tag",
+    "memoq": "memoQ marker",
+    "numeric": "memoQ marker",
 }
 TOKEN_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
     "angle": (),
@@ -57,7 +58,6 @@ BRACE_TOKEN_PATTERN = re.compile(
 )
 ANGLE_TAG_NAME_PATTERN = re.compile(r"^[^\s/=<>]+")
 NUMERIC_BRACE_PATTERN = re.compile(r"^\d+$")
-NUMERIC_TAG_ENVELOPE_PATTERN = re.compile(r"^\d+>.*<\d+$", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -179,11 +179,8 @@ def should_keep_angle_token(
     return any(regex.search(inner_text) or regex.search(display_text) for regex in angle_regexes)
 
 
-def should_keep_brace_token(inner_text: str) -> bool:
-    return not (
-        NUMERIC_BRACE_PATTERN.fullmatch(inner_text)
-        or NUMERIC_TAG_ENVELOPE_PATTERN.fullmatch(inner_text)
-    )
+def should_keep_brace_token(inner_text: str, *, memoq_selected: bool) -> bool:
+    return not (memoq_selected and NUMERIC_BRACE_PATTERN.fullmatch(inner_text))
 
 
 def _character_is_escaped(text: str, index: int) -> bool:
@@ -297,7 +294,10 @@ def _extract_token_details(
             if (
                 token_type == "brace"
                 and not display_text.startswith("{{")
-                and not should_keep_brace_token(inner_text)
+                and not should_keep_brace_token(
+                    inner_text,
+                    memoq_selected="memoq" in normalized_token_types,
+                )
             ):
                 continue
             matches.append(
@@ -510,7 +510,7 @@ def write_summary_sheet(
         ("含方括号color tag行数", summary.square_color_rows),
         ("含花括号placeholder行数", summary.brace_rows),
         (r"含\n mark行数", summary.newline_rows),
-        ("含memoQ tag行数", summary.memoq_rows),
+        ("含memoQ marker行数", summary.memoq_rows),
         ("问题行数", summary.problem_rows),
         ("问题条数", summary.problem_count),
     ]
@@ -750,7 +750,7 @@ def main() -> None:
     print(f"含方括号color tag行数: {summary.square_color_rows}")
     print(f"含花括号placeholder行数: {summary.brace_rows}")
     print(rf"含\n mark行数: {summary.newline_rows}")
-    print(f"含memoQ tag行数: {summary.memoq_rows}")
+    print(f"含memoQ marker行数: {summary.memoq_rows}")
     print(f"问题行数: {summary.problem_rows}")
     print(f"问题条数: {summary.problem_count}")
     print(f"输出文件: {summary.output_path}")

@@ -40,7 +40,7 @@ qatools tag-check --help
 | `qatools qa` | 一次执行多项质量检查并生成统一报告 |
 | `qatools phraseloom` | 导出 Strings 并在翻译后回填 |
 | `qatools term-check` | 术语 mark 与历史 TB 检查 |
-| `qatools tag-check` | Tag、Placeholder、换行标记与 memoQ Tag 检查 |
+| `qatools tag-check` | 常规 Tag、Placeholder、换行标记与 memoQ Marker 检查 |
 | `qatools line-break-check` | 真实换行数量检查 |
 | `qatools consistency-check` | 同源译文一致性检查 |
 | `qatools chinese-check` | Target 中文字符与中文标点检查 |
