@@ -10,7 +10,6 @@ from tkinter import filedialog, messagebox, ttk
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
 from tools.gui_common import (
     APP_MAIN_BACKGROUND,
-    MUTED_LABEL_STYLE,
     PRIMARY_BUTTON_STYLE,
     SECTION_FRAME_STYLE,
     add_optional_status_label,
@@ -358,14 +357,14 @@ class WorkflowRunnerApp(ttk.Frame):
         )
         ttk.Radiobutton(
             self.tag_settings_frame,
-            text="常规 Tag",
+            text="全部 Tag",
             variable=self.tag_mode_var,
             value="standard",
             command=self.handle_tag_mode_changed,
         ).grid(row=0, column=1, sticky="w", padx=(12, 0))
         ttk.Radiobutton(
             self.tag_settings_frame,
-            text="memoQ Tag",
+            text="仅 memoQ Tag",
             variable=self.tag_mode_var,
             value="memoq",
             command=self.handle_tag_mode_changed,
@@ -853,6 +852,7 @@ class WorkflowRunnerApp(ttk.Frame):
             token_types.append("brace")
         if self.newline_var.get():
             token_types.append("newline")
+        token_types.append("memoq")
         return tuple(token_types)
 
     def get_selected_target_text_rules(self) -> tuple[str, ...]:

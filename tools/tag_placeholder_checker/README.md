@@ -71,7 +71,7 @@ GUI 支持：
 - 默认输出为新的 Excel 文件，也可手动指定输出路径
 - 可单独勾选 `<...>`、`[color=...]` / `[/color]`、`{...}`、`\n` 或 memoQ tag 类型进行检查
 - 可选择尖括号 tag 过滤 JSON，与 CLI 的 `--angle-config` 规则一致
-- GUI 中 memoQ tag 与其他检查类型互斥：勾选 memoQ 会取消普通 tag 组，勾选普通 tag 组会取消 memoQ
+- GUI 默认使用“全部 Tag”模式，同时检查所选常规类型和 memoQ 数字占位符；也可切换为“仅 memoQ Tag”
 
 ## 常用参数
 

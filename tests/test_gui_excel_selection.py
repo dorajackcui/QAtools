@@ -995,7 +995,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertNotIn("<>", app.mark_style_vars)
         self.assertFalse(app.history_details_expanded)
 
-    def test_tag_placeholder_gui_defaults_to_standard_tags_not_memoq(self) -> None:
+    def test_tag_placeholder_gui_defaults_to_all_tags_including_memoq(self) -> None:
         app = TagPlaceholderCheckerApp.__new__(TagPlaceholderCheckerApp)
         with (
             patch.object(TagPlaceholderCheckerApp, "_build_ui", lambda self: None),
@@ -1012,10 +1012,10 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertEqual(app.tag_mode_var.get(), "standard")
         self.assertEqual(
             app.get_selected_token_types(),
-            ("angle", "square_color", "brace", "newline"),
+            ("angle", "square_color", "brace", "newline", "memoq"),
         )
 
-    def test_tag_placeholder_gui_makes_memoq_mutually_exclusive_with_standard_tags(self) -> None:
+    def test_tag_placeholder_gui_supports_memoq_only_or_all_tags(self) -> None:
         app = TagPlaceholderCheckerApp.__new__(TagPlaceholderCheckerApp)
         app.angle_var = FakeBoolVar(True)
         app.square_color_var = FakeBoolVar(True)
@@ -1036,7 +1036,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
 
         self.assertEqual(
             app.get_selected_token_types(),
-            ("angle", "square_color", "brace", "newline"),
+            ("angle", "square_color", "brace", "newline", "memoq"),
         )
         self.assertTrue(
             all(widget.state == "normal" for widget in app.standard_tag_checkbuttons)
@@ -1056,7 +1056,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertTrue(app.term_mark_style_vars["[]"].get())
         self.assertNotIn("<>", app.term_mark_style_vars)
 
-    def test_workflow_gui_defaults_to_standard_tags_not_memoq(self) -> None:
+    def test_workflow_gui_defaults_to_all_tags_including_memoq(self) -> None:
         app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
         with (
             patch.object(WorkflowRunnerApp, "_build_ui", lambda self: None),
@@ -1073,10 +1073,10 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertEqual(app.tag_mode_var.get(), "standard")
         self.assertEqual(
             app.get_selected_tag_token_types(),
-            ("angle", "square_color", "brace", "newline"),
+            ("angle", "square_color", "brace", "newline", "memoq"),
         )
 
-    def test_workflow_gui_tag_mode_selects_memoq_or_standard_tags(self) -> None:
+    def test_workflow_gui_tag_mode_selects_memoq_only_or_all_tags(self) -> None:
         app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
         app.angle_var = FakeBoolVar(True)
         app.square_color_var = FakeBoolVar(True)
@@ -1089,7 +1089,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.tag_mode_var.set("standard")
         self.assertEqual(
             app.get_selected_tag_token_types(),
-            ("angle", "square_color", "brace", "newline"),
+            ("angle", "square_color", "brace", "newline", "memoq"),
         )
 
 

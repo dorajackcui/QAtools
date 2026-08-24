@@ -88,14 +88,14 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
         ttk.Label(settings_frame, text="检查模式").grid(row=0, column=0, sticky="w")
         ttk.Radiobutton(
             settings_frame,
-            text="常规 Tag",
+            text="全部 Tag",
             variable=self.tag_mode_var,
             value="standard",
             command=self.handle_tag_mode_changed,
         ).grid(row=0, column=1, sticky="w", padx=(12, 0))
         ttk.Radiobutton(
             settings_frame,
-            text="memoQ Tag",
+            text="仅 memoQ Tag",
             variable=self.tag_mode_var,
             value="memoq",
             command=self.handle_tag_mode_changed,
@@ -167,7 +167,10 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
 
         ttk.Label(
             settings_frame,
-            text="逐行比较 source / target；尖括号过滤配置为可选 JSON；memoQ Tag 与常规类型互斥。",
+            text=(
+                "逐行比较 source / target；“全部 Tag”同时检查常规类型和 memoQ 数字占位符；"
+                "尖括号过滤配置为可选 JSON。"
+            ),
             style=MUTED_LABEL_STYLE,
             wraplength=760,
         ).grid(row=3, column=0, columnspan=5, sticky="w", pady=(12, 0))
@@ -276,6 +279,7 @@ class TagPlaceholderCheckerApp(OutputPreviewMixin, ttk.Frame):
             token_types.append("brace")
         if self.newline_var.get():
             token_types.append("newline")
+        token_types.append("memoq")
         return tuple(token_types)
 
     def run_check(self) -> None:

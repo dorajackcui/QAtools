@@ -70,10 +70,10 @@ Tag 检查用于逐行比较 source / target 中 tag、placeholder 和 mark toke
 | 入口 | 默认检查类型 |
 | --- | --- |
 | CLI / `process_excel()` 未显式传参 | `angle`、`square_color`、`brace`、`newline`、`memoq` |
-| Tag 检查 GUI | `angle`、`square_color`、`brace`、`newline` |
-| Workflow GUI | `angle`、`square_color`、`brace`、`newline` |
+| Tag 检查 GUI | `angle`、`square_color`、`brace`、`newline`、`memoq` |
+| Workflow GUI | `angle`、`square_color`、`brace`、`newline`、`memoq` |
 
-GUI 中 memoQ tag 与其他检查类型互斥：勾选 memoQ 会取消普通 tag 组，勾选普通 tag 组会取消 memoQ。Tag 独立 GUI 和 Workflow GUI 都可选择尖括号过滤 JSON；CLI / `process_excel()` 保持可显式组合，方便脚本按需调用。
+GUI 默认使用“全部 Tag”模式，同时检查所选常规类型和 memoQ 数字占位符；也可以切换为“仅 memoQ Tag”。Tag 独立 GUI 和 Workflow GUI 都可选择尖括号过滤 JSON；CLI / `process_excel()` 保持可显式组合，方便脚本按需调用。
 
 ### Tag token 过滤
 

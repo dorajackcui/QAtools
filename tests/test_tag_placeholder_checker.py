@@ -302,6 +302,46 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertIn("target缺少=<3}", str(problem_sheet["D2"].value))
             self.assertIn("target多出=<4}", str(problem_sheet["D2"].value))
 
+    def test_process_excel_reports_repeated_numeric_placeholder_count_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(
+                [
+                    "<link=8>{1}</link> 和 <link=9>{1}</link>",
+                    "<link=8>{1}</link> et <link=9></link>",
+                ]
+            )
+            worksheet.append(
+                [
+                    "<link=8>{1}</link> 和 <link=9>{1}</link>",
+                    "<link=8>{1}</link>, <link=9>{1}</link> et {1}",
+                ]
+            )
+            workbook.save(input_path)
+
+            summary = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                token_types=("angle", "memoq"),
+            )
+
+            self.assertEqual(summary.problem_rows, 2)
+            self.assertEqual(summary.problem_count, 2)
+            problem_sheet = load_workbook(summary.output_path)["标签占位问题"]
+            self.assertEqual(problem_sheet["E2"].value, "memoQ tag不一致")
+            self.assertIn("source={1} x2", problem_sheet["D2"].value)
+            self.assertIn("target={1}", problem_sheet["D2"].value)
+            self.assertIn("target缺少={1}", problem_sheet["D2"].value)
+            self.assertEqual(problem_sheet["E3"].value, "memoQ tag不一致")
+            self.assertIn("source={1} x2", problem_sheet["D3"].value)
+            self.assertIn("target={1} x3", problem_sheet["D3"].value)
+            self.assertIn("target多出={1}", problem_sheet["D3"].value)
+
     def test_process_excel_reports_square_color_tag_mismatches(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
