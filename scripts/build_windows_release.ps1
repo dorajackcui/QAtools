@@ -152,6 +152,7 @@ try {
         "tools.chinese_target_checker.check_chinese_target",
         "tools.french_nbsp_restorer.restore_french_nbsp",
         "tools.excel_batcher.excel_batcher",
+        "tools.excel_merger.merge_active_sheets",
         "tools.xbench_report_transformer.transform_xbench_report"
     )
     $cliArguments = $commonArguments + @(

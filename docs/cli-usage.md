@@ -46,6 +46,7 @@ qatools tag-check --help
 | `qatools chinese-check` | Target 中文字符与中文标点检查 |
 | `qatools french-nbsp` | 法语 NBSP 恢复 |
 | `qatools batch` | 按行拆分 Excel batch，并在处理后复原 |
+| `qatools merge-sheets` | 合并目录内所有 Excel 文件的活动工作表 |
 | `qatools xbench` | Xbench QA Report 转换 |
 
 可用别名：
@@ -55,6 +56,7 @@ qatools tag-check --help
 - `qatools source-consistency` → `qatools consistency-check`
 - `qatools target-chinese` → `qatools chinese-check`
 - `qatools excel-batch` → `qatools batch`
+- `qatools merge-active-sheets` → `qatools merge-sheets`
 - `qatools xbench-transform` → `qatools xbench`
 
 ## 自动化调用约定
@@ -251,6 +253,21 @@ qatools batch restore ./artifacts/input_batches \
 文件，应与 batch 一起保留。完整规则见
 [Excel batch 工具](../tools/excel_batcher/README.md)。
 
+合并一个目录（含子目录）内所有 Excel 文件的活动工作表：
+
+```bash
+qatools merge-sheets ./excel-files \
+  -o ./artifacts/merged.xlsx
+```
+
+默认只保留第一份表头。如需保留每个文件的第一行：
+
+```bash
+qatools merge-sheets ./excel-files --keep-all-headers
+```
+
+完整规则见[合并表格工具](../tools/excel_merger/README.md)。
+
 ## 兼容入口
 
 统一 CLI 是新文档和新自动化的首选入口。以下旧入口继续可用：
@@ -266,6 +283,7 @@ qatools batch restore ./artifacts/input_batches \
 | `qatools chinese-check` | `python tools/chinese_target_checker/check_chinese_target.py` |
 | `qatools french-nbsp` | `python tools/french_nbsp_restorer/restore_french_nbsp.py` |
 | `qatools batch` | `python tools/excel_batcher/excel_batcher.py` |
+| `qatools merge-sheets` | `python tools/excel_merger/merge_active_sheets.py` |
 | `qatools xbench` | `python tools/xbench_report_transformer/transform_xbench_report.py` |
 
 `qatools qa` 是统一新增的一键检查 CLI；此前该流程只有 GUI。

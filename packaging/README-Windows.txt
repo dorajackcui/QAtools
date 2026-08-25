@@ -12,7 +12,7 @@ QAtools Windows 便携版
 
 工具箱包含一键质量检查、PhraseLoom、术语检查、Tag 检查、换行检查、
 同源译文一致性检查、Target 中文检查、Excel 分行、Excel batch 拆分与复原、
-法语 NBSP 恢复和 Xbench QA 转换。
+活动工作表合并、法语 NBSP 恢复和 Xbench QA 转换。
 
 命令行
 ------
@@ -24,6 +24,7 @@ QAtools Windows 便携版
   QAtools-CLI.exe phraseloom export source.xlsx
   QAtools-CLI.exe batch split input.xlsx --batch-size 1000
   QAtools-CLI.exe batch restore input_batches -o input_restored.xlsx
+  QAtools-CLI.exe merge-sheets excel_files -o merged.xlsx
 
 也可以双击 QAtools-CLI.cmd 查看帮助。传递参数时，QAtools-CLI.cmd 与
 QAtools-CLI.exe 的用法相同。

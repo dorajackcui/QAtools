@@ -1,7 +1,8 @@
 # QAtools
 
 QAtools 是面向本地化工作的 Excel 工具箱，统一提供质量检查、文本修复、
-Excel batch 拆分与复原、Xbench 报告转换和 PhraseLoom Strings 工作流。
+Excel batch 拆分与复原、活动工作表合并、Xbench 报告转换和 PhraseLoom
+Strings 工作流。
 
 所有功能共用一个仓库、一个安装入口、一个 GUI 和一个 CLI；原有脚本路径继续
 保留，避免已有自动化失效。
@@ -47,6 +48,7 @@ python -m qatools gui
 | Target 中文检查 | `qatools chinese-check` | 是 | [中文检查](tools/chinese_target_checker/README.md) |
 | 法语 NBSP 恢复 | `qatools french-nbsp` | 是 | [法语 NBSP](tools/french_nbsp_restorer/README.md) |
 | Excel batch 拆分与复原 | `qatools batch` | 是 | [batch 工具](tools/excel_batcher/README.md) |
+| 合并表格 | `qatools merge-sheets` | 是 | [合并表格](tools/excel_merger/README.md) |
 | Xbench QA 转换 | `qatools xbench` | 是 | [Xbench 转换](tools/xbench_report_transformer/README.md) |
 
 完整参数、批处理建议和旧入口映射统一维护在

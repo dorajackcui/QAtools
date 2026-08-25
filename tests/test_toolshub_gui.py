@@ -179,7 +179,7 @@ class ToolshubLayoutTests(unittest.TestCase):
         self.assertEqual(grouped_tools["文本修复"], ["法语 NBSP 恢复"])
         self.assertEqual(
             grouped_tools["其他"],
-            ["Batch 拆分", "Xbench QA 转换"],
+            ["Batch 拆分", "合并表格", "Xbench QA 转换"],
         )
 
     def test_all_tool_pages_are_created_at_startup(self) -> None:
@@ -193,6 +193,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                     "phraseloom",
                     "french_nbsp",
                     "excel_batcher",
+                    "excel_merger",
                     "xbench_report",
                 },
             )

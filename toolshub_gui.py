@@ -25,6 +25,7 @@ from tools.gui_common import (
 )
 from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
 from tools.excel_batcher.excel_batcher_gui import ExcelBatcherApp
+from tools.excel_merger.merge_active_sheets_gui import MergeActiveSheetsApp
 from tools.workflow.file_receiver import (
     FRENCH_NBSP_RESTORE_ACTION,
     QA_WORKFLOW_ACTION,
@@ -93,6 +94,11 @@ TOOL_GROUPS = (
                 key="excel_batcher",
                 title="Batch 拆分",
                 factory=ExcelBatcherApp,
+            ),
+            ToolItem(
+                key="excel_merger",
+                title="合并表格",
+                factory=MergeActiveSheetsApp,
             ),
             ToolItem(
                 key="xbench_report",

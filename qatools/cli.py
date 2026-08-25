@@ -98,6 +98,14 @@ COMMANDS: tuple[CommandSpec, ...] = (
         legacy_entry="python tools/excel_batcher/excel_batcher.py",
     ),
     CommandSpec(
+        name="merge-sheets",
+        summary="合并目录内所有 Excel 文件的活动工作表",
+        module="tools.excel_merger.merge_active_sheets",
+        mode="argv",
+        aliases=("merge-active-sheets",),
+        legacy_entry="python tools/excel_merger/merge_active_sheets.py",
+    ),
+    CommandSpec(
         name="xbench",
         summary="把 Xbench QA Report 转换为行级问题表",
         module="tools.xbench_report_transformer.transform_xbench_report",
