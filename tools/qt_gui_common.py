@@ -7,33 +7,129 @@ import os
 import sys
 from typing import Any
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal, Slot
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtCore import QObject, QPointF, QRunnable, QRectF, Qt, QThreadPool, Signal, Slot
+from PySide6.QtGui import QColor, QFontDatabase, QPainter, QPainterPath, QPalette, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProxyStyle,
     QPushButton,
     QSizePolicy,
+    QStyle,
+    QStyleOption,
     QVBoxLayout,
     QWidget,
 )
 
 
-APP_BACKGROUND = "#15181d"
-SIDEBAR_BACKGROUND = "#101217"
-CARD_BACKGROUND = "#1c2027"
-INPUT_BACKGROUND = "#222730"
-BORDER_COLOR = "#343b47"
-TEXT_COLOR = "#f0f2f5"
-MUTED_TEXT_COLOR = "#9ca5b4"
-ACCENT_COLOR = "#4f8cff"
-ACCENT_HOVER_COLOR = "#6a9dff"
-ERROR_COLOR = "#ff7373"
+# Warm, opaque light tokens derived from the user's Codex theme reference. The
+# supplied surface, ink, and accent remain the three anchors; nearby elevations
+# are deliberately subtle so structure is felt without adding visual noise.
+APP_BACKGROUND = "#f9f9f7"
+SIDEBAR_BACKGROUND = "#f1f1ee"
+CARD_BACKGROUND = "#ffffff"
+INPUT_BACKGROUND = "#f4f4f1"
+BORDER_COLOR = "#deded8"
+BORDER_STRONG_COLOR = "#c6c6bf"
+TEXT_COLOR = "#2d2d2b"
+MUTED_TEXT_COLOR = "#6f6f6a"
+SUBTLE_TEXT_COLOR = "#989892"
+ACCENT_COLOR = "#cc7d5e"
+ACCENT_HOVER_COLOR = "#b96e51"
+ACCENT_PRESSED_COLOR = "#a86149"
+ACCENT_FOREGROUND_COLOR = "#ffffff"
+ERROR_COLOR = "#ff5f38"
+
+
+class _ToolshubStyle(QProxyStyle):
+    """Draw accessible checkbox/radio indicators consistently on Win and macOS."""
+
+    def drawPrimitive(
+        self,
+        element: QStyle.PrimitiveElement,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        if element == QStyle.PrimitiveElement.PE_IndicatorCheckBox:
+            self._draw_checkbox(option, painter)
+            return
+        if element == QStyle.PrimitiveElement.PE_IndicatorRadioButton:
+            self._draw_radio(option, painter)
+            return
+        super().drawPrimitive(element, option, painter, widget)
+
+    @staticmethod
+    def _state(option: QStyleOption, flag: QStyle.StateFlag) -> bool:
+        return bool(option.state & flag)
+
+    def _draw_checkbox(self, option: QStyleOption, painter: QPainter) -> None:
+        enabled = self._state(option, QStyle.StateFlag.State_Enabled)
+        checked = self._state(option, QStyle.StateFlag.State_On)
+        partial = self._state(option, QStyle.StateFlag.State_NoChange)
+        hovered = self._state(option, QStyle.StateFlag.State_MouseOver)
+        rect = QRectF(option.rect).adjusted(1.0, 1.0, -1.0, -1.0)
+
+        if not enabled:
+            border, fill, mark = "#c8c8c2", "#ecece8", "#a1a19a"
+        elif checked or partial:
+            border, fill, mark = ACCENT_COLOR, ACCENT_COLOR, ACCENT_FOREGROUND_COLOR
+        else:
+            border = ACCENT_COLOR if hovered else "#aaa9a2"
+            fill, mark = INPUT_BACKGROUND, TEXT_COLOR
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor(border), 1.2))
+        painter.setBrush(QColor(fill))
+        painter.drawRoundedRect(rect, 3.0, 3.0)
+
+        mark_pen = QPen(QColor(mark), 1.7)
+        mark_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        mark_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(mark_pen)
+        if partial:
+            painter.drawLine(
+                QPointF(rect.left() + 3.2, rect.center().y()),
+                QPointF(rect.right() - 3.2, rect.center().y()),
+            )
+        elif checked:
+            path = QPainterPath()
+            path.moveTo(rect.left() + 3.0, rect.center().y())
+            path.lineTo(rect.left() + 5.8, rect.bottom() - 3.1)
+            path.lineTo(rect.right() - 2.6, rect.top() + 3.0)
+            painter.drawPath(path)
+        painter.restore()
+
+    def _draw_radio(self, option: QStyleOption, painter: QPainter) -> None:
+        enabled = self._state(option, QStyle.StateFlag.State_Enabled)
+        checked = self._state(option, QStyle.StateFlag.State_On)
+        hovered = self._state(option, QStyle.StateFlag.State_MouseOver)
+        rect = QRectF(option.rect).adjusted(1.0, 1.0, -1.0, -1.0)
+
+        if not enabled:
+            border, fill, dot = "#c8c8c2", "#ecece8", "#a1a19a"
+        elif checked:
+            border, fill, dot = ACCENT_COLOR, ACCENT_COLOR, ACCENT_FOREGROUND_COLOR
+        else:
+            border = ACCENT_COLOR if hovered else "#aaa9a2"
+            fill, dot = INPUT_BACKGROUND, TEXT_COLOR
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor(border), 1.2))
+        painter.setBrush(QColor(fill))
+        painter.drawEllipse(rect)
+        if checked:
+            dot_rect = rect.adjusted(4.0, 4.0, -4.0, -4.0)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(dot))
+            painter.drawEllipse(dot_rect)
+        painter.restore()
 
 
 def configure_qt_application(app: QApplication) -> None:
@@ -41,98 +137,206 @@ def configure_qt_application(app: QApplication) -> None:
 
     app.setApplicationName("QAtools")
     app.setOrganizationName("QAtools")
-    app.setStyle("Fusion")
+    app.setStyle(_ToolshubStyle("Fusion"))
+    available_fonts = set(QFontDatabase.families())
+    for preferred_font in ("Geist", "Inter"):
+        if preferred_font in available_fonts:
+            ui_font = app.font()
+            ui_font.setFamily(preferred_font)
+            app.setFont(ui_font)
+            break
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window, QColor(APP_BACKGROUND))
     palette.setColor(QPalette.ColorRole.WindowText, QColor(TEXT_COLOR))
     palette.setColor(QPalette.ColorRole.Base, QColor(INPUT_BACKGROUND))
     palette.setColor(QPalette.ColorRole.AlternateBase, QColor(CARD_BACKGROUND))
-    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(CARD_BACKGROUND))
-    palette.setColor(QPalette.ColorRole.ToolTipText, QColor(TEXT_COLOR))
+    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(TEXT_COLOR))
+    palette.setColor(QPalette.ColorRole.ToolTipText, QColor(APP_BACKGROUND))
     palette.setColor(QPalette.ColorRole.Text, QColor(TEXT_COLOR))
     palette.setColor(QPalette.ColorRole.Button, QColor(CARD_BACKGROUND))
     palette.setColor(QPalette.ColorRole.ButtonText, QColor(TEXT_COLOR))
     palette.setColor(QPalette.ColorRole.Highlight, QColor(ACCENT_COLOR))
-    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor("#6f7784"))
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor("#6f7784"))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor(ACCENT_FOREGROUND_COLOR))
+    palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(SUBTLE_TEXT_COLOR))
+    palette.setColor(QPalette.ColorRole.Link, QColor(ACCENT_HOVER_COLOR))
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor("#aaa9a3"))
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor("#aaa9a3"))
     app.setPalette(palette)
     app.setStyleSheet(
         f"""
         QWidget {{
             color: {TEXT_COLOR};
-            background: {APP_BACKGROUND};
             font-size: 13px;
         }}
-        QMainWindow, QScrollArea, QScrollArea > QWidget > QWidget {{
+        QMainWindow,
+        QWidget#toolshubShell,
+        QWidget#toolshubWorkspace,
+        QStackedWidget#toolPageStack,
+        QScrollArea,
+        QScrollArea > QWidget > QWidget {{
             background: {APP_BACKGROUND};
         }}
-        QGroupBox {{
+        QScrollArea {{ border: none; }}
+        QLabel {{ background: transparent; }}
+        QFrame#sectionCard {{
             background: {CARD_BACKGROUND};
             border: 1px solid {BORDER_COLOR};
             border-radius: 8px;
-            margin-top: 12px;
-            padding: 14px 12px 12px 12px;
+        }}
+        QFrame#pageActionBar {{
+            background: {APP_BACKGROUND};
+            border: none;
+            border-top: 1px solid {BORDER_COLOR};
+        }}
+        QLabel#sectionTitle {{
+            color: #464642;
+            background: transparent;
+            font-size: 12px;
             font-weight: 600;
         }}
-        QGroupBox::title {{
-            subcontrol-origin: margin;
-            left: 12px;
-            padding: 0 5px;
+        QLabel#pageTitle {{
             color: {TEXT_COLOR};
-            background: {CARD_BACKGROUND};
+            background: transparent;
+            font-size: 18px;
+            font-weight: 600;
+        }}
+        QLabel#brandLabel {{
+            color: #373734;
+            background: transparent;
+            font-size: 16px;
+            font-weight: 650;
+            padding: 0 8px 8px 8px;
+        }}
+        QLabel[role="navSection"] {{
+            color: #92928c;
+            background: transparent;
+            font-size: 11px;
+            font-weight: 600;
         }}
         QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {{
             background: {INPUT_BACKGROUND};
-            border: 1px solid {BORDER_COLOR};
-            border-radius: 5px;
-            padding: 6px 8px;
+            border: 1px solid #d6d6d0;
+            border-radius: 6px;
+            padding: 4px 7px;
             selection-background-color: {ACCENT_COLOR};
+            selection-color: {ACCENT_FOREGROUND_COLOR};
+        }}
+        QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QPlainTextEdit:hover {{
+            border-color: {BORDER_STRONG_COLOR};
         }}
         QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus {{
             border-color: {ACCENT_COLOR};
+        }}
+        QLineEdit:read-only {{
+            color: #767671;
+            background: #f1f1ee;
         }}
         QComboBox::drop-down {{ border: none; width: 24px; }}
         QComboBox QAbstractItemView {{
             background: {INPUT_BACKGROUND};
             border: 1px solid {BORDER_COLOR};
-            selection-background-color: {ACCENT_COLOR};
+            border-radius: 6px;
+            outline: none;
+            selection-background-color: #eee1dc;
+            selection-color: {TEXT_COLOR};
         }}
         QPushButton {{
-            background: #2a303a;
-            border: 1px solid #414958;
-            border-radius: 5px;
-            padding: 7px 13px;
+            color: #444440;
+            background: #f1f1ee;
+            border: 1px solid #d8d8d2;
+            border-radius: 6px;
+            padding: 5px 10px;
         }}
-        QPushButton:hover {{ background: #343c48; }}
-        QPushButton:pressed {{ background: #222832; }}
-        QPushButton:disabled {{ color: #6f7784; background: #20242b; border-color: #2a3038; }}
+        QPushButton:hover {{ background: #e9e9e5; border-color: {BORDER_STRONG_COLOR}; }}
+        QPushButton:focus {{ border-color: {ACCENT_COLOR}; }}
+        QPushButton:pressed {{ background: #e1e1dc; }}
+        QPushButton:disabled {{ color: #aaa9a3; background: #f4f4f1; border-color: #e5e5df; }}
         QPushButton[primary="true"] {{
             background: {ACCENT_COLOR};
             border-color: {ACCENT_COLOR};
-            color: white;
+            color: {ACCENT_FOREGROUND_COLOR};
             font-weight: 600;
-            padding: 9px 16px;
+            padding: 6px 14px;
         }}
-        QPushButton[primary="true"]:hover {{ background: {ACCENT_HOVER_COLOR}; }}
-        QCheckBox, QRadioButton {{ spacing: 7px; background: transparent; }}
-        QCheckBox::indicator, QRadioButton::indicator {{ width: 16px; height: 16px; }}
-        QTabWidget::pane {{ border: 1px solid {BORDER_COLOR}; border-radius: 6px; }}
-        QTabBar::tab {{
-            background: {CARD_BACKGROUND};
+        QPushButton[primary="true"]:hover {{
+            background: {ACCENT_HOVER_COLOR};
+            border-color: {ACCENT_HOVER_COLOR};
+        }}
+        QPushButton[primary="true"]:pressed {{
+            background: {ACCENT_PRESSED_COLOR};
+            border-color: {ACCENT_PRESSED_COLOR};
+        }}
+        QPushButton[primary="true"]:disabled {{
+            color: #8a5a47;
+            background: #e6b9a7;
+            border-color: #e6b9a7;
+        }}
+        QPushButton[navItem="true"] {{
+            color: #73736e;
+            text-align: left;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            padding: 7px 9px;
+        }}
+        QPushButton[navItem="true"]:hover {{
+            color: #3e3e3a;
+            background: #e9e9e5;
+        }}
+        QPushButton[navItem="true"]:checked {{
+            color: {TEXT_COLOR};
+            background: #e3e3de;
+            font-weight: 600;
+        }}
+        QCheckBox, QRadioButton {{ spacing: 6px; background: transparent; }}
+        QCheckBox::indicator, QRadioButton::indicator {{ width: 15px; height: 15px; }}
+        QCheckBox:disabled, QRadioButton:disabled {{ color: #9b9b95; }}
+        QFrame#segmentedControl {{
+            background: {INPUT_BACKGROUND};
             border: 1px solid {BORDER_COLOR};
-            padding: 8px 18px;
+            border-radius: 6px;
         }}
-        QTabBar::tab:selected {{ background: {ACCENT_COLOR}; color: white; }}
-        QScrollBar:vertical {{ background: {APP_BACKGROUND}; width: 12px; margin: 0; }}
-        QScrollBar::handle:vertical {{ background: #48505d; min-height: 30px; border-radius: 5px; }}
+        QPushButton[segmentedMode="true"] {{
+            color: {MUTED_TEXT_COLOR};
+            background: transparent;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 12px;
+        }}
+        QPushButton[segmentedMode="true"]:hover {{
+            color: {TEXT_COLOR};
+            background: #eeeeea;
+        }}
+        QPushButton[segmentedMode="true"]:checked {{
+            color: {TEXT_COLOR};
+            background: #f1ddd5;
+            font-weight: 600;
+        }}
+        QTabWidget::pane {{ border: none; background: transparent; }}
+        QTabBar {{ background: transparent; }}
+        QTabBar::tab {{
+            color: #797974;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            margin: 0 2px 4px 0;
+            padding: 5px 10px;
+        }}
+        QTabBar::tab:hover {{ color: {TEXT_COLOR}; background: #eeeeea; }}
+        QTabBar::tab:selected {{ color: {TEXT_COLOR}; background: #e4e4df; font-weight: 600; }}
+        QScrollBar:vertical {{ background: transparent; width: 8px; margin: 0; }}
+        QScrollBar::handle:vertical {{ background: #c8c8c2; min-height: 28px; border-radius: 3px; }}
+        QScrollBar::handle:vertical:hover {{ background: #aaa9a2; }}
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         QProgressBar {{
-            border: 1px solid {BORDER_COLOR}; border-radius: 4px;
-            background: {INPUT_BACKGROUND}; text-align: center;
+            color: #5f5f5a;
+            border: 1px solid {BORDER_COLOR};
+            border-radius: 4px;
+            background: {INPUT_BACKGROUND};
+            text-align: center;
         }}
         QProgressBar::chunk {{ background: {ACCENT_COLOR}; }}
-        QToolTip {{ color: {TEXT_COLOR}; background: {CARD_BACKGROUND}; border: 1px solid {BORDER_COLOR}; }}
+        QToolTip {{ color: {APP_BACKGROUND}; background: {TEXT_COLOR}; border: 1px solid {TEXT_COLOR}; }}
         """
     )
 
@@ -146,11 +350,21 @@ def create_qt_application(argv: list[str] | None = None) -> tuple[QApplication, 
     return app, True
 
 
-def section(title: str) -> tuple[QGroupBox, QVBoxLayout]:
-    box = QGroupBox(title)
-    layout = QVBoxLayout(box)
-    layout.setContentsMargins(12, 15, 12, 12)
-    layout.setSpacing(10)
+def section(title: str) -> tuple[QFrame, QVBoxLayout]:
+    """Build a quiet surface with an internal heading instead of a fieldset."""
+
+    box = QFrame()
+    box.setObjectName("sectionCard")
+    outer = QVBoxLayout(box)
+    outer.setContentsMargins(12, 10, 12, 10)
+    outer.setSpacing(7)
+    heading = QLabel(title)
+    heading.setObjectName("sectionTitle")
+    outer.addWidget(heading)
+    layout = QVBoxLayout()
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(7)
+    outer.addLayout(layout)
     return box, layout
 
 
@@ -189,7 +403,7 @@ class PathPicker(QWidget):
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
         title = QLabel(label)
         title.setMinimumWidth(112)
         self.line_edit = QLineEdit()
@@ -316,6 +530,8 @@ def reveal_in_file_manager(path: str) -> None:
 
 
 __all__ = [
+    "ACCENT_COLOR",
+    "ACCENT_FOREGROUND_COLOR",
     "APP_BACKGROUND",
     "AsyncPage",
     "BackgroundWorker",

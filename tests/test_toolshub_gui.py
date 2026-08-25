@@ -12,11 +12,19 @@ from PySide6.QtGui import QCloseEvent  # noqa: E402
 from PySide6.QtWidgets import QApplication, QLineEdit, QStackedWidget  # noqa: E402
 
 from toolshub_gui import (  # noqa: E402
+    SIDEBAR_WIDTH,
     TOOL_GROUPS,
     ToolshubApp,
     build_argument_parser,
     calculate_initial_window_size,
     main,
+)
+from tools.qt_gui_common import (  # noqa: E402
+    ACCENT_COLOR,
+    ACCENT_FOREGROUND_COLOR,
+    APP_BACKGROUND,
+    TEXT_COLOR,
+    configure_qt_application,
 )
 from tools.qt_pages import FrenchNbspPage, PhraseLoomPage, WorkflowPage  # noqa: E402
 
@@ -25,6 +33,7 @@ class ToolshubLayoutTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.qt_app = QApplication.instance() or QApplication([])
+        configure_qt_application(cls.qt_app)
 
     def make_app(self) -> ToolshubApp:
         return ToolshubApp(show_window=False)
@@ -37,7 +46,18 @@ class ToolshubLayoutTests(unittest.TestCase):
                 screen_width=1920,
                 screen_height=1080,
             ),
-            (1334, 840),
+            (1254, 741),
+        )
+
+    def test_initial_window_size_uses_compact_default_floor(self) -> None:
+        self.assertEqual(
+            calculate_initial_window_size(
+                requested_width=960,
+                requested_height=500,
+                screen_width=1920,
+                screen_height=1080,
+            ),
+            (1000, 660),
         )
 
     def test_initial_window_size_stays_within_available_screen(self) -> None:
@@ -50,6 +70,12 @@ class ToolshubLayoutTests(unittest.TestCase):
             ),
             (1286, 688),
         )
+
+    def test_theme_uses_supplied_surface_ink_and_accent_anchors(self) -> None:
+        self.assertEqual(APP_BACKGROUND, "#f9f9f7")
+        self.assertEqual(TEXT_COLOR, "#2d2d2b")
+        self.assertEqual(ACCENT_COLOR, "#cc7d5e")
+        self.assertEqual(ACCENT_FOREGROUND_COLOR, "#ffffff")
 
     def test_smoke_test_builds_complete_app_without_showing_window(self) -> None:
         receiver = Mock()
@@ -91,6 +117,57 @@ class ToolshubLayoutTests(unittest.TestCase):
         finally:
             window.close()
 
+    def test_shell_and_workflow_actions_use_fixed_compact_action_bar(self) -> None:
+        window = self.make_app()
+        try:
+            window.resize(1000, 660)
+            window.show()
+            self.qt_app.processEvents()
+
+            workflow = window.tool_frames["workflow"]
+            margins = workflow.content_layout.contentsMargins()
+
+            self.assertEqual(window.sidebar.width(), SIDEBAR_WIDTH)
+            self.assertEqual(SIDEBAR_WIDTH, 184)
+            self.assertEqual(
+                (margins.left(), margins.top(), margins.right(), margins.bottom()),
+                (2, 2, 6, 2),
+            )
+            self.assertEqual(workflow.run_button.width(), 136)
+            self.assertEqual(workflow.revision_button.width(), 108)
+            self.assertEqual(window.title_label.objectName(), "pageTitle")
+            self.assertEqual(
+                window.nav_buttons["workflow"].property("navItem"),
+                True,
+            )
+            self.assertEqual(
+                workflow.term_settings_box.objectName(),
+                "sectionCard",
+            )
+            self.assertEqual(workflow.action_bar.objectName(), "pageActionBar")
+            self.assertEqual(workflow.action_bar.height(), 46)
+            self.assertIs(workflow.run_button.parentWidget(), workflow.action_bar)
+            self.assertGreaterEqual(
+                workflow.action_bar.y(),
+                workflow.height() - workflow.action_bar.height() - 1,
+            )
+            self.assertGreater(
+                workflow.run_button.x(),
+                workflow.revision_button.x(),
+            )
+
+            action_geometry = workflow.action_bar.geometry().getRect()
+            workflow.term_settings_button.setChecked(True)
+            self.qt_app.processEvents()
+
+            self.assertTrue(workflow.term_settings_box.isVisible())
+            self.assertEqual(
+                workflow.action_bar.geometry().getRect(),
+                action_geometry,
+            )
+        finally:
+            window.close()
+
     def test_selecting_a_tool_reuses_persistent_page(self) -> None:
         window = self.make_app()
         try:
@@ -103,6 +180,28 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertIs(window.current_tool_frame, page)
             self.assertIs(window.page_stack.currentWidget(), page)
             self.assertTrue(window.nav_buttons["french_nbsp"].isChecked())
+        finally:
+            window.close()
+
+    def test_all_primary_page_actions_live_in_fixed_action_bars(self) -> None:
+        window = self.make_app()
+        try:
+            action_buttons = (
+                window.tool_frames["workflow"].run_button,
+                window.tool_frames["phraseloom"].export_button,
+                window.tool_frames["french_nbsp"].run_button,
+                window.tool_frames["excel_merger"].run_button,
+                window.tool_frames["xbench_report"].run_button,
+                window.tool_frames["excel_batcher"].split_button,
+                window.tool_frames["excel_batcher"].restore_button,
+            )
+
+            for button in action_buttons:
+                with self.subTest(button=button.text()):
+                    self.assertEqual(
+                        button.parentWidget().objectName(),
+                        "pageActionBar",
+                    )
         finally:
             window.close()
 
@@ -127,6 +226,46 @@ class ToolshubLayoutTests(unittest.TestCase):
             workflow.angle_config.set_path(r"C:\configs\tags.json")
             workflow.angle_config.clear()
             self.assertEqual(workflow.angle_config.path(), "")
+        finally:
+            window.close()
+
+    def test_tag_modes_are_visually_grouped_and_strictly_exclusive(self) -> None:
+        window = self.make_app()
+        try:
+            window.resize(1000, 660)
+            window.show()
+            workflow = window.tool_frames["workflow"]
+            workflow.tag_settings_button.setChecked(True)
+            self.qt_app.processEvents()
+
+            self.assertTrue(workflow.tag_mode_group.exclusive())
+            self.assertEqual(workflow.standard_mode.property("segmentedMode"), True)
+            self.assertEqual(workflow.memoq_mode.property("segmentedMode"), True)
+            self.assertEqual(workflow.tag_mode_group.checkedId(), 0)
+
+            workflow.memoq_mode.setChecked(True)
+            self.qt_app.processEvents()
+
+            self.assertFalse(workflow.standard_mode.isChecked())
+            self.assertTrue(workflow.memoq_mode.isChecked())
+            self.assertEqual(workflow.tag_mode_group.checkedId(), 1)
+            self.assertTrue(
+                all(not check.isEnabled() for check in workflow.standard_tag_checks)
+            )
+            self.assertFalse(workflow.angle_config.isEnabled())
+            self.assertEqual(
+                workflow.content_scroll.horizontalScrollBar().maximum(),
+                0,
+            )
+
+            workflow.standard_mode.setChecked(True)
+            self.qt_app.processEvents()
+
+            self.assertFalse(workflow.memoq_mode.isChecked())
+            self.assertTrue(
+                all(check.isEnabled() for check in workflow.standard_tag_checks)
+            )
+            self.assertTrue(workflow.angle_config.isEnabled())
         finally:
             window.close()
 

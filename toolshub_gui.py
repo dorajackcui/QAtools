@@ -26,12 +26,9 @@ from PySide6.QtWidgets import (
 )
 
 from tools.qt_gui_common import (
-    APP_BACKGROUND,
     AsyncPage,
     BORDER_COLOR,
-    MUTED_TEXT_COLOR,
     SIDEBAR_BACKGROUND,
-    TEXT_COLOR,
     create_qt_application,
     show_error,
     show_warning,
@@ -47,12 +44,13 @@ from tools.workflow.file_receiver import (
 )
 
 
-DEFAULT_WINDOW_WIDTH = 1200
-DEFAULT_WINDOW_HEIGHT = 840
-MINIMUM_WINDOW_WIDTH = 980
-MINIMUM_WINDOW_HEIGHT = 680
-WINDOW_HORIZONTAL_BREATHING_ROOM = 96
-WINDOW_VERTICAL_BREATHING_ROOM = 72
+DEFAULT_WINDOW_WIDTH = 1000
+DEFAULT_WINDOW_HEIGHT = 660
+MINIMUM_WINDOW_WIDTH = 840
+MINIMUM_WINDOW_HEIGHT = 540
+SIDEBAR_WIDTH = 184
+WINDOW_HORIZONTAL_BREATHING_ROOM = 16
+WINDOW_VERTICAL_BREATHING_ROOM = 16
 
 
 @dataclass(frozen=True)
@@ -119,32 +117,28 @@ class ToolshubApp(QMainWindow):
     def _build_ui(self) -> None:
         shell = QWidget()
         shell.setObjectName("toolshubShell")
-        shell.setStyleSheet(f"#toolshubShell {{ background: {APP_BACKGROUND}; }}")
         shell_layout = QHBoxLayout(shell)
         shell_layout.setContentsMargins(0, 0, 0, 0)
         shell_layout.setSpacing(0)
-        shell_layout.addWidget(self._build_sidebar())
+        self.sidebar = self._build_sidebar()
+        shell_layout.addWidget(self.sidebar)
 
         separator = QFrame()
+        separator.setObjectName("sidebarSeparator")
         separator.setFrameShape(QFrame.Shape.VLine)
-        separator.setStyleSheet(f"color: {BORDER_COLOR};")
+        separator.setStyleSheet(f"color: {BORDER_COLOR}; background: {BORDER_COLOR}; max-width: 1px;")
         shell_layout.addWidget(separator)
 
         workspace = QWidget()
+        workspace.setObjectName("toolshubWorkspace")
         workspace_layout = QVBoxLayout(workspace)
-        workspace_layout.setContentsMargins(28, 22, 28, 18)
-        workspace_layout.setSpacing(10)
+        workspace_layout.setContentsMargins(16, 14, 16, 12)
+        workspace_layout.setSpacing(7)
         self.title_label = QLabel()
-        self.title_label.setStyleSheet(
-            f"font-size: 22px; font-weight: 650; color: {TEXT_COLOR}; background: transparent;"
-        )
+        self.title_label.setObjectName("pageTitle")
         workspace_layout.addWidget(self.title_label)
-        title_rule = QFrame()
-        title_rule.setFrameShape(QFrame.Shape.HLine)
-        title_rule.setStyleSheet(f"color: {BORDER_COLOR};")
-        workspace_layout.addWidget(title_rule)
         self.page_stack = QStackedWidget()
-        self.page_stack.setStyleSheet(f"background: {APP_BACKGROUND};")
+        self.page_stack.setObjectName("toolPageStack")
         workspace_layout.addWidget(self.page_stack, 1)
         shell_layout.addWidget(workspace, 1)
         self.setCentralWidget(shell)
@@ -159,40 +153,24 @@ class ToolshubApp(QMainWindow):
     def _build_sidebar(self) -> QWidget:
         sidebar = QWidget()
         sidebar.setObjectName("toolshubSidebar")
-        sidebar.setFixedWidth(222)
-        sidebar.setStyleSheet(
-            f"""
-            #toolshubSidebar {{ background: {SIDEBAR_BACKGROUND}; }}
-            QPushButton {{
-                text-align: left;
-                background: transparent;
-                border: none;
-                border-radius: 6px;
-                padding: 9px 12px;
-                color: {TEXT_COLOR};
-            }}
-            QPushButton:hover {{ background: #202630; }}
-            QPushButton:checked {{ background: #2c5fb8; color: white; font-weight: 600; }}
-            """
-        )
+        sidebar.setFixedWidth(SIDEBAR_WIDTH)
+        sidebar.setStyleSheet(f"#toolshubSidebar {{ background: {SIDEBAR_BACKGROUND}; }}")
         layout = QVBoxLayout(sidebar)
-        layout.setContentsMargins(16, 20, 14, 16)
-        layout.setSpacing(3)
+        layout.setContentsMargins(12, 16, 10, 12)
+        layout.setSpacing(2)
         brand = QLabel("QAtools")
-        brand.setStyleSheet(
-            f"font-size: 20px; font-weight: 700; color: {TEXT_COLOR}; background: transparent; padding: 0 9px 12px 9px;"
-        )
+        brand.setObjectName("brandLabel")
         layout.addWidget(brand)
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
         for group_index, group in enumerate(self.tool_groups):
             category = QLabel(group.title)
-            category.setStyleSheet(
-                f"color: {MUTED_TEXT_COLOR}; font-size: 11px; font-weight: 600; background: transparent; padding: {10 if group_index else 2}px 10px 4px 10px;"
-            )
+            category.setProperty("role", "navSection")
+            category.setContentsMargins(8, 8 if group_index else 2, 8, 3)
             layout.addWidget(category)
             for tool in group.tools:
                 button = QPushButton(tool.title)
+                button.setProperty("navItem", True)
                 button.setCheckable(True)
                 button.setCursor(Qt.CursorShape.PointingHandCursor)
                 button.clicked.connect(lambda _checked=False, key=tool.key: self.select_tool(key))

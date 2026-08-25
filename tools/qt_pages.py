@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
+    QFrame,
     QFormLayout,
     QGridLayout,
     QHBoxLayout,
@@ -20,7 +21,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QRadioButton,
     QScrollArea,
     QSpinBox,
     QTabWidget,
@@ -51,7 +51,6 @@ from tools.french_nbsp_restorer.restore_french_nbsp import (
 )
 from tools.qt_gui_common import (
     AsyncPage,
-    MUTED_TEXT_COLOR,
     PathPicker,
     muted_label,
     primary_button,
@@ -92,8 +91,26 @@ def _scroll_page(content: QWidget) -> QScrollArea:
     area = QScrollArea()
     area.setWidgetResizable(True)
     area.setFrameShape(QScrollArea.Shape.NoFrame)
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
     area.setWidget(content)
     return area
+
+
+def _add_action_bar(layout: QVBoxLayout, *buttons: QPushButton) -> QFrame:
+    """Pin consistently sized page actions to a quiet bottom bar."""
+
+    bar = QFrame()
+    bar.setObjectName("pageActionBar")
+    bar.setFixedHeight(46)
+    row = QHBoxLayout(bar)
+    row.setContentsMargins(2, 9, 6, 2)
+    row.setSpacing(8)
+    row.addStretch(1)
+    for button in buttons:
+        button.setFixedWidth(136 if button.property("primary") else 108)
+        row.addWidget(button)
+    layout.addWidget(bar)
+    return bar
 
 
 def _choose_excel(parent: QWidget, title: str, initial_dir: str = "") -> str:
@@ -140,8 +157,8 @@ class PhraseLoomPage(AsyncPage):
         outer.setContentsMargins(0, 0, 0, 0)
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(4, 4, 12, 4)
-        layout.setSpacing(12)
+        layout.setContentsMargins(2, 2, 6, 2)
+        layout.setSpacing(8)
 
         input_box, input_layout = section("输入与范围")
         self.input_picker = PathPicker("原始 Excel")
@@ -174,23 +191,24 @@ class PhraseLoomPage(AsyncPage):
         options_layout.addWidget(self.group_similar)
         options_layout.addWidget(self.tag_picker)
         layout.addWidget(options_box)
-        layout.addStretch(1)
-        outer.addWidget(_scroll_page(content), 1)
 
-        actions = QHBoxLayout()
         self.export_button = primary_button("导出 Strings")
         self.restore_button = QPushButton("回填译文…")
         self.export_button.clicked.connect(self.run_export)
         self.restore_button.clicked.connect(self.choose_and_restore)
-        actions.addWidget(self.export_button, 3)
-        actions.addWidget(self.restore_button, 1)
-        outer.addLayout(actions)
         self.preview = muted_label()
-        outer.addWidget(self.preview)
+        layout.addWidget(self.preview)
         self.progress = QProgressBar()
         self.progress.setRange(0, 0)
         self.progress.hide()
-        outer.addWidget(self.progress)
+        layout.addWidget(self.progress)
+        layout.addStretch(1)
+        outer.addWidget(_scroll_page(content), 1)
+        self.action_bar = _add_action_bar(
+            outer,
+            self.restore_button,
+            self.export_button,
+        )
 
     def choose_input(self) -> None:
         if path := _choose_excel(self, "选择原始 Excel"):
@@ -272,8 +290,8 @@ class FrenchNbspPage(AsyncPage):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 12, 4)
-        layout.setSpacing(12)
+        layout.setContentsMargins(2, 2, 6, 2)
+        layout.setSpacing(8)
         input_box, input_layout = section("输入与范围")
         self.input_picker = PathPicker("输入 Excel")
         self.input_picker.choose_button.clicked.connect(self.choose_input)
@@ -287,12 +305,13 @@ class FrenchNbspPage(AsyncPage):
         self.start_row = QSpinBox()
         self.start_row.setRange(1, 1_000_000)
         self.start_row.setValue(2)
+        self.start_row.setMaximumWidth(94)
         scope.addWidget(QLabel("处理工作表"))
         scope.addWidget(self.sheet)
-        scope.addSpacing(12)
+        scope.addSpacing(8)
         scope.addWidget(QLabel("Target 列"))
         scope.addWidget(self.target_column)
-        scope.addSpacing(12)
+        scope.addSpacing(8)
         scope.addWidget(QLabel("开始行"))
         scope.addWidget(self.start_row)
         scope.addStretch(1)
@@ -311,12 +330,12 @@ class FrenchNbspPage(AsyncPage):
             muted_label("留空时直接修复 Target 列；恢复 ; : ? ! % 前及 « » 内侧的 NBSP。", word_wrap=True)
         )
         layout.addWidget(output_box)
-        layout.addStretch(1)
         self.run_button = primary_button("开始恢复")
         self.run_button.clicked.connect(self.run_restore)
-        layout.addWidget(self.run_button)
         self.preview = muted_label()
         layout.addWidget(self.preview)
+        layout.addStretch(1)
+        self.action_bar = _add_action_bar(layout, self.run_button)
 
     def choose_input(self) -> None:
         if path := _choose_excel(self, "选择 Excel 文件"):
@@ -399,7 +418,8 @@ class XbenchPage(AsyncPage):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 12, 4)
+        layout.setContentsMargins(2, 2, 6, 2)
+        layout.setSpacing(8)
         input_box, input_layout = section("输入与范围")
         self.input_picker = PathPicker("Xbench QA Report")
         self.input_picker.choose_button.clicked.connect(self.choose_input)
@@ -413,12 +433,12 @@ class XbenchPage(AsyncPage):
         input_layout.addLayout(row)
         input_layout.addWidget(muted_label("将 QA 明细整理为文件名 / key / source / target / QA 问题，并按相同内容聚合。", word_wrap=True))
         layout.addWidget(input_box)
-        layout.addStretch(1)
         self.run_button = primary_button("开始转换")
         self.run_button.clicked.connect(self.run_transform)
-        layout.addWidget(self.run_button)
         self.preview = muted_label()
         layout.addWidget(self.preview)
+        layout.addStretch(1)
+        self.action_bar = _add_action_bar(layout, self.run_button)
 
     def choose_input(self) -> None:
         path = _choose_excel(self, "选择 Xbench QA Report Excel 文件")
@@ -464,7 +484,7 @@ class ExcelBatcherPage(AsyncPage):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 12, 4)
+        layout.setContentsMargins(2, 2, 6, 2)
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_split_tab(), "拆分 batch")
         self.tabs.addTab(self._build_restore_tab(), "复原文件")
@@ -473,28 +493,31 @@ class ExcelBatcherPage(AsyncPage):
     def _build_split_tab(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setSpacing(12)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
         input_box, input_layout = section("输入与范围")
         self.split_input = PathPicker("输入 Excel")
         self.split_input.choose_button.clicked.connect(self.choose_split_input)
         input_layout.addWidget(self.split_input)
         row = QHBoxLayout()
         self.split_sheet = QComboBox()
-        self.split_sheet.setMinimumWidth(200)
+        self.split_sheet.setMinimumWidth(160)
         self.batch_size = QSpinBox()
         self.batch_size.setRange(1, 1_000_000)
         self.batch_size.setValue(1000)
+        self.batch_size.setMaximumWidth(86)
         self.header_rows = QSpinBox()
         self.header_rows.setRange(0, 1_000_000)
         self.header_rows.setValue(1)
+        self.header_rows.setMaximumWidth(86)
         for label, widget in (
             ("工作表", self.split_sheet),
-            ("每个 batch 数据行数", self.batch_size),
+            ("每批行数", self.batch_size),
             ("表头行数", self.header_rows),
         ):
             row.addWidget(QLabel(label))
             row.addWidget(widget)
-            row.addSpacing(10)
+            row.addSpacing(6)
         row.addStretch(1)
         input_layout.addLayout(row)
         layout.addWidget(input_box)
@@ -505,20 +528,21 @@ class ExcelBatcherPage(AsyncPage):
         self.split_output.path_changed.connect(self.update_split_preview)
         output_layout.addWidget(self.split_output)
         layout.addWidget(output_box)
-        layout.addStretch(1)
         self.split_button = primary_button("开始拆分")
         self.split_button.clicked.connect(self.run_split)
-        layout.addWidget(self.split_button)
         self.split_status = muted_label()
         layout.addWidget(self.split_status)
         self.split_preview = muted_label()
         layout.addWidget(self.split_preview)
+        layout.addStretch(1)
+        self.split_action_bar = _add_action_bar(layout, self.split_button)
         return page
 
     def _build_restore_tab(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setSpacing(12)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
         input_box, input_layout = section("batch 文件")
         self.restore_dir = PathPicker("batch 目录", choose_text="选择目录")
         self.restore_dir.choose_button.clicked.connect(self.choose_restore_dir)
@@ -529,12 +553,12 @@ class ExcelBatcherPage(AsyncPage):
         self.restore_output.choose_button.clicked.connect(self.choose_restore_output)
         output_layout.addWidget(self.restore_output)
         layout.addWidget(output_box)
-        layout.addStretch(1)
         self.restore_button = primary_button("开始复原")
         self.restore_button.clicked.connect(self.run_restore)
-        layout.addWidget(self.restore_button)
         self.restore_status = muted_label()
         layout.addWidget(self.restore_status)
+        layout.addStretch(1)
+        self.restore_action_bar = _add_action_bar(layout, self.restore_button)
         return page
 
     def choose_split_input(self) -> None:
@@ -661,7 +685,8 @@ class ExcelMergerPage(AsyncPage):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 12, 4)
+        layout.setContentsMargins(2, 2, 6, 2)
+        layout.setSpacing(8)
         input_box, input_layout = section("输入目录与表头")
         self.input_dir = PathPicker("Excel 所在目录", choose_text="选择目录")
         self.input_dir.choose_button.clicked.connect(self.choose_input_dir)
@@ -674,14 +699,14 @@ class ExcelMergerPage(AsyncPage):
             word_wrap=True,
         ))
         layout.addWidget(input_box)
-        layout.addStretch(1)
         self.run_button = primary_button("开始合并")
         self.run_button.clicked.connect(self.run_merge)
-        layout.addWidget(self.run_button)
         self.status = muted_label()
         self.preview = muted_label()
         layout.addWidget(self.status)
         layout.addWidget(self.preview)
+        layout.addStretch(1)
+        self.action_bar = _add_action_bar(layout, self.run_button)
 
     def choose_input_dir(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "选择包含待合并 Excel 的目录", self.input_dir.path())
@@ -748,28 +773,30 @@ class WorkflowPage(AsyncPage):
         outer.setContentsMargins(0, 0, 0, 0)
         content = QWidget()
         self.content_layout = QVBoxLayout(content)
-        self.content_layout.setContentsMargins(4, 4, 12, 4)
-        self.content_layout.setSpacing(10)
+        self.content_layout.setContentsMargins(2, 2, 6, 2)
+        self.content_layout.setSpacing(8)
         self._build_input_section()
         self._build_task_section()
         self._build_term_settings()
         self._build_tag_settings()
         self._build_target_text_settings()
-        self.content_layout.addStretch(1)
-        outer.addWidget(_scroll_page(content), 1)
 
-        actions = QHBoxLayout()
         self.run_button = primary_button("开始检查")
         self.revision_button = QPushButton("应用修订")
         self.run_button.clicked.connect(self.run_selected_tasks)
         self.revision_button.clicked.connect(self.apply_revisions)
-        actions.addWidget(self.run_button, 3)
-        actions.addWidget(self.revision_button, 1)
-        outer.addLayout(actions)
         self.output_preview = muted_label()
         self.status = muted_label()
-        outer.addWidget(self.output_preview)
-        outer.addWidget(self.status)
+        self.content_layout.addWidget(self.output_preview)
+        self.content_layout.addWidget(self.status)
+        self.content_layout.addStretch(1)
+        self.content_scroll = _scroll_page(content)
+        outer.addWidget(self.content_scroll, 1)
+        self.action_bar = _add_action_bar(
+            outer,
+            self.revision_button,
+            self.run_button,
+        )
 
     def _build_input_section(self) -> None:
         box, layout = section("输入与范围")
@@ -787,6 +814,7 @@ class WorkflowPage(AsyncPage):
         self.start_row = QSpinBox()
         self.start_row.setRange(1, 1_000_000)
         self.start_row.setValue(2)
+        self.start_row.setMaximumWidth(94)
         for label, widget in (
             ("检查工作表", self.sheet),
             ("Source 列", self.source_column),
@@ -845,11 +873,11 @@ class WorkflowPage(AsyncPage):
         self.target_settings_button = QPushButton("展开设置")
         grid.addWidget(self._task_row(self.term_check, self.term_settings_button), 0, 0)
         grid.addWidget(self._task_row(self.tag_check, self.tag_settings_button), 0, 1)
-        grid.addWidget(self._task_row(self.line_break_check), 0, 2)
-        grid.addWidget(self._task_row(self.consistency_check), 1, 0)
-        grid.addWidget(self._task_row(self.chinese_check), 1, 1)
-        grid.addWidget(self._task_row(self.target_text_check, self.target_settings_button), 1, 2)
-        for column in range(3):
+        grid.addWidget(self._task_row(self.line_break_check), 1, 0)
+        grid.addWidget(self._task_row(self.consistency_check), 1, 1)
+        grid.addWidget(self._task_row(self.chinese_check), 2, 0)
+        grid.addWidget(self._task_row(self.target_text_check, self.target_settings_button), 2, 1)
+        for column in range(2):
             grid.setColumnStretch(column, 1)
         layout.addLayout(grid)
         self.content_layout.addWidget(box)
@@ -904,6 +932,7 @@ class WorkflowPage(AsyncPage):
         self.history_start_row = QSpinBox()
         self.history_start_row.setRange(1, 1_000_000)
         self.history_start_row.setValue(2)
+        self.history_start_row.setMaximumWidth(94)
         for label, widget in (
             ("工作表", self.history_sheet),
             ("Source 列", self.history_source),
@@ -924,29 +953,40 @@ class WorkflowPage(AsyncPage):
         self.tag_settings_box, layout = section("Tag 检查设置")
         mode_row = QHBoxLayout()
         mode_row.addWidget(QLabel("检查模式"))
-        self.standard_mode = QRadioButton("常规 Tag")
-        self.memoq_mode = QRadioButton("memoQ Marker")
+        mode_switch = QFrame()
+        mode_switch.setObjectName("segmentedControl")
+        mode_switch_layout = QHBoxLayout(mode_switch)
+        mode_switch_layout.setContentsMargins(1, 1, 1, 1)
+        mode_switch_layout.setSpacing(0)
+        self.standard_mode = QPushButton("常规 Tag")
+        self.memoq_mode = QPushButton("memoQ Marker")
+        for mode in (self.standard_mode, self.memoq_mode):
+            mode.setCheckable(True)
+            mode.setProperty("segmentedMode", True)
+            mode.setCursor(Qt.CursorShape.PointingHandCursor)
+            mode_switch_layout.addWidget(mode)
         self.standard_mode.setChecked(True)
         self.tag_mode_group = QButtonGroup(self)
-        self.tag_mode_group.addButton(self.standard_mode)
-        self.tag_mode_group.addButton(self.memoq_mode)
+        self.tag_mode_group.setExclusive(True)
+        self.tag_mode_group.addButton(self.standard_mode, 0)
+        self.tag_mode_group.addButton(self.memoq_mode, 1)
         self.standard_mode.toggled.connect(self.update_tag_mode)
-        mode_row.addWidget(self.standard_mode)
-        mode_row.addWidget(self.memoq_mode)
+        mode_row.addWidget(mode_switch)
         mode_row.addStretch(1)
         layout.addLayout(mode_row)
-        type_row = QHBoxLayout()
-        type_row.addWidget(QLabel("常规类型"))
+        layout.addWidget(QLabel("常规类型"))
+        type_grid = QGridLayout()
         self.angle_tag = QCheckBox("<...> tag")
         self.color_tag = QCheckBox("[color=...] tag")
         self.brace_tag = QCheckBox("{...} placeholder")
         self.newline_tag = QCheckBox(r"\n mark")
         self.standard_tag_checks = (self.angle_tag, self.color_tag, self.brace_tag, self.newline_tag)
-        for check in self.standard_tag_checks:
+        for index, check in enumerate(self.standard_tag_checks):
             check.setChecked(True)
-            type_row.addWidget(check)
-        type_row.addStretch(1)
-        layout.addLayout(type_row)
+            type_grid.addWidget(check, index // 2, index % 2)
+        for column in range(2):
+            type_grid.setColumnStretch(column, 1)
+        layout.addLayout(type_grid)
         self.angle_config = PathPicker("尖括号过滤配置", allow_clear=True)
         self.angle_config.choose_button.clicked.connect(self.choose_angle_config)
         layout.addWidget(self.angle_config)
@@ -955,8 +995,8 @@ class WorkflowPage(AsyncPage):
 
     def _build_target_text_settings(self) -> None:
         self.target_settings_box, layout = section("Target 文本规范检查设置")
-        row = QHBoxLayout()
-        row.addWidget(QLabel("检查规则"))
+        layout.addWidget(QLabel("检查规则"))
+        grid = QGridLayout()
         self.abnormal_rule = QCheckBox("异常标点符号（.. / ,, / 。。等）")
         self.spaces_rule = QCheckBox("连续空格（2 个及以上）")
         self.width_rule = QCheckBox("全半角混用")
@@ -965,11 +1005,12 @@ class WorkflowPage(AsyncPage):
             CONSECUTIVE_SPACES_RULE: self.spaces_rule,
             MIXED_WIDTH_RULE: self.width_rule,
         }
-        for check in self.rule_checks.values():
+        for index, check in enumerate(self.rule_checks.values()):
             check.setChecked(True)
-            row.addWidget(check)
-        row.addStretch(1)
-        layout.addLayout(row)
+            grid.addWidget(check, index // 2, index % 2)
+        for column in range(2):
+            grid.setColumnStretch(column, 1)
+        layout.addLayout(grid)
         self.target_settings_box.hide()
         self.content_layout.addWidget(self.target_settings_box)
 
