@@ -76,6 +76,8 @@ source_strings.xlsx
 - Target 已有内容：视为已完成，不进入翻译清单且不修改。
 - Source 单元格内有多行文本：默认将每个非空行作为独立 Segment 导出；
   回填时按原始顺序、空行和换行符精确合并回同一个 Target 单元格。
+- 字面量 `\n`、`\r`（反斜杠加字母）会转换为 Protected Token；它们不是
+  单元格中的真实换行，回填时会精确恢复为原始 marker。
 - 纯数字、纯符号或 Tag-only：自动将 Source 作为 Target，不进入翻译清单。
 - 完全相同的待翻译 Source：合并为一条。
 - 沿用原有 Translation Unit 清洗：数字等可变部分压缩为模板，例如
@@ -181,9 +183,9 @@ source_translated.xlsx
 
 - 将一条去重译文写回所有对应位置。
 - 将 `{num1}` 等模板变量展开为每个原始 Source 对应的值。
-- 将 Protected Token 恢复为原始 Tag 或占位符。
+- 将 Protected Token 恢复为原始 Tag、占位符或字面量 `\n` / `\r` marker。
 - 保留导出前已经存在的 Target。
 - 将 `completed` 中的自动完成行写回空 Target。
 - 恢复原工作表的顺序、可见状态和格式。
-- 检查 Tag、变量和占位符是否遗漏或增加。
+- 检查 Tag、变量、占位符和字面量 marker 是否遗漏或增加。
 - 仅在存在空 Target 或保护内容问题时生成 `*_restore_issues.xlsx`。

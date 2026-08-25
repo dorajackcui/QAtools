@@ -19,7 +19,8 @@ Entity workflows, or generated translations.
 Export performs this sequence:
 
 1. Read the first worksheet and ignore empty Source rows.
-2. Protect configured Tags and complete `{...}` placeholders.
+2. Protect configured Tags, complete `{...}` placeholders, and literal `\n` /
+   `\r` markers.
 3. Move rows with an existing Target to the visible `completed` sheet.
 4. Auto-complete numeric-only, symbol-only, and protected-only rows.
 5. Deduplicate identical pending strings.
@@ -27,9 +28,9 @@ Export performs this sequence:
 7. Optionally group structurally similar cleaned units for display ordering.
 8. Embed the original workbook, row mapping, and Tag rules.
 
-Restore expands row-specific template values, restores raw Tags/placeholders,
-writes every mapped Target, preserves existing Targets, and restores original
-sheet visibility and formatting.
+Restore expands row-specific template values, restores raw
+Tags/placeholders/markers, writes every mapped Target, preserves existing
+Targets, and restores original sheet visibility and formatting.
 
 ## Modules
 

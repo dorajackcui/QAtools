@@ -4,6 +4,7 @@ import unittest
 class TagEngineTests(unittest.TestCase):
     def test_protected_token_helpers_accept_new_contract(self):
         from phraseloom.tag_engine import (
+            RAW_MARKER,
             RAW_PLACEHOLDER,
             TAG_CLOSE,
             TAG_OPEN,
@@ -17,10 +18,12 @@ class TagEngineTests(unittest.TestCase):
         self.assertEqual(TAG_CLOSE, "cl")
         self.assertEqual(TAG_SELF, "sf")
         self.assertEqual(RAW_PLACEHOLDER, "ph")
+        self.assertEqual(RAW_MARKER, "mk")
         self.assertEqual(make_protected_token(1, TAG_OPEN), "{1>")
         self.assertEqual(make_protected_token(2, TAG_CLOSE), "<2}")
         self.assertEqual(make_protected_token(3, TAG_SELF), "{3}")
         self.assertEqual(make_protected_token(4, RAW_PLACEHOLDER), "{4}")
+        self.assertEqual(make_protected_token(5, RAW_MARKER), "{5}")
         self.assertTrue(is_protected_token("{1>"))
         self.assertTrue(is_protected_token("<2}"))
         self.assertTrue(is_protected_token("{3}"))
@@ -219,6 +222,46 @@ class TagEngineTests(unittest.TestCase):
             ),
         )
         self.assertEqual(result.warnings, ())
+
+    def test_literal_line_markers_are_protected_and_restore_exactly(self):
+        from phraseloom.tag_engine import (
+            RAW_MARKER,
+            extract_tags,
+            restore_tags,
+            serialize_known_tags,
+        )
+
+        source = r"First\nSecond\rThird"
+        extraction = extract_tags(source)
+
+        self.assertEqual(extraction.text, "First{1}Second{2}Third")
+        self.assertEqual(
+            tuple((tag.kind, tag.placeholder, tag.raw) for tag in extraction.tags),
+            (
+                (RAW_MARKER, "{1}", r"\n"),
+                (RAW_MARKER, "{2}", r"\r"),
+            ),
+        )
+        self.assertEqual(restore_tags(extraction.text, extraction.tags), source)
+
+        serialized = serialize_known_tags(
+            r"Premier\nDeuxième\rTroisième",
+            extraction.tags,
+        )
+        self.assertEqual(serialized.text, "Premier{1}Deuxième{2}Troisième")
+        self.assertEqual(
+            restore_tags(serialized.text, extraction.tags),
+            r"Premier\nDeuxième\rTroisième",
+        )
+
+    def test_actual_line_breaks_are_not_literal_line_markers(self):
+        from phraseloom.tag_engine import extract_tags
+
+        source = "First\nSecond\rThird"
+        extraction = extract_tags(source)
+
+        self.assertEqual(extraction.text, source)
+        self.assertEqual(extraction.tags, ())
 
     def test_extracts_tags_and_raw_braces_in_original_order(self):
         from phraseloom.tag_engine import RAW_PLACEHOLDER, TAG_CLOSE, TAG_OPEN, extract_tags

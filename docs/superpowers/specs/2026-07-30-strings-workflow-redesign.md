@@ -31,7 +31,8 @@ The GUI and interactive terminal expose only these two actions.
 Rows are processed in this order:
 
 1. Ignore rows with an empty Source.
-2. Replace protected Tags and brace placeholders with Protected Tokens.
+2. Replace protected Tags, brace placeholders, and literal `\n` / `\r` markers
+   with Protected Tokens.
 3. Treat a non-empty Target as completed; exclude it from user work and preserve
    it in the completed reference section.
 4. Treat numeric-only, symbol-only, and Tag-only Source values as automatic
@@ -119,12 +120,13 @@ Restore:
 
 - writes each translated string to every mapped pending row;
 - expands template variables using each original row's hidden values;
-- restores Protected Tokens to the original Tags and placeholders;
+- restores Protected Tokens to the original Tags, placeholders, and literal
+  `\n` / `\r` markers;
 - never touches rows skipped because they already had a Target;
 - writes each automatic passthrough Source into its empty Target;
 - restores original sheet visibility and active-sheet state;
 - preserves the original workbook structure and formatting;
-- checks protected Tags, variables, and placeholders;
+- checks protected Tags, variables, placeholders, and literal markers;
 - writes a separate restore-issues workbook only when a Target is empty or a
   protected-content warning exists.
 

@@ -33,6 +33,48 @@ def _write_source(path: Path) -> None:
 
 
 class StringsWorkflowTests(unittest.TestCase):
+    def test_literal_line_markers_export_and_restore_exactly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "literal_markers.xlsx"
+            package_path = Path(tmp) / "literal_markers_strings.xlsx"
+            result_path = Path(tmp) / "literal_markers_translated.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["source", "target"])
+            worksheet.append([r"First\nSecond\rThird", None])
+            workbook.save(source_path)
+            workbook.close()
+
+            export_strings_workbook(source_path, package_path)
+
+            package = load_workbook(package_path)
+            strings = package[schema.STRINGS_SHEET]
+            headers = [cell.value for cell in strings[1]]
+            source_index = headers.index(schema.SOURCE_COLUMN) + 1
+            target_index = headers.index(schema.TARGET_COLUMN) + 1
+            self.assertEqual(
+                strings.cell(row=2, column=source_index).value,
+                "First{1}Second{2}Third",
+            )
+            strings.cell(row=2, column=target_index).value = (
+                "Premier{1}Deuxième{2}Troisième"
+            )
+            package.save(package_path)
+            package.close()
+
+            restore_stats = restore_strings_workbook(package_path, result_path)
+
+            self.assertEqual(restore_stats["issue_count"], 0)
+            self.assertEqual(restore_stats["restored_row_count"], 1)
+            restored = load_workbook(result_path, data_only=True)
+            try:
+                self.assertEqual(
+                    restored.active.cell(row=2, column=2).value,
+                    r"Premier\nDeuxième\rTroisième",
+                )
+            finally:
+                restored.close()
+
     def test_multiline_source_cells_export_segments_and_restore_exact_structure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             source_path = Path(tmp) / "done.xlsx"

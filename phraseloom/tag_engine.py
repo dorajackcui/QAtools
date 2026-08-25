@@ -11,6 +11,7 @@ TAG_OPEN = "op"
 TAG_CLOSE = "cl"
 TAG_SELF = "sf"
 RAW_PLACEHOLDER = "ph"
+RAW_MARKER = "mk"
 PROTECTED_SINGLE = "single"
 
 PROTECTED_TOKEN_RE = re.compile(r"\{([1-9]\d*)>|<([1-9]\d*)\}|\{([1-9]\d*)\}")
@@ -27,7 +28,14 @@ _TAG_SPAN_RE = re.compile(
     r"|\[[A-Za-z][A-Za-z0-9:._-]*(?:=[^\[\]]+)?\]"
 )
 _RAW_BRACE_RE = re.compile(r"\{[^{}]+\}")
-_PROTECTED_SPAN_RE = re.compile(_TAG_SPAN_RE.pattern + r"|" + _RAW_BRACE_RE.pattern)
+_RAW_MARKER_RE = re.compile(r"\\[nr]")
+_PROTECTED_SPAN_RE = re.compile(
+    _TAG_SPAN_RE.pattern
+    + r"|"
+    + _RAW_BRACE_RE.pattern
+    + r"|"
+    + _RAW_MARKER_RE.pattern
+)
 
 
 @dataclass(frozen=True)
@@ -77,7 +85,7 @@ def make_protected_token(index: int, kind: str) -> str:
         return f"{{{index}>"
     if kind == TAG_CLOSE:
         return f"<{index}}}"
-    if kind in {TAG_SELF, RAW_PLACEHOLDER, PROTECTED_SINGLE}:
+    if kind in {TAG_SELF, RAW_PLACEHOLDER, RAW_MARKER, PROTECTED_SINGLE}:
         return f"{{{index}}}"
     raise ValueError(f"unknown protected token kind: {kind}")
 
@@ -133,6 +141,15 @@ def extract_tags(text: str, rules: TagRules | None = None) -> TagExtraction:
             next_index += 1
             placeholder = make_protected_token(index, RAW_PLACEHOLDER)
             tags.append(TagToken(index, RAW_PLACEHOLDER, placeholder, raw))
+            chunks.append(placeholder)
+            pos = found.end()
+            continue
+
+        if _RAW_MARKER_RE.fullmatch(raw):
+            index = next_index
+            next_index += 1
+            placeholder = make_protected_token(index, RAW_MARKER)
+            tags.append(TagToken(index, RAW_MARKER, placeholder, raw))
             chunks.append(placeholder)
             pos = found.end()
             continue
@@ -569,6 +586,7 @@ def _protected_token_sort_key(placeholder: str) -> tuple[int, int]:
 
 __all__ = [
     "RAW_PLACEHOLDER",
+    "RAW_MARKER",
     "PROTECTED_SINGLE",
     "TAG_OPEN",
     "TAG_CLOSE",
