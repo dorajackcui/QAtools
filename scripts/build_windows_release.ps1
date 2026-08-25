@@ -12,8 +12,6 @@ $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $tagRulesPath = Join-Path $projectRoot "phraseloom\tag_rules.toml"
 $guiEntry = Join-Path $projectRoot "toolshub_gui.py"
 $cliEntry = Join-Path $projectRoot "qatools_cli.py"
-$originalTclLibrary = [Environment]::GetEnvironmentVariable("TCL_LIBRARY", "Process")
-$originalTkLibrary = [Environment]::GetEnvironmentVariable("TK_LIBRARY", "Process")
 $originalTemp = [Environment]::GetEnvironmentVariable("TEMP", "Process")
 $originalTmp = [Environment]::GetEnvironmentVariable("TMP", "Process")
 
@@ -98,26 +96,11 @@ try {
     }
     New-Item -ItemType Directory -Path $releaseDir, $exeDir, $workDir, $specDir -Force | Out-Null
 
-    # Stage Tcl/Tk under the project so sandboxed build environments can read
-    # the runtime files and PyInstaller can collect a complete GUI runtime.
-    $pythonBaseOutput = & $PythonCommand -c "import sys; print(sys.base_prefix)"
-    if ($LASTEXITCODE -ne 0) {
-        throw "Could not locate the Python runtime."
-    }
-    $pythonBase = ($pythonBaseOutput | Select-Object -Last 1).Trim()
-    $sourceTclRoot = Join-Path $pythonBase "tcl"
-    if (-not (Test-Path -LiteralPath (Join-Path $sourceTclRoot "tcl8.6\init.tcl"))) {
-        throw "The selected Python runtime does not include Tcl/Tk: $pythonBase"
-    }
-    $stagedTclRoot = Join-Path $buildRoot "tcl-runtime"
-    Copy-Item -LiteralPath $sourceTclRoot -Destination $stagedTclRoot -Recurse
-    $env:TCL_LIBRARY = Join-Path $stagedTclRoot "tcl8.6"
-    $env:TK_LIBRARY = Join-Path $stagedTclRoot "tk8.6"
     Invoke-ProjectPython `
-        -Description "Tcl/Tk runtime check" `
+        -Description "PySide6 runtime check" `
         -Arguments @(
             "-c",
-            "import tkinter; t = tkinter.Tcl(); print(t.eval('info patchlevel'))"
+            "from PySide6 import QtCore; print(QtCore.__version__)"
         )
 
     $commonArguments = @(
@@ -129,7 +112,6 @@ try {
         "--distpath", $exeDir,
         "--workpath", $workDir,
         "--specpath", $specDir,
-        "--collect-data", "sv_ttk",
         "--add-data", "$tagRulesPath;phraseloom"
     )
 
@@ -171,11 +153,8 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\QAtools-CLI.cmd") -Destination $releaseDir
     Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\README-Windows.txt") -Destination $releaseDir
 
-    # Verify the frozen programs, including the complete hidden GUI. This loads
-    # the Sun Valley Tcl/PNG resources and constructs every tool page without
+    # Verify the frozen programs, including every persistent Qt page, without
     # showing the application window.
-    Remove-Item Env:TCL_LIBRARY -ErrorAction SilentlyContinue
-    Remove-Item Env:TK_LIBRARY -ErrorAction SilentlyContinue
     $smokeTemp = Join-Path $buildRoot "smoke-temp"
     New-Item -ItemType Directory -Path $smokeTemp -Force | Out-Null
     $env:TEMP = $smokeTemp
@@ -222,18 +201,6 @@ try {
     Write-Host "  Archive:   $zipPath"
 }
 finally {
-    if ($null -eq $originalTclLibrary) {
-        Remove-Item Env:TCL_LIBRARY -ErrorAction SilentlyContinue
-    }
-    else {
-        $env:TCL_LIBRARY = $originalTclLibrary
-    }
-    if ($null -eq $originalTkLibrary) {
-        Remove-Item Env:TK_LIBRARY -ErrorAction SilentlyContinue
-    }
-    else {
-        $env:TK_LIBRARY = $originalTkLibrary
-    }
     if ($null -eq $originalTemp) {
         Remove-Item Env:TEMP -ErrorAction SilentlyContinue
     }

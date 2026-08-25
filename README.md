@@ -4,8 +4,8 @@ QAtools 是面向本地化工作的 Excel 工具箱，统一提供质量检查�
 Excel batch 拆分与复原、活动工作表合并、Xbench 报告转换和 PhraseLoom
 Strings 工作流。
 
-所有功能共用一个仓库、一个安装入口、一个 GUI 和一个 CLI；原有脚本路径继续
-保留，避免已有自动化失效。
+所有功能共用一个仓库、一个安装入口、一个基于 PySide6/Qt 6 的 GUI 和一个
+CLI；原有脚本路径继续保留，避免已有自动化失效。
 
 ## 快速开始
 
@@ -99,13 +99,14 @@ tools/                   各 QA 工具及统一 workflow
 tests/                   全仓库回归测试
 docs/                    CLI、规则、设计和迁移文档
 toolshub_gui.py          统一 GUI 入口
+tools/qt_pages.py        PySide6 工具页面
 pyproject.toml           安装、依赖和命令行入口
 ```
 
 新增工具时，应保持三层边界：
 
 1. 业务逻辑留在独立包中。
-2. GUI 页面注册到 `toolshub_gui.py`。
+2. PySide6 GUI 页面实现并注册到 `tools/qt_pages.py`。
 3. CLI 命令注册到 `qatools/cli.py`，并在 CLI 指南中补一个示例。
 
 测试会检查命令注册表中的每个正式命令是否已出现在 CLI 指南中。

@@ -1,28 +1,34 @@
 from __future__ import annotations
 
-import tkinter as tk
-from tkinter import font as tkfont
-from tkinter import ttk
+import os
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from phraseloom.gui import PhraseLoomApp
-from toolshub_gui import (
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtGui import QCloseEvent  # noqa: E402
+from PySide6.QtWidgets import QApplication, QLineEdit, QStackedWidget  # noqa: E402
+
+from toolshub_gui import (  # noqa: E402
     TOOL_GROUPS,
     ToolshubApp,
     build_argument_parser,
     calculate_initial_window_size,
     main,
 )
-from tools.gui_common import FILE_PATH_DISPLAY_WIDTH
-from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
-from tools.gui_common import APP_MAIN_BACKGROUND
+from tools.qt_pages import FrenchNbspPage, PhraseLoomPage, WorkflowPage  # noqa: E402
 
 
 class ToolshubLayoutTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.qt_app = QApplication.instance() or QApplication([])
+
+    def make_app(self) -> ToolshubApp:
+        return ToolshubApp(show_window=False)
+
     def test_initial_window_size_adds_breathing_room(self) -> None:
         self.assertEqual(
             calculate_initial_window_size(
@@ -46,148 +52,30 @@ class ToolshubLayoutTests(unittest.TestCase):
         )
 
     def test_smoke_test_builds_complete_app_without_showing_window(self) -> None:
-        root = Mock()
-        with (
-            patch("toolshub_gui.create_application_root", return_value=root),
-            patch("toolshub_gui.ToolshubApp") as app_class,
-        ):
+        receiver = Mock()
+        receiver.start.return_value = False
+        with patch("toolshub_gui.WorkflowFileReceiver", return_value=receiver):
             self.assertEqual(main(["--smoke-test"]), 0)
-
-        root.withdraw.assert_called_once_with()
-        app_class.assert_called_once_with(root, show_window=False)
-        root.update_idletasks.assert_called_once_with()
-        root.destroy.assert_called_once_with()
-
-    def make_app(self) -> tuple[tk.Tk, ToolshubApp]:
-        try:
-            root = tk.Tk()
-        except tk.TclError as exc:
-            self.skipTest(f"Tk display is unavailable: {exc}")
-
-        root.withdraw()
-        root.deiconify = lambda: None
-        return root, ToolshubApp(root)
-
-    def test_initial_window_is_not_smaller_than_requested_content(self) -> None:
-        root, _ = self.make_app()
-
-        try:
-            root.update()
-
-            content = root.winfo_children()[0]
-            self.assertGreaterEqual(root.winfo_width(), content.winfo_reqwidth())
-            self.assertGreaterEqual(root.winfo_height(), content.winfo_reqheight())
-        finally:
-            root.destroy()
-
-    def test_minimum_width_keeps_the_requested_layout_visible(self) -> None:
-        root, _ = self.make_app()
-
-        try:
-            root.update_idletasks()
-            content = root.winfo_children()[0]
-            minimum_width, _ = root.minsize()
-
-            self.assertGreaterEqual(minimum_width, content.winfo_reqwidth())
-        finally:
-            root.destroy()
-
-    def test_sun_valley_dark_theme_and_toggle_navigation_are_active(self) -> None:
-        root, _ = self.make_app()
-
-        try:
-            style = ttk.Style(root)
-
-            self.assertEqual(style.theme_use(), "sun-valley-dark")
-            self.assertEqual(
-                style.layout("Toolshub.Nav.TRadiobutton"),
-                style.layout("Toggle.TButton"),
-            )
-            self.assertIn("Checkbutton.indicator", repr(style.layout("TCheckbutton")))
-            body_font = tkfont.nametofont("SunValleyBodyFont", root=root)
-            default_font = tkfont.nametofont("TkDefaultFont", root=root)
-            self.assertEqual(body_font.actual("family"), default_font.actual("family"))
-            self.assertEqual(body_font.actual("size"), 10)
-        finally:
-            root.destroy()
-
-    def test_workflow_file_picker_is_button_driven_and_non_editable(self) -> None:
-        root, app = self.make_app()
-
-        try:
-            workflow_frame = app.tool_frames["workflow"]
-            variable_name = str(workflow_frame.input_file_var)
-            matching_entries = [
-                widget
-                for widget in self.collect_widgets(workflow_frame)
-                if isinstance(widget, ttk.Entry)
-                and str(widget.cget("textvariable")) == variable_name
-            ]
-
-            self.assertEqual(matching_entries, [])
-
-            path_display = workflow_frame.input_file_display
-            self.assertIsInstance(path_display, ttk.Label)
-            self.assertEqual(int(path_display.cget("width")), FILE_PATH_DISPLAY_WIDTH)
-            self.assertEqual(str(path_display.grid_info()["sticky"]), "w")
-            self.assertEqual(
-                path_display._file_path_display_variable.get(),
-                "未选择文件",
-            )
-
-            workflow_frame.input_file_var.set(r"C:\very\long\folder\sample.xlsx")
-            self.assertEqual(
-                path_display._file_path_display_variable.get(),
-                "sample.xlsx",
-            )
-        finally:
-            root.destroy()
-
-    def test_workflow_optional_tag_config_can_be_cleared(self) -> None:
-        root, app = self.make_app()
-
-        try:
-            workflow = app.tool_frames["workflow"]
-            workflow.tag_angle_config_file_var.set(r"C:\configs\tags.json")
-            self.assertEqual(
-                workflow.tag_angle_config_entry._file_path_display_variable.get(),
-                "tags.json",
-            )
-
-            workflow.tag_angle_config_clear_button.invoke()
-
-            self.assertEqual(workflow.tag_angle_config_file_var.get(), "")
-            self.assertEqual(
-                workflow.tag_angle_config_entry._file_path_display_variable.get(),
-                "未选择文件",
-            )
-        finally:
-            root.destroy()
+        receiver.close.assert_called()
 
     def test_navigation_only_exposes_top_level_workflows_and_utilities(self) -> None:
         grouped_tools = {
             group.title: [tool.title for tool in group.tools]
             for group in TOOL_GROUPS
         }
-
-        self.assertEqual(
-            grouped_tools["常用流程"],
-            ["一键质量检查", "PhraseLoom"],
-        )
-        self.assertNotIn("术语处理", grouped_tools)
-        self.assertNotIn("质量检查", grouped_tools)
+        self.assertEqual(grouped_tools["常用流程"], ["一键质量检查", "PhraseLoom"])
         self.assertEqual(grouped_tools["文本修复"], ["法语 NBSP 恢复"])
         self.assertEqual(
             grouped_tools["其他"],
             ["Batch 拆分", "合并表格", "Xbench QA 转换"],
         )
 
-    def test_all_tool_pages_are_created_at_startup(self) -> None:
-        root, app = self.make_app()
-
+    def test_all_qt_pages_are_created_once_and_kept_in_stack(self) -> None:
+        window = self.make_app()
         try:
+            self.assertIsInstance(window.page_stack, QStackedWidget)
             self.assertEqual(
-                set(app.tool_frames),
+                set(window.tool_frames),
                 {
                     "workflow",
                     "phraseloom",
@@ -197,189 +85,154 @@ class ToolshubLayoutTests(unittest.TestCase):
                     "xbench_report",
                 },
             )
-            for frame in app.tool_frames.values():
-                self.assertEqual(frame.winfo_manager(), "grid")
+            self.assertEqual(window.page_stack.count(), 6)
+            self.assertIsInstance(window.tool_frames["workflow"], WorkflowPage)
+            self.assertIsInstance(window.tool_frames["phraseloom"], PhraseLoomPage)
         finally:
-            root.destroy()
+            window.close()
 
-    def test_selecting_a_tool_updates_heading_and_visible_page(self) -> None:
-        root, app = self.make_app()
-
+    def test_selecting_a_tool_reuses_persistent_page(self) -> None:
+        window = self.make_app()
         try:
-            workflow_frame = app.tool_frames["workflow"]
-            app.select_tool("french_nbsp")
-            root.update()
-
-            self.assertEqual(app.selected_tool_key.get(), "french_nbsp")
-            self.assertEqual(app.current_tool_title.get(), "法语 NBSP 恢复")
-            self.assertIs(app.current_tool_frame, app.tool_frames["french_nbsp"])
-            self.assertEqual(workflow_frame.winfo_manager(), "grid")
-            self.assertEqual(app.current_tool_frame.winfo_manager(), "grid")
+            page = window.tool_frames["french_nbsp"]
+            window.select_tool("french_nbsp")
+            window.select_tool("workflow")
+            window.select_tool("french_nbsp")
+            self.assertEqual(window.current_tool_key, "french_nbsp")
+            self.assertEqual(window.title_label.text(), "法语 NBSP 恢复")
+            self.assertIs(window.current_tool_frame, page)
+            self.assertIs(window.page_stack.currentWidget(), page)
+            self.assertTrue(window.nav_buttons["french_nbsp"].isChecked())
         finally:
-            root.destroy()
+            window.close()
 
-    def test_selecting_an_existing_tool_page_reuses_its_frame(self) -> None:
-        root, app = self.make_app()
-
+    def test_workflow_file_path_is_read_only_and_button_driven(self) -> None:
+        window = self.make_app()
         try:
-            app.select_tool("french_nbsp")
-            nbsp_frame = app.current_tool_frame
-            app.select_tool("workflow")
-            app.select_tool("french_nbsp")
-
-            self.assertIs(app.current_tool_frame, nbsp_frame)
-            self.assertEqual(nbsp_frame.winfo_manager(), "grid")
-            self.assertEqual(app.tool_frames["workflow"].winfo_manager(), "grid")
-        finally:
-            root.destroy()
-
-    def test_phraseloom_is_embedded_as_a_tool_page(self) -> None:
-        root, app = self.make_app()
-
-        try:
-            app.select_tool("phraseloom")
-            root.update()
-
-            self.assertIsInstance(app.current_tool_frame, PhraseLoomApp)
-            self.assertEqual(app.current_tool_title.get(), "PhraseLoom")
-        finally:
-            root.destroy()
-
-    def test_redundant_shell_copy_and_empty_output_hint_are_hidden(self) -> None:
-        root, app = self.make_app()
-
-        try:
-            root.update()
-            widget_texts = self.collect_widget_texts(root)
-            for redundant_text in (
-                "本地化 QA 工作台",
-                "集中执行全部质量检查项目，并统一写入输出 Excel。",
-                "导出干净、去重的 Strings 工作簿，并在翻译后回填原始 Excel。",
-                "输出文件：选择输入 Excel 后自动生成",
-            ):
-                self.assertNotIn(redundant_text, widget_texts)
-
-            workflow = app.tool_frames["workflow"]
-            self.assertEqual(workflow.output_preview_label.winfo_manager(), "")
-            workflow.output_preview_var.set("输出文件：result.xlsx")
-            self.assertEqual(workflow.output_preview_label.winfo_manager(), "grid")
-        finally:
-            root.destroy()
-
-    def test_tool_pages_do_not_show_output_path_controls(self) -> None:
-        root, _ = self.make_app()
-
-        try:
-            root.update()
-            widget_texts = self.collect_widget_texts(root)
-
-            self.assertNotIn("输出 Excel", widget_texts)
-            self.assertNotIn("另存为", widget_texts)
-        finally:
-            root.destroy()
-
-    def test_scroll_canvases_use_the_application_background(self) -> None:
-        root, app = self.make_app()
-
-        try:
+            workflow = window.tool_frames["workflow"]
+            self.assertTrue(workflow.input_picker.line_edit.isReadOnly())
+            self.assertIsInstance(workflow.input_picker.line_edit, QLineEdit)
+            workflow.input_picker.set_path(r"C:\very\long\folder\sample.xlsx")
             self.assertEqual(
-                app.tool_frames["workflow"].scroll_canvas.cget("background"),
-                APP_MAIN_BACKGROUND,
-            )
-            self.assertEqual(
-                app.tool_frames["phraseloom"].scroll_canvas.cget("background"),
-                APP_MAIN_BACKGROUND,
+                workflow.input_picker.path(),
+                r"C:\very\long\folder\sample.xlsx",
             )
         finally:
-            root.destroy()
+            window.close()
 
-    def test_workflow_short_content_stays_at_the_top_of_a_tall_viewport(self) -> None:
+    def test_workflow_optional_tag_config_can_be_cleared(self) -> None:
+        window = self.make_app()
         try:
-            root = tk.Tk()
-        except tk.TclError as exc:
-            self.skipTest(f"Tk display is unavailable: {exc}")
+            workflow = window.tool_frames["workflow"]
+            workflow.angle_config.set_path(r"C:\configs\tags.json")
+            workflow.angle_config.clear()
+            self.assertEqual(workflow.angle_config.path(), "")
+        finally:
+            window.close()
 
+    def test_workflow_runs_excel_processing_through_background_worker(self) -> None:
+        window = self.make_app()
         try:
-            app = ToolshubApp(root, show_window=False)
-            root.geometry("1334x900")
-            root.deiconify()
-            root.update()
+            workflow = window.tool_frames["workflow"]
+            workflow.input_picker.set_path(r"C:\input\sample.xlsx")
+            workflow.sheet.addItem("Sheet1")
+            workflow.source_column.setText("A")
+            workflow.target_column.setText("B")
+            workflow.run_in_background = Mock()
 
-            workflow = app.tool_frames["workflow"]
-            scroll_region = tuple(
-                float(value)
-                for value in workflow.scroll_canvas.cget("scrollregion").split()
-            )
-            region_height = scroll_region[3] - scroll_region[1]
-            self.assertGreaterEqual(
-                region_height,
-                workflow.scroll_canvas.winfo_height(),
-            )
-            self.assertEqual(workflow.scroll_canvas.canvasy(0), 0.0)
+            workflow.run_selected_tasks()
+
+            workflow.run_in_background.assert_called_once()
+            call_kwargs = workflow.run_in_background.call_args.kwargs
+            self.assertEqual(call_kwargs["kwargs"]["input_file"], r"C:\input\sample.xlsx")
+            self.assertEqual(call_kwargs["kwargs"]["sheet"], "Sheet1")
+            self.assertTrue(call_kwargs["kwargs"]["run_term_pair_check"])
+            self.assertTrue(call_kwargs["kwargs"]["run_target_text_check"])
+            self.assertEqual(call_kwargs["kwargs"]["term_mark_styles"], ("【】", "[]"))
             self.assertEqual(
-                workflow.scroll_content.winfo_rooty(),
-                workflow.scroll_canvas.winfo_rooty(),
+                call_kwargs["kwargs"]["tag_token_types"],
+                ("angle", "square_color", "brace", "newline"),
             )
         finally:
-            root.destroy()
+            window.close()
+
+    def test_batch_worker_uses_values_captured_on_gui_thread(self) -> None:
+        window = self.make_app()
+        try:
+            batcher = window.tool_frames["excel_batcher"]
+            batcher.split_input.set_path(r"C:\input\sample.xlsx")
+            batcher.split_sheet.addItem("Sheet1")
+            batcher.batch_size.setValue(250)
+            batcher.header_rows.setValue(2)
+            batcher.split_output.set_path(r"C:\output\batches")
+            batcher.run_in_background = Mock()
+
+            batcher.run_split()
+            task = batcher.run_in_background.call_args.args[0]
+
+            batcher.split_sheet.setCurrentText("")
+            batcher.batch_size.setValue(999)
+            batcher.header_rows.setValue(0)
+            batcher.split_output.clear()
+            with patch("tools.qt_pages.split_workbook", return_value=Mock()) as split:
+                task()
+
+            split.assert_called_once_with(
+                input_file=r"C:\input\sample.xlsx",
+                sheet="Sheet1",
+                batch_size=250,
+                header_rows=2,
+                output_dir=r"C:\output\batches",
+            )
+        finally:
+            window.close()
+
+    def test_window_refuses_to_close_while_background_task_is_running(self) -> None:
+        window = self.make_app()
+        workflow = window.tool_frames["workflow"]
+        worker = Mock()
+        workflow._workers.add(worker)
+        event = QCloseEvent()
+        try:
+            with patch("toolshub_gui.show_warning") as warning:
+                window.closeEvent(event)
+
+            self.assertFalse(event.isAccepted())
+            warning.assert_called_once()
+            self.assertIn("一键质量检查", warning.call_args.args[2])
+        finally:
+            workflow._workers.clear()
+            window.close()
 
     def test_qa_workflow_argument_accepts_finder_excel_path(self) -> None:
-        args = build_argument_parser().parse_args(
-            ["--qa-workflow", "/tmp/QA input.xlsx"]
-        )
-
+        args = build_argument_parser().parse_args(["--qa-workflow", "/tmp/QA input.xlsx"])
         self.assertEqual(args.qa_workflow, "/tmp/QA input.xlsx")
 
     def test_nbsp_restore_argument_accepts_finder_excel_path(self) -> None:
-        args = build_argument_parser().parse_args(
-            ["--nbsp-restore", "/tmp/French input.xlsx"]
-        )
-
+        args = build_argument_parser().parse_args(["--nbsp-restore", "/tmp/French input.xlsx"])
         self.assertEqual(args.nbsp_restore, "/tmp/French input.xlsx")
 
-    def test_nbsp_finder_action_loads_safe_defaults_and_runs_restore(self) -> None:
+    def test_nbsp_finder_action_loads_safe_defaults_and_schedules_restore(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workbook_path = Path(tmp_dir) / "French input.xlsx"
             workbook_path.touch()
-            restorer = FrenchNbspRestorerApp.__new__(FrenchNbspRestorerApp)
-            restorer.load_input_file = Mock()
-            restorer.run_restore = Mock()
-            app = ToolshubApp.__new__(ToolshubApp)
-            app.root = SimpleNamespace(
-                after_idle=lambda callback: callback(),
-            )
-            app.tool_frames = {"french_nbsp": restorer}
-            app.select_tool = Mock()
-            app._bring_window_to_front = Mock()
-
-            app.open_french_nbsp_restore_file(str(workbook_path))
-
-            app.select_tool.assert_called_once_with("french_nbsp")
-            restorer.load_input_file.assert_called_once_with(
-                str(workbook_path.absolute()),
-                reset_options=True,
-            )
-            app._bring_window_to_front.assert_called_once()
-            restorer.run_restore.assert_called_once()
-
-    def collect_widget_texts(self, widget: tk.Misc) -> set[str]:
-        texts: set[str] = set()
-        for child in widget.winfo_children():
+            window = self.make_app()
             try:
-                text = child.cget("text")
-            except tk.TclError:
-                text = ""
-            if text:
-                texts.add(str(text))
-            texts.update(self.collect_widget_texts(child))
-        return texts
-
-    def collect_widgets(self, widget: tk.Misc) -> list[tk.Misc]:
-        widgets: list[tk.Misc] = []
-        for child in widget.winfo_children():
-            widgets.append(child)
-            widgets.extend(self.collect_widgets(child))
-        return widgets
+                restorer = window.tool_frames["french_nbsp"]
+                self.assertIsInstance(restorer, FrenchNbspPage)
+                restorer.load_input_file = Mock()
+                restorer.run_restore = Mock()
+                window._bring_window_to_front = Mock()
+                with patch("toolshub_gui.QTimer.singleShot", side_effect=lambda _delay, callback: callback()):
+                    window.open_french_nbsp_restore_file(str(workbook_path))
+                restorer.load_input_file.assert_called_once_with(
+                    str(workbook_path.absolute()),
+                    reset_options=True,
+                )
+                restorer.run_restore.assert_called_once_with()
+                window._bring_window_to_front.assert_called_once_with()
+            finally:
+                window.close()
 
 
 if __name__ == "__main__":

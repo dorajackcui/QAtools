@@ -1,31 +1,42 @@
 #!/usr/bin/env python3
-"""Unified GUI launcher for all Excel tools in this repository."""
+"""Unified PySide6 desktop launcher for all QAtools Excel workflows."""
 
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
+import ctypes
 from dataclasses import dataclass
+import os
 import sys
-import tkinter as tk
-from tkinter import messagebox, ttk
 
-from phraseloom.gui import PhraseLoomApp
-from tools.gui_common import (
-    APP_MAIN_BACKGROUND,
-    APP_MUTED_TEXT,
-    APP_SIDEBAR_BACKGROUND,
-    APP_TEXT,
-    BODY_FONT,
-    BRAND_FONT,
-    CATEGORY_FONT,
-    TITLE_FONT,
-    configure_tool_page_style,
-    create_application_root,
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QCloseEvent
+from PySide6.QtWidgets import (
+    QApplication,
+    QButtonGroup,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QSizePolicy,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from tools.french_nbsp_restorer.restore_french_nbsp_gui import FrenchNbspRestorerApp
-from tools.excel_batcher.excel_batcher_gui import ExcelBatcherApp
-from tools.excel_merger.merge_active_sheets_gui import MergeActiveSheetsApp
+
+from tools.qt_gui_common import (
+    APP_BACKGROUND,
+    AsyncPage,
+    BORDER_COLOR,
+    MUTED_TEXT_COLOR,
+    SIDEBAR_BACKGROUND,
+    TEXT_COLOR,
+    create_qt_application,
+    show_error,
+    show_warning,
+)
+from tools.qt_pages import FrenchNbspPage, PAGE_FACTORIES, WorkflowPage
 from tools.workflow.file_receiver import (
     FRENCH_NBSP_RESTORE_ACTION,
     QA_WORKFLOW_ACTION,
@@ -34,11 +45,7 @@ from tools.workflow.file_receiver import (
     normalize_excel_input_file,
     send_tool_input_file,
 )
-from tools.workflow.workflow_gui import WorkflowRunnerApp
-from tools.xbench_report_transformer.transform_xbench_report_gui import XbenchReportTransformerApp
 
-
-ToolFactory = Callable[[tk.Misc], ttk.Frame]
 
 DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 840
@@ -52,7 +59,6 @@ WINDOW_VERTICAL_BREATHING_ROOM = 72
 class ToolItem:
     key: str
     title: str
-    factory: ToolFactory
 
 
 @dataclass(frozen=True)
@@ -65,287 +71,246 @@ TOOL_GROUPS = (
     ToolGroup(
         title="常用流程",
         tools=(
-            ToolItem(
-                key="workflow",
-                title="一键质量检查",
-                factory=WorkflowRunnerApp,
-            ),
-            ToolItem(
-                key="phraseloom",
-                title="PhraseLoom",
-                factory=PhraseLoomApp,
-            ),
+            ToolItem(key="workflow", title="一键质量检查"),
+            ToolItem(key="phraseloom", title="PhraseLoom"),
         ),
     ),
     ToolGroup(
         title="文本修复",
-        tools=(
-            ToolItem(
-                key="french_nbsp",
-                title="法语 NBSP 恢复",
-                factory=FrenchNbspRestorerApp,
-            ),
-        ),
+        tools=(ToolItem(key="french_nbsp", title="法语 NBSP 恢复"),),
     ),
     ToolGroup(
         title="其他",
         tools=(
-            ToolItem(
-                key="excel_batcher",
-                title="Batch 拆分",
-                factory=ExcelBatcherApp,
-            ),
-            ToolItem(
-                key="excel_merger",
-                title="合并表格",
-                factory=MergeActiveSheetsApp,
-            ),
-            ToolItem(
-                key="xbench_report",
-                title="Xbench QA 转换",
-                factory=XbenchReportTransformerApp,
-            ),
+            ToolItem(key="excel_batcher", title="Batch 拆分"),
+            ToolItem(key="excel_merger", title="合并表格"),
+            ToolItem(key="xbench_report", title="Xbench QA 转换"),
         ),
     ),
 )
 
 
-class ToolshubApp:
-    def __init__(self, root: tk.Tk, *, show_window: bool = True) -> None:
-        self.root = root
-        self.root.withdraw()
-        self.root.title("Toolshub")
-        self.root.resizable(True, True)
+class ToolshubApp(QMainWindow):
+    """One native Qt window with persistent pages in a QStackedWidget."""
+
+    def __init__(self, *, show_window: bool = True) -> None:
+        super().__init__()
+        self.setWindowTitle("Toolshub")
+        self.setMinimumSize(MINIMUM_WINDOW_WIDTH, MINIMUM_WINDOW_HEIGHT)
+        self.setAutoFillBackground(True)
         self.tool_groups = TOOL_GROUPS
         self.tools_by_key = {
             tool.key: tool
             for group in self.tool_groups
             for tool in group.tools
         }
-        self.selected_tool_key = tk.StringVar()
-        self.current_tool_title = tk.StringVar()
-        self.tool_frames: dict[str, ttk.Frame] = {}
-        self.nav_buttons: dict[str, ttk.Radiobutton] = {}
-        self.current_tool_frame: ttk.Frame | None = None
+        self.tool_frames: dict[str, QWidget] = {}
+        self.nav_buttons: dict[str, QPushButton] = {}
+        self.current_tool_key = ""
+        self.current_tool_frame: QWidget | None = None
+        self._receiver: WorkflowFileReceiver | None = None
+        self._poll_timer: QTimer | None = None
         self._build_ui()
-        self._fit_window_to_content(show_window=show_window)
+        self._fit_window_to_screen()
+        self.select_tool(self.tool_groups[0].tools[0].key)
+        if show_window:
+            self.show()
 
     def _build_ui(self) -> None:
-        self._configure_style()
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        shell = QWidget()
+        shell.setObjectName("toolshubShell")
+        shell.setStyleSheet(f"#toolshubShell {{ background: {APP_BACKGROUND}; }}")
+        shell_layout = QHBoxLayout(shell)
+        shell_layout.setContentsMargins(0, 0, 0, 0)
+        shell_layout.setSpacing(0)
+        shell_layout.addWidget(self._build_sidebar())
 
-        shell = ttk.Frame(self.root, style="Toolshub.Shell.TFrame")
-        shell.grid(row=0, column=0, sticky="nsew")
-        shell.columnconfigure(1, weight=1)
-        shell.rowconfigure(0, weight=1)
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setStyleSheet(f"color: {BORDER_COLOR};")
+        shell_layout.addWidget(separator)
 
-        sidebar = ttk.Frame(
-            shell,
-            padding=(16, 20, 14, 16),
-            style="Toolshub.Sidebar.TFrame",
+        workspace = QWidget()
+        workspace_layout = QVBoxLayout(workspace)
+        workspace_layout.setContentsMargins(28, 22, 28, 18)
+        workspace_layout.setSpacing(10)
+        self.title_label = QLabel()
+        self.title_label.setStyleSheet(
+            f"font-size: 22px; font-weight: 650; color: {TEXT_COLOR}; background: transparent;"
         )
-        sidebar.grid(row=0, column=0, sticky="nsw")
-        self._build_sidebar(sidebar)
-        ttk.Separator(shell, orient="vertical").grid(
-            row=0,
-            column=0,
-            sticky="nse",
-        )
+        workspace_layout.addWidget(self.title_label)
+        title_rule = QFrame()
+        title_rule.setFrameShape(QFrame.Shape.HLine)
+        title_rule.setStyleSheet(f"color: {BORDER_COLOR};")
+        workspace_layout.addWidget(title_rule)
+        self.page_stack = QStackedWidget()
+        self.page_stack.setStyleSheet(f"background: {APP_BACKGROUND};")
+        workspace_layout.addWidget(self.page_stack, 1)
+        shell_layout.addWidget(workspace, 1)
+        self.setCentralWidget(shell)
 
-        workspace = ttk.Frame(
-            shell,
-            padding=(24, 22, 28, 18),
-            style="Toolshub.Workspace.TFrame",
-        )
-        workspace.grid(row=0, column=1, sticky="nsew")
-        workspace.columnconfigure(0, weight=1)
-        workspace.rowconfigure(2, weight=1)
-
-        ttk.Label(
-            workspace,
-            textvariable=self.current_tool_title,
-            style="Toolshub.Title.TLabel",
-        ).grid(row=0, column=0, sticky="w", padx=16)
-        ttk.Separator(workspace).grid(
-            row=1,
-            column=0,
-            sticky="ew",
-            padx=16,
-            pady=(10, 2),
-        )
-
-        self.content_frame = ttk.Frame(workspace)
-        self.content_frame.grid(row=2, column=0, sticky="nsew")
-        self.content_frame.columnconfigure(0, weight=1)
-        self.content_frame.rowconfigure(0, weight=1)
-
-        self._build_tool_pages()
-        first_tool = self.tool_groups[0].tools[0]
-        self.select_tool(first_tool.key)
-
-    def _configure_style(self) -> None:
-        configure_tool_page_style(self.root)
-        style = ttk.Style(self.root)
-
-        style.configure("Toolshub.Shell.TFrame", background=APP_MAIN_BACKGROUND)
-        style.configure("Toolshub.Sidebar.TFrame", background=APP_SIDEBAR_BACKGROUND)
-        style.configure("Toolshub.Workspace.TFrame", background=APP_MAIN_BACKGROUND)
-        style.configure(
-            "Toolshub.AppTitle.TLabel",
-            background=APP_SIDEBAR_BACKGROUND,
-            foreground=APP_TEXT,
-            font=BRAND_FONT,
-        )
-        style.configure(
-            "Toolshub.Category.TLabel",
-            background=APP_SIDEBAR_BACKGROUND,
-            foreground=APP_MUTED_TEXT,
-            font=CATEGORY_FONT,
-        )
-        style.configure(
-            "Toolshub.Title.TLabel",
-            background=APP_MAIN_BACKGROUND,
-            foreground=APP_TEXT,
-            font=TITLE_FONT,
-        )
-        style.layout(
-            "Toolshub.Nav.TRadiobutton",
-            style.layout("Toggle.TButton"),
-        )
-        style.configure(
-            "Toolshub.Nav.TRadiobutton",
-            anchor="w",
-            font=BODY_FONT,
-            padding=(11, 8),
-        )
-        style.map(
-            "Toolshub.Nav.TRadiobutton",
-            foreground=style.map("Toggle.TButton", "foreground"),
-        )
-
-    def _build_sidebar(self, parent: ttk.Frame) -> None:
-        ttk.Label(
-            parent,
-            text="QAtools",
-            style="Toolshub.AppTitle.TLabel",
-        ).grid(row=0, column=0, sticky="w", padx=10, pady=(0, 20))
-
-        row = 1
         for group in self.tool_groups:
-            ttk.Label(
-                parent,
-                text=group.title,
-                style="Toolshub.Category.TLabel",
-            ).grid(
-                row=row,
-                column=0,
-                sticky="w",
-                padx=11,
-                pady=(14 if row > 1 else 0, 5),
+            for tool in group.tools:
+                page = PAGE_FACTORIES[tool.key]()
+                page.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+                self.page_stack.addWidget(page)
+                self.tool_frames[tool.key] = page
+
+    def _build_sidebar(self) -> QWidget:
+        sidebar = QWidget()
+        sidebar.setObjectName("toolshubSidebar")
+        sidebar.setFixedWidth(222)
+        sidebar.setStyleSheet(
+            f"""
+            #toolshubSidebar {{ background: {SIDEBAR_BACKGROUND}; }}
+            QPushButton {{
+                text-align: left;
+                background: transparent;
+                border: none;
+                border-radius: 6px;
+                padding: 9px 12px;
+                color: {TEXT_COLOR};
+            }}
+            QPushButton:hover {{ background: #202630; }}
+            QPushButton:checked {{ background: #2c5fb8; color: white; font-weight: 600; }}
+            """
+        )
+        layout = QVBoxLayout(sidebar)
+        layout.setContentsMargins(16, 20, 14, 16)
+        layout.setSpacing(3)
+        brand = QLabel("QAtools")
+        brand.setStyleSheet(
+            f"font-size: 20px; font-weight: 700; color: {TEXT_COLOR}; background: transparent; padding: 0 9px 12px 9px;"
+        )
+        layout.addWidget(brand)
+        self.nav_group = QButtonGroup(self)
+        self.nav_group.setExclusive(True)
+        for group_index, group in enumerate(self.tool_groups):
+            category = QLabel(group.title)
+            category.setStyleSheet(
+                f"color: {MUTED_TEXT_COLOR}; font-size: 11px; font-weight: 600; background: transparent; padding: {10 if group_index else 2}px 10px 4px 10px;"
             )
-            row += 1
+            layout.addWidget(category)
             for tool in group.tools:
-                button = ttk.Radiobutton(
-                    parent,
-                    text=tool.title,
-                    value=tool.key,
-                    variable=self.selected_tool_key,
-                    command=lambda key=tool.key: self.select_tool(key),
-                    style="Toolshub.Nav.TRadiobutton",
-                )
-                button.grid(row=row, column=0, sticky="ew", pady=2)
+                button = QPushButton(tool.title)
+                button.setCheckable(True)
+                button.setCursor(Qt.CursorShape.PointingHandCursor)
+                button.clicked.connect(lambda _checked=False, key=tool.key: self.select_tool(key))
+                self.nav_group.addButton(button)
                 self.nav_buttons[tool.key] = button
-                row += 1
-
-        parent.columnconfigure(0, minsize=204)
-
-    def _build_tool_pages(self) -> None:
-        for group in self.tool_groups:
-            for tool in group.tools:
-                frame = tool.factory(self.content_frame)
-                frame.grid(row=0, column=0, sticky="nsew")
-                self.tool_frames[tool.key] = frame
+                layout.addWidget(button)
+        layout.addStretch(1)
+        return sidebar
 
     def select_tool(self, key: str) -> None:
         tool = self.tools_by_key[key]
-        frame = self.tool_frames[key]
-        self.selected_tool_key.set(key)
-        self.current_tool_title.set(tool.title)
-        self.current_tool_frame = frame
-        frame.tkraise()
+        page = self.tool_frames[key]
+        self.current_tool_key = key
+        self.current_tool_frame = page
+        self.title_label.setText(tool.title)
+        self.nav_buttons[key].setChecked(True)
+        self.page_stack.setCurrentWidget(page)
 
     def open_qa_workflow_file(self, file_path: str) -> None:
-        """Select the workflow page and load an Excel file from Finder."""
-
-        normalized_path = normalize_excel_input_file(
-            file_path,
-            action_name="QA workflow",
-        )
-        workflow_frame = self.tool_frames["workflow"]
-        if not isinstance(workflow_frame, WorkflowRunnerApp):
+        normalized = normalize_excel_input_file(file_path, action_name="QA workflow")
+        page = self.tool_frames["workflow"]
+        if not isinstance(page, WorkflowPage):
             raise RuntimeError("一键质量检查页面未正确加载。")
-
         self.select_tool("workflow")
-        workflow_frame.load_input_file(str(normalized_path))
+        page.load_input_file(str(normalized))
         self._bring_window_to_front()
 
-    def open_french_nbsp_restore_file(
-        self,
-        file_path: str,
-        *,
-        run_immediately: bool = True,
-    ) -> None:
-        """Load a Finder file into French NBSP restore and optionally run it."""
-
-        normalized_path = normalize_excel_input_file(
-            file_path,
-            action_name="NBSP restore",
-        )
-        restorer_frame = self.tool_frames["french_nbsp"]
-        if not isinstance(restorer_frame, FrenchNbspRestorerApp):
+    def open_french_nbsp_restore_file(self, file_path: str, *, run_immediately: bool = True) -> None:
+        normalized = normalize_excel_input_file(file_path, action_name="NBSP restore")
+        page = self.tool_frames["french_nbsp"]
+        if not isinstance(page, FrenchNbspPage):
             raise RuntimeError("法语 NBSP 恢复页面未正确加载。")
-
         self.select_tool("french_nbsp")
-        restorer_frame.load_input_file(
-            str(normalized_path),
-            reset_options=True,
-        )
+        page.load_input_file(str(normalized), reset_options=True)
         self._bring_window_to_front()
         if run_immediately:
-            self.root.after_idle(restorer_frame.run_restore)
+            QTimer.singleShot(0, page.run_restore)
 
     def _bring_window_to_front(self) -> None:
-        self.root.deiconify()
-        self.root.lift()
-        try:
-            self.root.attributes("-topmost", True)
-            self.root.after(250, lambda: self.root.attributes("-topmost", False))
-            self.root.focus_force()
-        except tk.TclError:
-            pass
+        if self.isMinimized():
+            self.showNormal()
+        else:
+            self.show()
+        self.raise_()
+        self.activateWindow()
+        if os.name == "nt":
+            try:
+                window_handle = int(self.winId())
+                user32 = ctypes.windll.user32
+                user32.ShowWindow(window_handle, 9)  # SW_RESTORE
+                user32.SetForegroundWindow(window_handle)
+            except (AttributeError, OSError, TypeError, ValueError):
+                pass
 
-    def _fit_window_to_content(self, *, show_window: bool = True) -> None:
-        self.root.update_idletasks()
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
-        requested_width = self.root.winfo_reqwidth()
-        requested_height = self.root.winfo_reqheight()
+    def _fit_window_to_screen(self) -> None:
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+            return
+        available = screen.availableGeometry()
+        requested = self.sizeHint()
         width, height = calculate_initial_window_size(
-            requested_width=requested_width,
-            requested_height=requested_height,
-            screen_width=screen_width,
-            screen_height=screen_height,
+            requested_width=requested.width(),
+            requested_height=requested.height(),
+            screen_width=available.width(),
+            screen_height=available.height(),
         )
-        x = max((self.root.winfo_screenwidth() - width) // 2, 0)
-        y = max((self.root.winfo_screenheight() - height) // 2, 30)
-        self.root.geometry(f"{width}x{height}+{x}+{y}")
-        self.root.minsize(
-            min(width, max(requested_width, MINIMUM_WINDOW_WIDTH)),
-            min(height, MINIMUM_WINDOW_HEIGHT),
+        self.resize(width, height)
+        self.move(
+            available.x() + max((available.width() - width) // 2, 0),
+            available.y() + max((available.height() - height) // 2, 0),
         )
-        if show_window:
-            self.root.deiconify()
+
+    def attach_receiver(self, receiver: WorkflowFileReceiver) -> None:
+        self._receiver = receiver
+        self._poll_timer = QTimer(self)
+        self._poll_timer.setInterval(150)
+        self._poll_timer.timeout.connect(self._poll_forwarded_files)
+        self._poll_timer.start()
+
+    def _poll_forwarded_files(self) -> None:
+        if self._receiver is None:
+            return
+        for request in self._receiver.pop_pending_requests():
+            try:
+                self.handle_file_request(request)
+            except Exception as exc:  # noqa: BLE001
+                show_error(self, "无法载入 Excel", str(exc))
+
+    def handle_file_request(self, request: ToolFileRequest) -> None:
+        if request.action == FRENCH_NBSP_RESTORE_ACTION:
+            self.open_french_nbsp_restore_file(request.file_path)
+        else:
+            self.open_qa_workflow_file(request.file_path)
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt API
+        running_tools = [
+            self.tools_by_key[key].title
+            for key, page in self.tool_frames.items()
+            if isinstance(page, AsyncPage) and page.has_running_tasks()
+        ]
+        if running_tools:
+            event.ignore()
+            show_warning(
+                self,
+                "任务仍在执行",
+                (
+                    "以下任务仍在处理 Excel，完成前不能关闭程序：\n"
+                    + "、".join(running_tools)
+                    + "\n\n请等待任务完成后再关闭，以免输出文件不完整。"
+                ),
+            )
+            return
+        if self._poll_timer is not None:
+            self._poll_timer.stop()
+        if self._receiver is not None:
+            self._receiver.close()
+        super().closeEvent(event)
 
 
 def calculate_initial_window_size(
@@ -355,22 +320,14 @@ def calculate_initial_window_size(
     screen_width: int,
     screen_height: int,
 ) -> tuple[int, int]:
-    """Add breathing room to the requested layout while respecting the screen."""
-
     available_width = max(screen_width - 80, 900)
     available_height = max(screen_height - 80, 640)
     width = min(
-        max(
-            requested_width + WINDOW_HORIZONTAL_BREATHING_ROOM,
-            DEFAULT_WINDOW_WIDTH,
-        ),
+        max(requested_width + WINDOW_HORIZONTAL_BREATHING_ROOM, DEFAULT_WINDOW_WIDTH),
         available_width,
     )
     height = min(
-        max(
-            requested_height + WINDOW_VERTICAL_BREATHING_ROOM,
-            DEFAULT_WINDOW_HEIGHT,
-        ),
+        max(requested_height + WINDOW_VERTICAL_BREATHING_ROOM, DEFAULT_WINDOW_HEIGHT),
         available_height,
     )
     return width, height
@@ -378,122 +335,76 @@ def calculate_initial_window_size(
 
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="打开 Toolshub Excel 工具箱。")
-    finder_action_group = parser.add_mutually_exclusive_group()
-    finder_action_group.add_argument(
-        "--qa-workflow",
-        metavar="EXCEL_FILE",
-        help="把 Excel 文件载入一键质量检查页面。",
-    )
-    finder_action_group.add_argument(
-        "--nbsp-restore",
-        metavar="EXCEL_FILE",
-        help="对 Excel 自动执行法语 NBSP 恢复。",
-    )
-    parser.add_argument(
-        "--smoke-test",
-        action="store_true",
-        help=argparse.SUPPRESS,
-    )
+    action_group = parser.add_mutually_exclusive_group()
+    action_group.add_argument("--qa-workflow", metavar="EXCEL_FILE", help="把 Excel 文件载入一键质量检查页面。")
+    action_group.add_argument("--nbsp-restore", metavar="EXCEL_FILE", help="对 Excel 自动执行法语 NBSP 恢复。")
+    parser.add_argument("--smoke-test", action="store_true", help=argparse.SUPPRESS)
     return parser
+
+
+def _initial_request(args: argparse.Namespace) -> ToolFileRequest | None:
+    if args.qa_workflow:
+        return ToolFileRequest(
+            action=QA_WORKFLOW_ACTION,
+            file_path=str(normalize_excel_input_file(args.qa_workflow, action_name="QA workflow")),
+        )
+    if args.nbsp_restore:
+        return ToolFileRequest(
+            action=FRENCH_NBSP_RESTORE_ACTION,
+            file_path=str(normalize_excel_input_file(args.nbsp_restore, action_name="NBSP restore")),
+        )
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_argument_parser().parse_args(argv)
     if args.smoke_test:
-        root = create_application_root()
-        try:
-            root.withdraw()
-            ToolshubApp(root, show_window=False)
-            root.update_idletasks()
-        finally:
-            root.destroy()
-        return 0
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    try:
+        initial_request = _initial_request(args)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
 
-    initial_request: ToolFileRequest | None = None
-    if args.qa_workflow:
-        try:
-            initial_request = ToolFileRequest(
-                action=QA_WORKFLOW_ACTION,
-                file_path=str(
-                    normalize_excel_input_file(
-                        args.qa_workflow,
-                        action_name="QA workflow",
-                    )
-                ),
-            )
-        except ValueError as exc:
-            print(str(exc), file=sys.stderr)
-            return 2
-    elif args.nbsp_restore:
-        try:
-            initial_request = ToolFileRequest(
-                action=FRENCH_NBSP_RESTORE_ACTION,
-                file_path=str(
-                    normalize_excel_input_file(
-                        args.nbsp_restore,
-                        action_name="NBSP restore",
-                    )
-                ),
-            )
-        except ValueError as exc:
-            print(str(exc), file=sys.stderr)
-            return 2
-
-    if initial_request and send_tool_input_file(
-        initial_request.action,
-        initial_request.file_path,
-    ):
+    if initial_request and send_tool_input_file(initial_request.action, initial_request.file_path):
         return 0
 
     receiver = WorkflowFileReceiver()
     receiver_started = receiver.start()
-    if initial_request and not receiver_started:
-        if send_tool_input_file(
-            initial_request.action,
-            initial_request.file_path,
-        ):
-            return 0
+    if initial_request and not receiver_started and send_tool_input_file(initial_request.action, initial_request.file_path):
+        return 0
 
-    root = create_application_root()
-    app = ToolshubApp(root)
-
-    def handle_file_request(request: ToolFileRequest) -> None:
-        if request.action == FRENCH_NBSP_RESTORE_ACTION:
-            app.open_french_nbsp_restore_file(request.file_path)
-        else:
-            app.open_qa_workflow_file(request.file_path)
-
+    app, owns_app = create_qt_application([sys.argv[0]])
+    window = ToolshubApp(show_window=not args.smoke_test)
+    if receiver_started:
+        window.attach_receiver(receiver)
     if initial_request:
         try:
-            handle_file_request(initial_request)
-        except Exception as exc:
-            messagebox.showerror("无法载入 Excel", str(exc))
+            window.handle_file_request(initial_request)
+        except Exception as exc:  # noqa: BLE001
+            if args.smoke_test:
+                print(str(exc), file=sys.stderr)
+                receiver.close()
+                window.close()
+                return 2
+            show_error(window, "无法载入 Excel", str(exc))
 
-    poll_job: str | None = None
-
-    def poll_forwarded_files() -> None:
-        nonlocal poll_job
-        for forwarded_request in receiver.pop_pending_requests():
-            try:
-                handle_file_request(forwarded_request)
-            except Exception as exc:
-                messagebox.showerror("无法载入 Excel", str(exc))
-        poll_job = root.after(150, poll_forwarded_files)
-
-    def close_app() -> None:
-        if poll_job is not None:
-            root.after_cancel(poll_job)
+    if args.smoke_test:
+        app.processEvents()
         receiver.close()
-        root.destroy()
-
-    if receiver_started:
-        poll_forwarded_files()
-    root.protocol("WM_DELETE_WINDOW", close_app)
+        window.close()
+        return 0
+    # pythonw can create the native window before Qt starts dispatching events,
+    # which lets Windows leave it behind other applications. Activate once as
+    # the event loop starts and once more after the native window settles.
+    QTimer.singleShot(0, window._bring_window_to_front)
+    QTimer.singleShot(180, window._bring_window_to_front)
+    if not owns_app:
+        return 0
     try:
-        root.mainloop()
+        return app.exec()
     finally:
         receiver.close()
-    return 0
 
 
 if __name__ == "__main__":
