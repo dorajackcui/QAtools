@@ -1,4 +1,4 @@
-# PhraseLoom Strings Workflow Redesign
+# PhraseLoom Strings Workflow Redesign (Archived)
 
 ## Product Definition
 

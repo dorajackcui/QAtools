@@ -115,9 +115,9 @@ pyproject.toml           安装、依赖和命令行入口
 
 文档总入口：[docs/README.md](docs/README.md)
 
+- Agent 开发与维护入口：[AGENTS.md](AGENTS.md)
 - 自动化和完整命令参数：[docs/cli-usage.md](docs/cli-usage.md)
 - 术语与 Tag 规则：[docs/term-and-tag-check-rules.md](docs/term-and-tag-check-rules.md)
-- PhraseLoom 合并记录：[docs/phraseloom-migration.md](docs/phraseloom-migration.md)
 - macOS Finder 快速操作：[docs/macos-finder-workflow.md](docs/macos-finder-workflow.md)
 
 ## 开发验证

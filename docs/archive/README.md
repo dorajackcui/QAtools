@@ -1,5 +1,7 @@
-# Archive
+# 文档归档
 
-This directory keeps historical implementation plans and design notes that are useful for provenance but are not part of the active user documentation.
+这里保存已完成的设计、实施计划和迁移记录，仅用于追溯背景，不作为当前
+行为或开发要求。当前文档入口见 [`docs/README.md`](../README.md)。
 
-Active user-facing docs remain in the root `README.md`, `docs/cli-usage.md`, and each tool's own `README.md`.
+归档内容不需要随代码变化持续更新；如与代码、测试或当前 README 冲突，
+以代码、测试和当前 README 为准。

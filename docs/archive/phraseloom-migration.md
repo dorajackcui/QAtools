@@ -1,4 +1,4 @@
-# PhraseLoom 合并记录
+# PhraseLoom 合并记录（已归档）
 
 PhraseLoom 已作为一级 Strings 工作流并入 QAtools。
 
@@ -16,7 +16,7 @@ PhraseLoom remote；合并后的 `phraseloom/` 是后续开发的唯一代码来
 
 - 核心包：`phraseloom/`
 - PhraseLoom 测试：`tests/phraseloom_tests/`
-- Strings 工作流设计：`docs/superpowers/specs/2026-07-30-strings-workflow-redesign.md`
+- Strings 工作流设计：`docs/archive/superpowers/specs/2026-07-30-strings-workflow-redesign.md`
 - Toolshub 入口：`toolshub_gui.py`
 - 统一 CLI：`qatools phraseloom`
 
