@@ -191,17 +191,9 @@ def process_excel(
     rules: Iterable[str] | None = None,
     output_file: str | Path | None = None,
 ) -> CheckSummary:
-    if start_row < 1:
-        raise ValueError("开始行必须大于等于 1。")
-
     input_path = Path(input_file).expanduser().resolve()
     if not input_path.exists():
         raise FileNotFoundError(f"输入文件不存在: {input_path}")
-
-    source_column = normalize_column(source_column)
-    target_column = normalize_column(target_column)
-    validate_distinct_source_target_columns(source_column, target_column)
-    selected_rules = normalize_rules(rules)
     output_path = (
         Path(output_file).expanduser().resolve()
         if output_file
@@ -210,78 +202,108 @@ def process_excel(
 
     workbook = load_workbook_for_editing(input_path)
     try:
-        worksheet = workbook[sheet] if sheet else workbook.active
-        last_row = find_last_value_row(
-            worksheet,
-            (source_column, target_column),
-            start_row=start_row,
-        )
-        number_entries: list[tuple[object, ...]] = []
-        url_entries: list[tuple[object, ...]] = []
-
-        for row_index in range(start_row, last_row + 1):
-            source_text = cell_text(worksheet[f"{source_column}{row_index}"].value)
-            target_text = cell_text(worksheet[f"{target_column}{row_index}"].value)
-            if NUMBER_RULE in selected_rules:
-                source_numbers = extract_numbers(source_text)
-                target_numbers = extract_numbers(target_text)
-                if Counter(source_numbers) != Counter(target_numbers):
-                    number_entries.append(
-                        _problem_entry(
-                            row_index=row_index,
-                            source_text=source_text,
-                            target_text=target_text,
-                            label="数字",
-                            source_values=source_numbers,
-                            target_values=target_numbers,
-                        )
-                    )
-            if URL_RULE in selected_rules:
-                source_urls = extract_urls(source_text)
-                target_urls = extract_urls(target_text)
-                if Counter(source_urls) != Counter(target_urls):
-                    url_entries.append(
-                        _problem_entry(
-                            row_index=row_index,
-                            source_text=source_text,
-                            target_text=target_text,
-                            label="URL",
-                            source_values=source_urls,
-                            target_values=target_urls,
-                        )
-                    )
-
-        detail_headers = ("Source 内容", "Target 内容", "Target 缺少", "Target 多出")
-        if NUMBER_RULE in selected_rules:
-            write_output_table(
-                workbook,
-                current_sheet_name=worksheet.title,
-                sheet_name=NUMBER_PROBLEM_SHEET_NAME,
-                headers=PROBLEM_BASE_HEADERS + detail_headers,
-                rows=number_entries,
-                row_link_target_column=target_column,
-            )
-        if URL_RULE in selected_rules:
-            write_output_table(
-                workbook,
-                current_sheet_name=worksheet.title,
-                sheet_name=URL_PROBLEM_SHEET_NAME,
-                headers=PROBLEM_BASE_HEADERS + detail_headers,
-                rows=url_entries,
-                row_link_target_column=target_column,
-            )
-
-        workbook.save(output_path)
-        return CheckSummary(
+        summary = process_workbook(
+            workbook=workbook,
             output_path=output_path,
-            worksheet_title=worksheet.title,
             source_column=source_column,
             target_column=target_column,
+            sheet=sheet,
             start_row=start_row,
-            total_rows_checked=max(0, last_row - start_row + 1),
-            selected_rules=selected_rules,
-            number_problem_rows=len(number_entries),
-            url_problem_rows=len(url_entries),
+            rules=rules,
         )
+        workbook.save(output_path)
+        return summary
     finally:
         workbook.close()
+
+
+def process_workbook(
+    *,
+    workbook,
+    output_path: Path,
+    source_column: str,
+    target_column: str,
+    sheet: str | None = None,
+    start_row: int = 2,
+    rules: Iterable[str] | None = None,
+) -> CheckSummary:
+    """Run the selected checks against an already-open workbook without saving it."""
+    if start_row < 1:
+        raise ValueError("开始行必须大于等于 1。")
+
+    source_column = normalize_column(source_column)
+    target_column = normalize_column(target_column)
+    validate_distinct_source_target_columns(source_column, target_column)
+    selected_rules = normalize_rules(rules)
+    worksheet = workbook[sheet] if sheet else workbook.active
+    last_row = find_last_value_row(
+        worksheet,
+        (source_column, target_column),
+        start_row=start_row,
+    )
+    number_entries: list[tuple[object, ...]] = []
+    url_entries: list[tuple[object, ...]] = []
+
+    for row_index in range(start_row, last_row + 1):
+        source_text = cell_text(worksheet[f"{source_column}{row_index}"].value)
+        target_text = cell_text(worksheet[f"{target_column}{row_index}"].value)
+        if NUMBER_RULE in selected_rules:
+            source_numbers = extract_numbers(source_text)
+            target_numbers = extract_numbers(target_text)
+            if Counter(source_numbers) != Counter(target_numbers):
+                number_entries.append(
+                    _problem_entry(
+                        row_index=row_index,
+                        source_text=source_text,
+                        target_text=target_text,
+                        label="数字",
+                        source_values=source_numbers,
+                        target_values=target_numbers,
+                    )
+                )
+        if URL_RULE in selected_rules:
+            source_urls = extract_urls(source_text)
+            target_urls = extract_urls(target_text)
+            if Counter(source_urls) != Counter(target_urls):
+                url_entries.append(
+                    _problem_entry(
+                        row_index=row_index,
+                        source_text=source_text,
+                        target_text=target_text,
+                        label="URL",
+                        source_values=source_urls,
+                        target_values=target_urls,
+                    )
+                )
+
+    detail_headers = ("Source 内容", "Target 内容", "Target 缺少", "Target 多出")
+    if NUMBER_RULE in selected_rules:
+        write_output_table(
+            workbook,
+            current_sheet_name=worksheet.title,
+            sheet_name=NUMBER_PROBLEM_SHEET_NAME,
+            headers=PROBLEM_BASE_HEADERS + detail_headers,
+            rows=number_entries,
+            row_link_target_column=target_column,
+        )
+    if URL_RULE in selected_rules:
+        write_output_table(
+            workbook,
+            current_sheet_name=worksheet.title,
+            sheet_name=URL_PROBLEM_SHEET_NAME,
+            headers=PROBLEM_BASE_HEADERS + detail_headers,
+            rows=url_entries,
+            row_link_target_column=target_column,
+        )
+
+    return CheckSummary(
+        output_path=output_path,
+        worksheet_title=worksheet.title,
+        source_column=source_column,
+        target_column=target_column,
+        start_row=start_row,
+        total_rows_checked=max(0, last_row - start_row + 1),
+        selected_rules=selected_rules,
+        number_problem_rows=len(number_entries),
+        url_problem_rows=len(url_entries),
+    )

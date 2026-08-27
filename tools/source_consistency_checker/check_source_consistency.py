@@ -84,16 +84,9 @@ def process_excel(
     start_row: int = 2,
     output_file: str | Path | None = None,
 ) -> CheckSummary:
-    if start_row < 1:
-        raise ValueError("开始行必须大于等于 1。")
-
     input_path = Path(input_file).expanduser().resolve()
     if not input_path.exists():
         raise FileNotFoundError(f"输入文件不存在: {input_path}")
-
-    source_column = normalize_column(source_column)
-    target_column = normalize_column(target_column)
-    validate_distinct_source_target_columns(source_column, target_column)
     output_path = (
         Path(output_file).expanduser().resolve()
         if output_file
@@ -101,6 +94,37 @@ def process_excel(
     )
 
     workbook = load_workbook_for_editing(input_path)
+    try:
+        summary = process_workbook(
+            workbook=workbook,
+            output_path=output_path,
+            source_column=source_column,
+            target_column=target_column,
+            sheet=sheet,
+            start_row=start_row,
+        )
+        workbook.save(output_path)
+        return summary
+    finally:
+        workbook.close()
+
+
+def process_workbook(
+    *,
+    workbook,
+    output_path: Path,
+    source_column: str,
+    target_column: str,
+    sheet: str | None = None,
+    start_row: int = 2,
+) -> CheckSummary:
+    """Run the check against an already-open workbook without saving it."""
+    if start_row < 1:
+        raise ValueError("开始行必须大于等于 1。")
+
+    source_column = normalize_column(source_column)
+    target_column = normalize_column(target_column)
+    validate_distinct_source_target_columns(source_column, target_column)
     worksheet = workbook[sheet] if sheet else workbook.active
     occurrences_by_source: dict[str, list[SourceOccurrence]] = {}
     last_row = find_last_value_row(
@@ -144,7 +168,6 @@ def process_excel(
             )
 
     write_problem_sheet(workbook, worksheet.title, target_column, problem_entries)
-    workbook.save(output_path)
     return CheckSummary(
         output_path=output_path,
         worksheet_title=worksheet.title,

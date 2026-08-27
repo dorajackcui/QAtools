@@ -80,12 +80,6 @@ def process_excel(
     input_path = Path(input_file).expanduser().resolve()
     if not input_path.exists():
         raise FileNotFoundError(f"输入文件不存在: {input_path}")
-    if start_row < 1:
-        raise ValueError("开始行必须大于等于 1。")
-
-    source_column = normalize_column(source_column)
-    target_column = normalize_column(target_column)
-    validate_distinct_source_target_columns(source_column, target_column)
     output_path = (
         Path(output_file).expanduser().resolve()
         if output_file
@@ -93,6 +87,37 @@ def process_excel(
     )
 
     workbook = load_workbook_for_editing(input_path)
+    try:
+        summary = process_workbook(
+            workbook=workbook,
+            output_path=output_path,
+            source_column=source_column,
+            target_column=target_column,
+            sheet=sheet,
+            start_row=start_row,
+        )
+        workbook.save(output_path)
+        return summary
+    finally:
+        workbook.close()
+
+
+def process_workbook(
+    *,
+    workbook,
+    output_path: Path,
+    source_column: str,
+    target_column: str,
+    sheet: str | None = None,
+    start_row: int = 2,
+) -> CheckSummary:
+    """Run the check against an already-open workbook without saving it."""
+    if start_row < 1:
+        raise ValueError("开始行必须大于等于 1。")
+
+    source_column = normalize_column(source_column)
+    target_column = normalize_column(target_column)
+    validate_distinct_source_target_columns(source_column, target_column)
     worksheet = workbook[sheet] if sheet else workbook.active
     for legacy_sheet_name in LEGACY_PROBLEM_SHEET_NAMES:
         if (
@@ -133,7 +158,6 @@ def process_excel(
         rows=problem_entries,
         row_link_target_column=target_column,
     )
-    workbook.save(output_path)
     return CheckSummary(
         output_path=output_path,
         worksheet_title=worksheet.title,

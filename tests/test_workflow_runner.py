@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from openpyxl import Workbook, load_workbook
 
@@ -184,6 +184,42 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(metadata["source_column"], "A")
             self.assertEqual(metadata["target_column"], "B")
             self.assertEqual(metadata["remove_term_helper"], "0")
+
+    def test_workflow_loads_and_saves_the_main_workbook_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            output_path = Path(tmp_dir) / "workflow_output.xlsx"
+            self.create_workbook(input_path)
+            shared_workbook = load_workbook(input_path)
+            real_save = shared_workbook.save
+            shared_workbook.save = Mock(wraps=real_save)
+
+            with patch(
+                "tools.workflow.workflow_runner.load_workbook_for_editing",
+                return_value=shared_workbook,
+            ) as load_mock:
+                run_workflow(
+                    input_file=input_path,
+                    output_file=output_path,
+                    source_column="A",
+                    target_column="B",
+                    sheet="Data",
+                    run_term_pair_check=True,
+                    term_mark_styles=("[]",),
+                    run_tag_check=True,
+                    tag_token_types=("angle", "brace"),
+                    run_line_break_check=True,
+                    run_source_consistency_check=True,
+                    run_target_consistency_check=True,
+                    run_number_check=True,
+                    run_url_check=True,
+                    run_chinese_target_check=True,
+                    run_target_text_check=True,
+                )
+
+            load_mock.assert_called_once_with(input_path.resolve())
+            self.assertEqual(shared_workbook.save.call_count, 1)
+            self.assertEqual(shared_workbook.save.call_args.args, (output_path.resolve(),))
 
     def test_run_workflow_surfaces_angle_tag_structure_mismatches(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

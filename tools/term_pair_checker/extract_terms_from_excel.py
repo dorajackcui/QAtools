@@ -558,6 +558,9 @@ def process_excel(
     history_start_row: int = 2,
     output_file: str | Path | None = None,
     include_row_problem_column: bool = True,
+    *,
+    workbook=None,
+    save_output: bool = True,
 ) -> tuple[str, str, str, Path, int, int]:
     if start_row < 1:
         raise ValueError("开始行必须大于等于 1。")
@@ -605,7 +608,9 @@ def process_excel(
         else build_default_output_path(input_path)
     )
 
-    workbook = load_workbook_for_editing(input_path)
+    owns_workbook = workbook is None
+    if owns_workbook:
+        workbook = load_workbook_for_editing(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
     last_row = find_last_value_row(
         worksheet,
@@ -816,15 +821,62 @@ def process_excel(
 
     delete_legacy_term_sheets(workbook)
 
-    workbook.save(output_path)
+    if save_output:
+        workbook.save(output_path)
 
-    return (
+    result = (
         worksheet.title,
         source_column,
         target_column,
         output_path,
         len(output_term_mapping),
         len(problem_entries),
+    )
+    if owns_workbook:
+        workbook.close()
+    return result
+
+
+def process_workbook(
+    *,
+    workbook,
+    input_file: str | Path,
+    output_path: Path,
+    source_column: str,
+    target_column: str,
+    sheet: str | None = None,
+    start_row: int = 2,
+    mark_styles: Iterable[str] | None = None,
+    mark_style: str | None = None,
+    exclusion_patterns: Iterable[str] | None = None,
+    exclusion_config_file: str | Path | None = None,
+    history_tb_file: str | Path | None = None,
+    history_sheet: str | None = None,
+    history_source_column: str | None = None,
+    history_target_column: str | None = None,
+    history_start_row: int = 2,
+    include_row_problem_column: bool = True,
+) -> tuple[str, str, str, Path, int, int]:
+    """Run terminology checks against an already-open workbook without saving it."""
+    return process_excel(
+        input_file=input_file,
+        source_column=source_column,
+        target_column=target_column,
+        sheet=sheet,
+        start_row=start_row,
+        mark_styles=mark_styles,
+        mark_style=mark_style,
+        exclusion_patterns=exclusion_patterns,
+        exclusion_config_file=exclusion_config_file,
+        history_tb_file=history_tb_file,
+        history_sheet=history_sheet,
+        history_source_column=history_source_column,
+        history_target_column=history_target_column,
+        history_start_row=history_start_row,
+        output_file=output_path,
+        include_row_problem_column=include_row_problem_column,
+        workbook=workbook,
+        save_output=False,
     )
 
 

@@ -11,14 +11,14 @@ from openpyxl.utils import column_index_from_string
 
 from tools.chinese_target_checker.check_chinese_target import (
     PROBLEM_SHEET_NAME as CHINESE_PROBLEM_SHEET_NAME,
-    process_excel as run_chinese_target_check_excel,
+    process_workbook as run_chinese_target_check_workbook,
 )
 from tools.content_fidelity_checker.check_content_fidelity import (
     NUMBER_PROBLEM_SHEET_NAME,
     NUMBER_RULE,
     URL_PROBLEM_SHEET_NAME,
     URL_RULE,
-    process_excel as run_content_fidelity_check_excel,
+    process_workbook as run_content_fidelity_check_workbook,
 )
 from tools.excel_output import (
     ROW_PROBLEM_COLUMN_HEADER,
@@ -28,27 +28,27 @@ from tools.excel_output import (
 )
 from tools.line_break_checker.check_line_breaks import (
     PROBLEM_SHEET_NAME as LINE_BREAK_PROBLEM_SHEET_NAME,
-    process_excel as run_line_break_check_excel,
+    process_workbook as run_line_break_check_workbook,
 )
 from tools.source_consistency_checker.check_source_consistency import (
     PROBLEM_SHEET_NAME as SOURCE_CONSISTENCY_PROBLEM_SHEET_NAME,
-    process_excel as run_source_consistency_check_excel,
+    process_workbook as run_source_consistency_check_workbook,
 )
 from tools.target_consistency_checker.check_target_consistency import (
     PROBLEM_SHEET_NAME as TARGET_CONSISTENCY_PROBLEM_SHEET_NAME,
-    process_excel as run_target_consistency_check_excel,
+    process_workbook as run_target_consistency_check_workbook,
 )
 from tools.tag_placeholder_checker.check_tags_and_placeholders import (
     PROBLEM_SHEET_NAME as TAG_PROBLEM_SHEET_NAME,
     SUMMARY_SHEET_NAME as TAG_SUMMARY_SHEET_NAME,
-    process_excel as run_tag_check_excel,
+    process_workbook as run_tag_check_workbook,
 )
 from tools.target_text_checker.check_target_text import (
     PROBLEM_SHEET_NAME as TARGET_TEXT_PROBLEM_SHEET_NAME,
-    process_excel as run_target_text_check_excel,
+    process_workbook as run_target_text_check_workbook,
 )
 from tools.term_pair_checker.extract_terms_from_excel import (
-    process_excel as run_term_pair_check_excel,
+    process_workbook as run_term_pair_check_workbook,
 )
 from tools.term_pair_checker.workbook_output import (
     PROBLEM_SHEET_NAME as TERM_PROBLEM_SHEET_NAME,
@@ -139,110 +139,115 @@ def finalize_workflow_output(
     source_column: str,
     target_column: str,
     start_row: int,
+    workbook=None,
 ) -> int:
     """Normalize workflow-only sheets and write the compact quality summary."""
-    workbook = load_workbook_for_editing(output_path)
+    owns_workbook = workbook is None
+    if owns_workbook:
+        workbook = load_workbook_for_editing(output_path)
     term_problem_rows = 0
+    try:
+        if run_term_pair_check and TERM_PROBLEM_SHEET_NAME in workbook.sheetnames:
+            if worksheet_title == WORKFLOW_TERM_PROBLEM_SHEET_NAME:
+                raise ValueError(
+                    f"数据工作表名称不能为 {WORKFLOW_TERM_PROBLEM_SHEET_NAME}"
+                )
+            term_problem_sheet = workbook[TERM_PROBLEM_SHEET_NAME]
+            term_problem_rows = count_unique_problem_rows(term_problem_sheet)
+            if WORKFLOW_TERM_PROBLEM_SHEET_NAME in workbook.sheetnames:
+                del workbook[WORKFLOW_TERM_PROBLEM_SHEET_NAME]
+            term_problem_sheet.title = WORKFLOW_TERM_PROBLEM_SHEET_NAME
 
-    if run_term_pair_check and TERM_PROBLEM_SHEET_NAME in workbook.sheetnames:
-        if worksheet_title == WORKFLOW_TERM_PROBLEM_SHEET_NAME:
-            raise ValueError(
-                f"数据工作表名称不能为 {WORKFLOW_TERM_PROBLEM_SHEET_NAME}"
+        if worksheet_title == WORKFLOW_SUMMARY_SHEET_NAME:
+            raise ValueError(f"数据工作表名称不能为 {WORKFLOW_SUMMARY_SHEET_NAME}")
+
+        if TAG_SUMMARY_SHEET_NAME in workbook.sheetnames:
+            del workbook[TAG_SUMMARY_SHEET_NAME]
+        if WORKFLOW_SUMMARY_SHEET_NAME in workbook.sheetnames:
+            del workbook[WORKFLOW_SUMMARY_SHEET_NAME]
+
+        problem_sheets = []
+        if run_term_pair_check:
+            problem_sheets.append(("术语检查", WORKFLOW_TERM_PROBLEM_SHEET_NAME))
+        if run_source_consistency_check:
+            problem_sheets.append(
+                ("同 Source 不同 Target", SOURCE_CONSISTENCY_PROBLEM_SHEET_NAME)
             )
-        term_problem_sheet = workbook[TERM_PROBLEM_SHEET_NAME]
-        term_problem_rows = count_unique_problem_rows(term_problem_sheet)
-        if WORKFLOW_TERM_PROBLEM_SHEET_NAME in workbook.sheetnames:
-            del workbook[WORKFLOW_TERM_PROBLEM_SHEET_NAME]
-        term_problem_sheet.title = WORKFLOW_TERM_PROBLEM_SHEET_NAME
-
-    if worksheet_title == WORKFLOW_SUMMARY_SHEET_NAME:
-        raise ValueError(f"数据工作表名称不能为 {WORKFLOW_SUMMARY_SHEET_NAME}")
-
-    if TAG_SUMMARY_SHEET_NAME in workbook.sheetnames:
-        del workbook[TAG_SUMMARY_SHEET_NAME]
-    if WORKFLOW_SUMMARY_SHEET_NAME in workbook.sheetnames:
-        del workbook[WORKFLOW_SUMMARY_SHEET_NAME]
-
-    problem_sheets = []
-    if run_term_pair_check:
-        problem_sheets.append(("术语检查", WORKFLOW_TERM_PROBLEM_SHEET_NAME))
-    if run_source_consistency_check:
-        problem_sheets.append(
-            ("同 Source 不同 Target", SOURCE_CONSISTENCY_PROBLEM_SHEET_NAME)
+        if run_target_consistency_check:
+            problem_sheets.append(
+                ("同 Target 不同 Source", TARGET_CONSISTENCY_PROBLEM_SHEET_NAME)
+            )
+        if run_tag_check:
+            problem_sheets.append(("Tag 检查", TAG_PROBLEM_SHEET_NAME))
+        if run_line_break_check:
+            problem_sheets.append(("换行数量检查", LINE_BREAK_PROBLEM_SHEET_NAME))
+        if run_number_check:
+            problem_sheets.append(("数字一致性", NUMBER_PROBLEM_SHEET_NAME))
+        if run_url_check:
+            problem_sheets.append(("URL 一致性", URL_PROBLEM_SHEET_NAME))
+        if run_chinese_target_check:
+            problem_sheets.append(("Target 中文检查", CHINESE_PROBLEM_SHEET_NAME))
+        if run_target_text_check:
+            problem_sheets.append(("Target 文本规范检查", TARGET_TEXT_PROBLEM_SHEET_NAME))
+        generated_sheet_names = []
+        if run_term_pair_check:
+            generated_sheet_names.append(TERM_SHEET_NAME)
+        generated_sheet_names.extend(
+            (WORKFLOW_REVIEW_SHEET_NAME, WORKFLOW_SUMMARY_SHEET_NAME)
         )
-    if run_target_consistency_check:
-        problem_sheets.append(
-            ("同 Target 不同 Source", TARGET_CONSISTENCY_PROBLEM_SHEET_NAME)
+        write_review_sheet(
+            workbook,
+            current_sheet_name=worksheet_title,
+            input_file=input_file,
+            source_column=source_column,
+            target_column=target_column,
+            start_row=start_row,
+            problem_sheets=problem_sheets,
+            generated_sheet_names=generated_sheet_names,
+            remove_term_helper=False,
         )
-    if run_tag_check:
-        problem_sheets.append(("Tag 检查", TAG_PROBLEM_SHEET_NAME))
-    if run_line_break_check:
-        problem_sheets.append(("换行数量检查", LINE_BREAK_PROBLEM_SHEET_NAME))
-    if run_number_check:
-        problem_sheets.append(("数字一致性", NUMBER_PROBLEM_SHEET_NAME))
-    if run_url_check:
-        problem_sheets.append(("URL 一致性", URL_PROBLEM_SHEET_NAME))
-    if run_chinese_target_check:
-        problem_sheets.append(("Target 中文检查", CHINESE_PROBLEM_SHEET_NAME))
-    if run_target_text_check:
-        problem_sheets.append(("Target 文本规范检查", TARGET_TEXT_PROBLEM_SHEET_NAME))
-    generated_sheet_names = []
-    if run_term_pair_check:
-        generated_sheet_names.append(TERM_SHEET_NAME)
-    generated_sheet_names.extend(
-        (WORKFLOW_REVIEW_SHEET_NAME, WORKFLOW_SUMMARY_SHEET_NAME)
-    )
-    write_review_sheet(
-        workbook,
-        current_sheet_name=worksheet_title,
-        input_file=input_file,
-        source_column=source_column,
-        target_column=target_column,
-        start_row=start_row,
-        problem_sheets=problem_sheets,
-        generated_sheet_names=generated_sheet_names,
-        remove_term_helper=False,
-    )
 
-    for _, problem_sheet_name in problem_sheets:
-        if problem_sheet_name in workbook.sheetnames:
-            del workbook[problem_sheet_name]
+        for _, problem_sheet_name in problem_sheets:
+            if problem_sheet_name in workbook.sheetnames:
+                del workbook[problem_sheet_name]
 
-    if run_term_pair_check:
-        data_sheet = workbook[worksheet_title]
-        helper_column_index = column_index_from_string(target_column) + 1
-        if data_sheet.cell(1, helper_column_index).value == ROW_PROBLEM_COLUMN_HEADER:
-            data_sheet.delete_cols(helper_column_index)
+        if run_term_pair_check:
+            data_sheet = workbook[worksheet_title]
+            helper_column_index = column_index_from_string(target_column) + 1
+            if data_sheet.cell(1, helper_column_index).value == ROW_PROBLEM_COLUMN_HEADER:
+                data_sheet.delete_cols(helper_column_index)
 
-    summary_sheet = workbook.create_sheet(WORKFLOW_SUMMARY_SHEET_NAME)
-    summary_sheet.append(["检查项", "问题行数"])
-    summary_rows = []
-    if run_term_pair_check:
-        summary_rows.append(("术语检查", term_problem_rows))
-    if run_source_consistency_check:
-        summary_rows.append(("同 Source 不同 Target", source_consistency_problem_rows))
-    if run_target_consistency_check:
-        summary_rows.append(("同 Target 不同 Source", target_consistency_problem_rows))
-    if run_tag_check:
-        summary_rows.append(("Tag 检查", tag_problem_rows))
-    if run_line_break_check:
-        summary_rows.append(("换行数量检查", line_break_problem_rows))
-    if run_number_check:
-        summary_rows.append(("数字一致性", number_problem_rows))
-    if run_url_check:
-        summary_rows.append(("URL 一致性", url_problem_rows))
-    if run_chinese_target_check:
-        summary_rows.append(("Target 中文检查", chinese_target_problem_rows))
-    if run_target_text_check:
-        summary_rows.append(("Target 文本规范检查", target_text_problem_rows))
-    for summary_row in summary_rows:
-        summary_sheet.append(summary_row)
+        summary_sheet = workbook.create_sheet(WORKFLOW_SUMMARY_SHEET_NAME)
+        summary_sheet.append(["检查项", "问题行数"])
+        summary_rows = []
+        if run_term_pair_check:
+            summary_rows.append(("术语检查", term_problem_rows))
+        if run_source_consistency_check:
+            summary_rows.append(("同 Source 不同 Target", source_consistency_problem_rows))
+        if run_target_consistency_check:
+            summary_rows.append(("同 Target 不同 Source", target_consistency_problem_rows))
+        if run_tag_check:
+            summary_rows.append(("Tag 检查", tag_problem_rows))
+        if run_line_break_check:
+            summary_rows.append(("换行数量检查", line_break_problem_rows))
+        if run_number_check:
+            summary_rows.append(("数字一致性", number_problem_rows))
+        if run_url_check:
+            summary_rows.append(("URL 一致性", url_problem_rows))
+        if run_chinese_target_check:
+            summary_rows.append(("Target 中文检查", chinese_target_problem_rows))
+        if run_target_text_check:
+            summary_rows.append(("Target 文本规范检查", target_text_problem_rows))
+        for summary_row in summary_rows:
+            summary_sheet.append(summary_row)
 
-    summary_sheet.column_dimensions["A"].width = 22
-    summary_sheet.column_dimensions["B"].width = 12
-    workbook.save(output_path)
-    workbook.close()
-    return term_problem_rows
+        summary_sheet.column_dimensions["A"].width = 22
+        summary_sheet.column_dimensions["B"].width = 12
+        workbook.save(output_path)
+        return term_problem_rows
+    finally:
+        if owns_workbook:
+            workbook.close()
 
 
 def run_workflow(
@@ -307,7 +312,6 @@ def run_workflow(
         else build_default_output_path(input_path)
     )
 
-    current_input_path = input_path
     worksheet_title = sheet or ""
     term_count = 0
     term_problem_count = 0
@@ -325,16 +329,20 @@ def run_workflow(
     target_text_problem_count = 0
     target_text_problem_rows = 0
 
+    workflow_workbook = load_workbook_for_editing(input_path)
+
     if run_term_pair_check:
         (
             worksheet_title,
             normalized_source_column,
             normalized_target_column,
-            saved_path,
+            _saved_path,
             term_count,
             term_problem_count,
-        ) = run_term_pair_check_excel(
-            input_file=current_input_path,
+        ) = run_term_pair_check_workbook(
+            workbook=workflow_workbook,
+            input_file=input_path,
+            output_path=output_path,
             source_column=normalized_source_column,
             target_column=normalized_target_column,
             sheet=sheet,
@@ -345,75 +353,70 @@ def run_workflow(
             history_source_column=term_history_source_column,
             history_target_column=term_history_target_column,
             history_start_row=term_history_start_row,
-            output_file=output_path,
             include_row_problem_column=False,
         )
-        current_input_path = saved_path
 
     if run_tag_check:
-        tag_summary = run_tag_check_excel(
-            input_file=current_input_path,
+        tag_summary = run_tag_check_workbook(
+            workbook=workflow_workbook,
+            output_path=output_path,
             source_column=normalized_source_column,
             target_column=normalized_target_column,
             sheet=sheet,
             start_row=start_row,
             token_types=tag_token_types,
             angle_config_file=tag_angle_config_file,
-            output_file=output_path,
         )
         worksheet_title = tag_summary.worksheet_title
         tag_problem_count = tag_summary.problem_count
         tag_problem_rows = tag_summary.problem_rows
-        current_input_path = tag_summary.output_path
 
     if run_line_break_check:
-        line_break_summary = run_line_break_check_excel(
-            input_file=current_input_path,
+        line_break_summary = run_line_break_check_workbook(
+            workbook=workflow_workbook,
+            output_path=output_path,
             source_column=normalized_source_column,
             target_column=normalized_target_column,
             sheet=sheet,
             start_row=start_row,
-            output_file=output_path,
         )
         worksheet_title = line_break_summary.worksheet_title
         line_break_problem_count = line_break_summary.problem_rows
-        current_input_path = line_break_summary.output_path
 
     if run_source_consistency_check:
-        source_consistency_summary = run_source_consistency_check_excel(
-            input_file=current_input_path,
+        source_consistency_summary = run_source_consistency_check_workbook(
+            workbook=workflow_workbook,
+            output_path=output_path,
             source_column=normalized_source_column,
             target_column=normalized_target_column,
             sheet=sheet,
             start_row=start_row,
-            output_file=output_path,
         )
         worksheet_title = source_consistency_summary.worksheet_title
         source_consistency_problem_count = (
             source_consistency_summary.inconsistent_source_count
         )
         source_consistency_problem_rows = source_consistency_summary.problem_rows
-        current_input_path = source_consistency_summary.output_path
 
     if run_target_consistency_check:
-        target_consistency_summary = run_target_consistency_check_excel(
-            input_file=current_input_path,
+        target_consistency_summary = run_target_consistency_check_workbook(
+            workbook=workflow_workbook,
+            output_path=output_path,
             source_column=normalized_source_column,
             target_column=normalized_target_column,
             sheet=sheet,
             start_row=start_row,
-            output_file=output_path,
         )
         worksheet_title = target_consistency_summary.worksheet_title
         target_consistency_problem_count = (
             target_consistency_summary.inconsistent_target_count
         )
         target_consistency_problem_rows = target_consistency_summary.problem_rows
-        current_input_path = target_consistency_summary.output_path
 
     if run_number_check or run_url_check:
-        content_fidelity_summary = run_content_fidelity_check_excel(
-            input_file=current_input_path,
+        content_fidelity_summary = run_content_fidelity_check_workbook(
+            workbook=workflow_workbook,
+            output_path=output_path,
             source_column=normalized_source_column,
             target_column=normalized_target_column,
             sheet=sheet,
@@ -426,35 +429,32 @@ def run_workflow(
                 )
                 if enabled
             ),
-            output_file=output_path,
         )
         worksheet_title = content_fidelity_summary.worksheet_title
         number_problem_rows = content_fidelity_summary.number_problem_rows
         url_problem_rows = content_fidelity_summary.url_problem_rows
-        current_input_path = content_fidelity_summary.output_path
 
     if run_chinese_target_check:
-        chinese_target_summary = run_chinese_target_check_excel(
-            input_file=current_input_path,
+        chinese_target_summary = run_chinese_target_check_workbook(
+            workbook=workflow_workbook,
+            output_path=output_path,
             source_column=normalized_source_column,
             target_column=normalized_target_column,
             sheet=sheet,
             start_row=start_row,
-            output_file=output_path,
         )
         worksheet_title = chinese_target_summary.worksheet_title
         chinese_target_problem_count = chinese_target_summary.matched_count
-        current_input_path = chinese_target_summary.output_path
 
     if run_target_text_check:
-        target_text_summary = run_target_text_check_excel(
-            input_file=current_input_path,
+        target_text_summary = run_target_text_check_workbook(
+            workbook=workflow_workbook,
+            output_path=output_path,
             source_column=normalized_source_column,
             target_column=normalized_target_column,
             sheet=sheet,
             start_row=start_row,
             rules=target_text_rules,
-            output_file=output_path,
         )
         worksheet_title = target_text_summary.worksheet_title
         target_text_problem_count = target_text_summary.problem_count
@@ -484,7 +484,9 @@ def run_workflow(
         source_column=normalized_source_column,
         target_column=normalized_target_column,
         start_row=start_row,
+        workbook=workflow_workbook,
     )
+    workflow_workbook.close()
 
     return WorkflowSummary(
         output_path=output_path,

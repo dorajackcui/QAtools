@@ -56,11 +56,18 @@ def write_term_sheet(workbook, worksheet_title: str, term_pairs: Iterable["Recor
     term_sheet["D1"] = "target术语（无mark）"
     term_sheet["E1"] = "术语来源"
     for row_index, term_pair in enumerate(term_pairs, start=2):
-        term_sheet[f"A{row_index}"] = term_pair.source_display_text
-        term_sheet[f"B{row_index}"] = term_pair.target_display_text
-        term_sheet[f"C{row_index}"] = term_pair.source_plain_text
-        term_sheet[f"D{row_index}"] = term_pair.target_plain_text
-        term_sheet[f"E{row_index}"] = term_pair.term_source
+        for column, value in zip(
+            ("A", "B", "C", "D", "E"),
+            (
+                term_pair.source_display_text,
+                term_pair.target_display_text,
+                term_pair.source_plain_text,
+                term_pair.target_plain_text,
+                term_pair.term_source,
+            ),
+        ):
+            if value:
+                term_sheet[f"{column}{row_index}"] = value
 
 
 def write_problem_sheet(

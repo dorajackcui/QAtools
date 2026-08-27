@@ -587,6 +587,48 @@ def process_excel(
     angle_config_file: str | Path | None = None,
     output_file: str | Path | None = None,
 ) -> CheckSummary:
+    input_path = Path(input_file).expanduser().resolve()
+    if not input_path.exists():
+        raise FileNotFoundError(f"输入文件不存在: {input_path}")
+
+    output_path = (
+        Path(output_file).expanduser().resolve()
+        if output_file
+        else build_default_output_path(input_path)
+    )
+
+    workbook = load_workbook_for_editing(input_path)
+    try:
+        summary = process_workbook(
+            workbook=workbook,
+            output_path=output_path,
+            source_column=source_column,
+            target_column=target_column,
+            sheet=sheet,
+            start_row=start_row,
+            token_types=token_types,
+            angle_patterns=angle_patterns,
+            angle_config_file=angle_config_file,
+        )
+        workbook.save(output_path)
+        return summary
+    finally:
+        workbook.close()
+
+
+def process_workbook(
+    *,
+    workbook,
+    output_path: Path,
+    source_column: str,
+    target_column: str,
+    sheet: str | None = None,
+    start_row: int = 2,
+    token_types: tuple[str, ...] | list[str] | None = None,
+    angle_patterns: tuple[str, ...] | list[str] | None = None,
+    angle_config_file: str | Path | None = None,
+) -> CheckSummary:
+    """Run the selected checks against an already-open workbook without saving it."""
     if start_row < 1:
         raise ValueError("开始行必须大于等于 1。")
 
@@ -599,18 +641,6 @@ def process_excel(
         if "angle" in normalized_token_types
         else ()
     )
-
-    input_path = Path(input_file).expanduser().resolve()
-    if not input_path.exists():
-        raise FileNotFoundError(f"输入文件不存在: {input_path}")
-
-    output_path = (
-        Path(output_file).expanduser().resolve()
-        if output_file
-        else build_default_output_path(input_path)
-    )
-
-    workbook = load_workbook_for_editing(input_path)
     worksheet = workbook[sheet] if sheet else workbook.active
 
     last_row = find_last_value_row(
@@ -724,7 +754,6 @@ def process_excel(
         target_column=target_column,
         start_row=start_row,
     )
-    workbook.save(output_path)
     return summary
 
 
