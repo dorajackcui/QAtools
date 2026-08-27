@@ -10,6 +10,7 @@ Set-StrictMode -Version Latest
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $tagRulesPath = Join-Path $projectRoot "phraseloom\tag_rules.toml"
+$iconPath = Join-Path $projectRoot "packaging\QAtools.ico"
 $guiEntry = Join-Path $projectRoot "toolshub_gui.py"
 $cliEntry = Join-Path $projectRoot "qatools_cli.py"
 $originalTemp = [Environment]::GetEnvironmentVariable("TEMP", "Process")
@@ -116,6 +117,7 @@ try {
         "--noconfirm",
         "--clean",
         "--onefile",
+        "--icon", $iconPath,
         "--paths", $projectRoot,
         "--distpath", $exeDir,
         "--workpath", $workDir,

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img">
+  <title>QAtools Q icon</title>
+  <rect
+    x="48"
+    y="48"
+    width="928"
+    height="928"
+    rx="232"
+    fill="#cc7d5e"
+  />
+  <circle
+    id="q-mark"
+    cx="512"
+    cy="455"
+    r="250"
+    fill="none"
+    stroke="#f9f9f7"
+    stroke-width="132"
+  />
+  <path
+    d="M 570 570 L 730 750"
+    fill="none"
+    stroke="#f9f9f7"
+    stroke-width="110"
+    stroke-linecap="round"
+  />
+</svg>
