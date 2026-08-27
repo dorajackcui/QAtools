@@ -6,7 +6,7 @@
 
 ## GUI
 
-打开 `qatools gui`，在【其他】中选择【Excel batch 拆分与复原】：
+打开 `qatools gui`，在【其他】中选择【Batch 拆分】：
 
 - 【拆分 batch】：选择 Excel、工作表、每批行数和表头行数。
 - 【复原文件】：选择拆分时生成的完整 batch 目录。

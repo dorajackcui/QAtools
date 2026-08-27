@@ -31,7 +31,7 @@ python3 tools/line_break_checker/check_line_breaks.py input.xlsx \
 python3 tools/line_break_checker/check_line_breaks_gui.py
 ```
 
-也可以运行 `python3 toolshub_gui.py`，在“质量检查”中选择“换行数量检查”。
+也可以运行 `qatools gui`，在“一键质量检查”中选择“换行数量”。
 
 ## 输出
 

@@ -1,7 +1,7 @@
 # QAtools CLI 使用指南
 
-这份文档是 QAtools 命令行的统一入口，面向人工调用、agent、自动化脚本和
-批处理任务。各工具的业务规则仍以对应工具 README 为准。
+这份文档是 QAtools 命令行的统一入口，面向人工调用、AI agent 和自动化脚本。
+参数名称以各命令的 `--help` 为准；业务判定规则以对应工具 README 为准。
 
 ## 安装与入口
 
@@ -36,7 +36,7 @@ qatools tag-check --help
 
 | 命令 | 用途 |
 |---|---|
-| `qatools gui` | 打开统一 Toolshub GUI |
+| `qatools gui` | 打开统一 GUI |
 | `qatools qa` | 一次执行多项质量检查并生成统一报告 |
 | `qatools phraseloom` | 导出 Strings 并在翻译后回填 |
 | `qatools term-check` | 术语 mark 与历史 TB 检查 |
@@ -70,9 +70,8 @@ qatools tag-check --help
 
 ## 一键质量检查
 
-默认运行八项常用检查：术语、同 Source 不同 Target、Tag、换行数量、数字、
-URL、Target 中文和 Target 文本规范。“同 Target 不同 Source”属于辅助检查，
-默认关闭：
+默认运行八项常用检查；“同 Target 不同 Source”因合理复用较常见而默认关闭。
+组合运行时，所有检查共用一次主工作簿读取和一次保存：
 
 ```bash
 qatools qa ./input.xlsx \
@@ -83,7 +82,21 @@ qatools qa ./input.xlsx \
   -o ./artifacts/workflow_check_input.xlsx
 ```
 
-用 `--check` 重复选择部分检查：
+检查名称、默认状态和规则入口：
+
+| `--check` 值 | GUI 名称 | 默认 | 规则 |
+|---|---|---:|---|
+| `term` | 术语检查 | 开 | [术语检查](../tools/term_pair_checker/README.md) |
+| `consistency` | 同 Source 不同 Target | 开 | [同 Source 不同 Target](../tools/source_consistency_checker/README.md) |
+| `target-consistency` | 同 Target 不同 Source | 关 | [同 Target 不同 Source](../tools/target_consistency_checker/README.md) |
+| `tag` | Tag / Placeholder | 开 | [Tag / Placeholder](../tools/tag_placeholder_checker/README.md) |
+| `line-break` | 换行数量 | 开 | [换行数量](../tools/line_break_checker/README.md) |
+| `number` | 数字一致性 | 开 | [数字与 URL](../tools/content_fidelity_checker/README.md) |
+| `url` | URL 一致性 | 开 | [数字与 URL](../tools/content_fidelity_checker/README.md) |
+| `chinese` | Target 中文 | 开 | [Target 中文](../tools/chinese_target_checker/README.md) |
+| `text` | Target 文本规范 | 开 | [Target 文本规范](../tools/target_text_checker/README.md) |
+
+一旦传入 `--check`，只运行显式选择的项目；该参数可以重复：
 
 ```bash
 qatools qa ./input.xlsx -c A -t B \
@@ -92,39 +105,13 @@ qatools qa ./input.xlsx -c A -t B \
   --check consistency
 ```
 
-可选检查值：
-
-```text
-term
-consistency
-target-consistency
-tag
-line-break
-number
-url
-chinese
-text
-```
-
-双向文本一致性检查：
+例如同时运行双向一致性检查：
 
 ```bash
 qatools qa ./input.xlsx -c A -t B \
   --check consistency \
   --check target-consistency
 ```
-
-数字与 URL 一致性检查：
-
-```bash
-qatools qa ./input.xlsx -c A -t B \
-  --check number \
-  --check url
-```
-
-`consistency` 表示“同 Source 不同 Target”，`target-consistency` 表示“同
-Target 不同 Source”。数字和 URL 的提取与比较规则见
-[内容保真检查 README](../tools/content_fidelity_checker/README.md)。
 
 Target 文本规范检查支持单独选择规则；不传 `--text-rule` 时默认运行全部四项：
 
@@ -157,6 +144,9 @@ qatools qa ./input.xlsx -c A -t B \
   --no-term-mark \
   --history-tb ./history_tb.xlsx
 ```
+
+统一报告的 `问题处理`、`质量检查汇总` 和修订回填契约见
+[workflow README](../tools/workflow/README.md)。
 
 ## PhraseLoom
 

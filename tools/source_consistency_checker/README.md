@@ -34,7 +34,7 @@ python3 tools/source_consistency_checker/check_source_consistency.py input.xlsx 
 python3 tools/source_consistency_checker/check_source_consistency_gui.py
 ```
 
-也可以运行 `python3 toolshub_gui.py`，在“质量检查”中选择“同 Source 不同 Target”。
+也可以运行 `qatools gui`，在“一键质量检查”中选择“同 Source 不同 Target”。
 
 ## 输出
 

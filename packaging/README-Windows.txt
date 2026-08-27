@@ -10,9 +10,9 @@ QAtools Windows 便携版
 --------
 双击 QAtools.exe 即可打开统一工具箱。
 
-工具箱包含一键质量检查、PhraseLoom、术语检查、双向文本一致性、Tag 检查、
-换行、数字和 URL 一致性、Target 文本质量检查、Excel 分行、Excel batch
-拆分与复原、活动工作表合并、法语 NBSP 恢复和 Xbench QA 转换。
+工具箱包含一键质量检查、PhraseLoom、法语 NBSP 恢复、Batch 拆分与复原、
+活动工作表合并和 Xbench QA 转换。一键质量检查内含术语、双向文本一致性、
+Tag / Placeholder、换行、数字、URL 和 Target 文本质量检查。
 
 命令行
 ------
@@ -40,6 +40,8 @@ QAtools-CLI.exe 的用法相同。
 注意事项
 --------
 - 第一次启动单文件程序时，Windows 可能需要几秒钟解压运行文件。
+- 覆盖旧目录中的同名程序后，资源管理器可能暂时显示旧图标；解压到新目录或重启
+  Windows 资源管理器即可刷新。
 - 程序没有代码签名；Windows SmartScreen 若显示未知发布者，请确认文件来源和
   SHA256 校验值后再选择运行。
 - 历史 TB 项目配置保存在当前 Windows 用户的

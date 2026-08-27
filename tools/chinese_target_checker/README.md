@@ -35,10 +35,10 @@ python3 tools/chinese_target_checker/check_chinese_target_gui.py
 也可以使用统一入口：
 
 ```bash
-python3 toolshub_gui.py
+qatools gui
 ```
 
-然后在“质量检查”分组选择 `Target 中文检查`。
+然后在“一键质量检查”中选择 `Target 中文`。
 
 ## 输出
 

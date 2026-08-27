@@ -50,9 +50,12 @@ python -m unittest discover -s tests/phraseloom_tests -v
 
 ## 文档职责
 
-- `README.md`：产品概览、快速开始和功能入口。
-- `docs/cli-usage.md`：统一 CLI 的唯一完整手册。
+- `README.md`：产品概览、最短上手路径和能力地图。
+- `docs/README.md`：按任务路由用户和 agent，不重复业务规则。
+- `docs/cli-usage.md`：统一 CLI 的唯一完整调用手册。
 - `tools/<tool>/README.md`：单项工具的输入、输出与业务规则。
 - `phraseloom/README.md`：Strings 工作簿与用户流程契约。
 - `AGENTS.md`：agent 的仓库地图、开发约束和验证方式。
 - `docs/archive/`：已完成方案和迁移记录，不维护为当前事实。
+
+一个事实只保留一个权威位置。其他文档使用链接引用，不复制完整参数或规则。

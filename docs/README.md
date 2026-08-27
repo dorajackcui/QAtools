@@ -1,28 +1,42 @@
-# QAtools 文档索引
+# QAtools 文档路由
 
-## 当前文档
+本索引面向用户、自动化和 AI agent。按任务读取最少的权威文档，不需要遍历整个
+仓库。
 
-- [项目 README](../README.md)：快速开始、功能目录和仓库结构。
-- [Agent 入口](../AGENTS.md)：代码地图、开发约束、验证与文档维护规则。
-- [CLI 使用指南](cli-usage.md)：统一命令、自动化约定、示例和兼容入口。
-- [PhraseLoom](../phraseloom/README.md)：Strings 导出、翻译与回填契约。
-- [术语与 Tag 检查规则](term-and-tag-check-rules.md)：跨工具检查规则。
-- [内容保真检查](../tools/content_fidelity_checker/README.md)：数字和 URL 一致性规则。
-- [同 Target 不同 Source](../tools/target_consistency_checker/README.md)：译文复用辅助检查。
-- [macOS Finder 快速操作](macos-finder-workflow.md)：右键执行 QA 或 NBSP 恢复。
+| 任务 | 读取 |
+|---|---|
+| 首次使用或了解能力 | [项目 README](../README.md) |
+| 调用 CLI、编写脚本 | [CLI 使用指南](cli-usage.md) |
+| 运行一键检查、理解统一报告 | [workflow README](../tools/workflow/README.md) |
+| 导出或回填 Strings | [PhraseLoom README](../phraseloom/README.md) |
+| 修改代码或文档 | [AGENTS.md](../AGENTS.md) |
 
-单项工具的业务规则保存在对应的 `tools/<tool>/README.md`。从根目录
-[功能目录](../README.md#功能目录) 可以直接进入各工具文档。
+## 规则文档
 
-## 历史文档
+- 术语与 Tag：[术语检查](../tools/term_pair_checker/README.md)、
+  [Tag / Placeholder](../tools/tag_placeholder_checker/README.md)、
+  [共享规则](term-and-tag-check-rules.md)
+- 双向文本一致性：[同 Source 不同 Target](../tools/source_consistency_checker/README.md)、
+  [同 Target 不同 Source](../tools/target_consistency_checker/README.md)
+- 内容保真：[数字与 URL](../tools/content_fidelity_checker/README.md)、
+  [换行数量](../tools/line_break_checker/README.md)
+- Target 文本质量：[Target 中文](../tools/chinese_target_checker/README.md)、
+  [Target 文本规范](../tools/target_text_checker/README.md)
+- 其他工具：[法语 NBSP](../tools/french_nbsp_restorer/README.md)、
+  [Batch 拆分与复原](../tools/excel_batcher/README.md)、
+  [合并表格](../tools/excel_merger/README.md)、
+  [Xbench QA 转换](../tools/xbench_report_transformer/README.md)
 
-[archive](archive/README.md) 保存已完成的设计、实施计划和迁移记录，仅用于
-追溯背景，不代表当前行为。
+平台说明：[Windows 便携版](../packaging/README-Windows.txt)、
+[macOS Finder 工作流](macos-finder-workflow.md)。
 
-## 维护规则
+## 文档契约
 
-- 用户入口变化：更新根 README。
-- CLI 参数变化：更新 `cli-usage.md`。
-- 单项业务规则变化：更新对应工具 README。
-- Agent 开发路径或约束变化：更新相应 `AGENTS.md`。
-- 已实施且不再指导开发的方案：移入 `archive/`。
+- 当前行为以代码和测试为准，其次是当前文档。
+- 一个事实只维护在一个位置：调用参数在 CLI 手册，业务规则在工具 README，
+  开发约束在 `AGENTS.md`。
+- 根 README 只保留快速入口和能力地图，不复制完整参数或规则。
+- `archive/` 只保存历史背景，不能作为当前实现依据。
+
+更新入口、CLI、业务规则或开发约束时，分别修改根 README、`cli-usage.md`、
+对应工具 README 或 `AGENTS.md`。

@@ -1,135 +1,89 @@
 # QAtools
 
-QAtools 是面向本地化工作的 Excel 工具箱，统一提供质量检查、文本修复、
-Excel batch 拆分与复原、活动工作表合并、Xbench 报告转换和 PhraseLoom
-Strings 工作流。
+QAtools 是面向本地化团队的本地 Excel 工具箱，提供统一的 Windows GUI、CLI
+和可组合的质量检查工作流。它不会上传工作簿；检查结果默认另存为新的 Excel。
 
-所有功能共用一个仓库、一个安装入口、一个基于 PySide6/Qt 6 的 GUI 和一个
-CLI；原有脚本路径继续保留，避免已有自动化失效。
+## 最快开始
 
-## 快速开始
+Windows 便携版无需安装 Python：解压发布包后双击 `QAtools.exe`。
 
-要求 Python 3.11 或更高版本。
+源码运行要求 Python 3.11 或更高版本：
 
 ```bash
 python -m pip install -e .
-```
-
-打开统一 GUI：
-
-```bash
 qatools gui
 ```
 
-查看统一 CLI：
+Agent、脚本和批处理任务优先使用 CLI：
 
 ```bash
+qatools qa input.xlsx -s Sheet1 -c A -t B
 qatools --help
-qatools list
+qatools help qa
 ```
 
-未安装命令行脚本时，可等价使用：
+## 一键质量检查
 
-```bash
-python -m qatools --help
-python -m qatools gui
-```
+`qatools qa` 将选中的检查写入同一份报告。组合运行时，所有检查共用一次主工作簿
+读取和一次保存，适合处理大型 Excel。
 
-## 功能目录
-
-| 功能 | 统一 CLI | GUI | 详细说明 |
+| 分组 | 检查 | 默认 | 用途 |
 |---|---|---:|---|
-| 一键质量检查 | `qatools qa` | 是 | [CLI 指南](docs/cli-usage.md#一键质量检查) |
-| PhraseLoom Strings | `qatools phraseloom` | 是 | [PhraseLoom](phraseloom/README.md) |
-| 术语检查 | `qatools term-check` | 是 | [术语检查](tools/term_pair_checker/README.md) |
-| Tag / Placeholder 检查 | `qatools tag-check` | 是 | [Tag 检查](tools/tag_placeholder_checker/README.md) |
-| 换行数量检查 | `qatools line-break-check` | 是 | [换行检查](tools/line_break_checker/README.md) |
-| 同 Source 不同 Target | `qatools consistency-check` | 是 | [一致性检查](tools/source_consistency_checker/README.md) |
-| Target 中文检查 | `qatools chinese-check` | 是 | [中文检查](tools/chinese_target_checker/README.md) |
-| 法语 NBSP 恢复 | `qatools french-nbsp` | 是 | [法语 NBSP](tools/french_nbsp_restorer/README.md) |
-| Excel batch 拆分与复原 | `qatools batch` | 是 | [batch 工具](tools/excel_batcher/README.md) |
-| 合并表格 | `qatools merge-sheets` | 是 | [合并表格](tools/excel_merger/README.md) |
-| Xbench QA 转换 | `qatools xbench` | 是 | [Xbench 转换](tools/xbench_report_transformer/README.md) |
+| 术语与翻译一致性 | 术语检查 | 开 | 新术语 mark 与历史 TB |
+| 术语与翻译一致性 | 同 Source 不同 Target | 开 | 定位同源文本的译法分歧 |
+| 术语与翻译一致性 | 同 Target 不同 Source | 关 | 辅助发现可能的译文误复用 |
+| 内容保真检查 | Tag / Placeholder | 开 | 比较 Tag、占位符和 memoQ Marker |
+| 内容保真检查 | 换行数量 | 开 | 比较真实换行数量 |
+| 内容保真检查 | 数字一致性 | 开 | 比较排除 URL、Tag 后的数字表达式 |
+| 内容保真检查 | URL 一致性 | 开 | 比较 URL 内容和重复次数 |
+| Target 文本质量 | Target 中文 | 开 | 定位中文字符和中文标点残留 |
+| Target 文本质量 | Target 文本规范 | 开 | 检查异常标点、空格和全半角混用 |
 
-完整参数、批处理建议和旧入口映射统一维护在
+报告中的 `问题处理` 会把同一原始行的多个问题合并。填写 `修改后target` 后，
+可以在 GUI 中应用修订并生成新的工作簿。完整选择参数见
+[CLI 使用指南](docs/cli-usage.md#一键质量检查)，报告与回填规则见
+[workflow README](tools/workflow/README.md)。
+
+## 其他工作流
+
+| 工作流 | CLI | 说明 |
+|---|---|---|
+| PhraseLoom Strings | `qatools phraseloom` | 导出待翻译 Strings，完成后回填原工作簿 |
+| 法语 NBSP 恢复 | `qatools french-nbsp` | 恢复法语标点所需的不换行空格 |
+| Batch 拆分与复原 | `qatools batch` | 分批处理大型工作表并按原行位复原 |
+| 合并表格 | `qatools merge-sheets` | 合并目录内工作簿的活动工作表 |
+| Xbench QA 转换 | `qatools xbench` | 把 Xbench 报告转换为行级问题表 |
+
+单项检查仍保留兼容 CLI；完整命令目录和示例统一维护在
 [CLI 使用指南](docs/cli-usage.md)。
 
-## 常用流程
+## 文档路由
 
-一次执行全部质量检查：
+| 需要 | 入口 |
+|---|---|
+| 运行命令或编写自动化 | [CLI 使用指南](docs/cli-usage.md) |
+| 确认检查、输出或回填规则 | [文档索引](docs/README.md) → 对应工具 README |
+| 使用 PhraseLoom | [PhraseLoom README](phraseloom/README.md) |
+| 修改代码 | [AGENTS.md](AGENTS.md) |
 
-```bash
-qatools qa input.xlsx -s Sheet1 -c A -t B -o workflow_check_input.xlsx
-```
+文档按 AI-first 原则维护：根 README 负责入口，CLI 手册负责调用，工具 README
+负责业务规则；`docs/archive/` 仅用于追溯，不代表当前行为。
 
-GUI 将检查项分为“术语与翻译一致性”“内容保真检查”和“Target 文本质量”。
-数字与 URL 一致性属于常用默认检查；容易产生合理复用提示的“同 Target 不同
-Source”默认关闭，可按需开启。
-
-只执行部分检查：
-
-```bash
-qatools qa input.xlsx -c A -t B \
-  --check tag \
-  --check line-break \
-  --check consistency
-```
-
-PhraseLoom 导出与回填：
-
-```bash
-qatools phraseloom export source.xlsx
-qatools phraseloom restore source_strings.xlsx
-```
-
-## Windows 便携版
-
-在 64 位 Windows 上生成无需安装 Python 的开箱即用版本：
+## Windows 便携版构建
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build_windows_release.ps1
 ```
 
-脚本会先运行回归测试，再生成 `QAtools.exe`（统一 GUI）、
-`QAtools-CLI.exe`（统一 CLI）和完整 ZIP，输出到 `dist/`。如果已经单独完成测试，
-可以追加 `-SkipTests`。分发包内的具体用法见 `packaging/README-Windows.txt`。
-
-## 仓库结构
-
-```text
-qatools/                 统一 CLI 和命令注册表
-phraseloom/              Strings 导出、清洗与回填
-tools/                   各 QA 工具及统一 workflow
-tests/                   全仓库回归测试
-docs/                    CLI、规则、设计和迁移文档
-toolshub_gui.py          统一 GUI 入口
-tools/qt_pages.py        PySide6 工具页面
-pyproject.toml           安装、依赖和命令行入口
-```
-
-新增工具时，应保持三层边界：
-
-1. 业务逻辑留在独立包中。
-2. PySide6 GUI 页面实现并注册到 `tools/qt_pages.py`。
-3. CLI 命令注册到 `qatools/cli.py`，并在 CLI 指南中补一个示例。
-
-测试会检查命令注册表中的每个正式命令是否已出现在 CLI 指南中。
-
-## 文档
-
-文档总入口：[docs/README.md](docs/README.md)
-
-- Agent 开发与维护入口：[AGENTS.md](AGENTS.md)
-- 自动化和完整命令参数：[docs/cli-usage.md](docs/cli-usage.md)
-- 术语与 Tag 规则：[docs/term-and-tag-check-rules.md](docs/term-and-tag-check-rules.md)
-- macOS Finder 快速操作：[docs/macos-finder-workflow.md](docs/macos-finder-workflow.md)
+脚本会运行回归测试，并在 `dist/` 生成 `QAtools.exe`、`QAtools-CLI.exe` 和完整
+ZIP。包内说明见 [README-Windows.txt](packaging/README-Windows.txt)。
 
 ## 开发验证
+
+修改前先阅读 [AGENTS.md](AGENTS.md)。完整验证命令：
 
 ```bash
 python -m unittest discover -s tests -v
 python -m compileall -q qatools phraseloom tools tests
 git diff --check
 ```
-
-Finder 文件转发测试依赖 macOS 的 `fcntl`，在 Windows 上会自动跳过。

@@ -45,5 +45,5 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp_gui.py
 也可以通过统一入口打开：
 
 ```bash
-python3 toolshub_gui.py
+qatools gui
 ```
