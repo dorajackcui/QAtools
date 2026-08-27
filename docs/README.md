@@ -7,6 +7,8 @@
 - [CLI 使用指南](cli-usage.md)：统一命令、自动化约定、示例和兼容入口。
 - [PhraseLoom](../phraseloom/README.md)：Strings 导出、翻译与回填契约。
 - [术语与 Tag 检查规则](term-and-tag-check-rules.md)：跨工具检查规则。
+- [内容保真检查](../tools/content_fidelity_checker/README.md)：数字和 URL 一致性规则。
+- [同 Target 不同 Source](../tools/target_consistency_checker/README.md)：译文复用辅助检查。
 - [macOS Finder 快速操作](macos-finder-workflow.md)：右键执行 QA 或 NBSP 恢复。
 
 单项工具的业务规则保存在对应的 `tools/<tool>/README.md`。从根目录

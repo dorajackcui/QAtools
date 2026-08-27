@@ -1,8 +1,11 @@
-# 同源译文一致性检查
+# 同 Source 不同 Target
 
 统一 CLI：`qatools consistency-check --help`。下文中的脚本路径作为兼容入口保留。
 
 检查 Excel 中完全相同的 `source` 是否对应多个不同 `target`，用于定位同源文本译法不一致问题。
+
+一键质量检查 GUI 和统一报告使用直观名称“同 Source 不同 Target”；现有
+`qatools consistency-check` 命令保持兼容。
 
 ## 规则
 
@@ -31,7 +34,7 @@ python3 tools/source_consistency_checker/check_source_consistency.py input.xlsx 
 python3 tools/source_consistency_checker/check_source_consistency_gui.py
 ```
 
-也可以运行 `python3 toolshub_gui.py`，在“质量检查”中选择“同源译文一致性”。
+也可以运行 `python3 toolshub_gui.py`，在“质量检查”中选择“同 Source 不同 Target”。
 
 ## 输出
 

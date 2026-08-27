@@ -54,7 +54,7 @@ TOKEN_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
     ),
 }
 BRACE_TOKEN_PATTERN = re.compile(
-    r"(?<!\{)(?:\{\{(?P<double>[^{}]+)\}\}|\{(?P<single>[^{}]+)\})(?!\})"
+    r"(?<!\{)(?:\{\{(?P<double>[^{}]*)\}\}|\{(?P<single>[^{}]*)\})(?!\})"
 )
 ANGLE_TAG_NAME_PATTERN = re.compile(r"^[^\s/=<>]+")
 NUMERIC_BRACE_PATTERN = re.compile(r"^\d+$")
@@ -222,7 +222,7 @@ def _iter_angle_token_candidates(text: str) -> Iterator[tuple[int, int, str, str
 
         display_text = text[start:end]
         raw_inner_text = text[start + 1 : end - 1]
-        if raw_inner_text and raw_inner_text == raw_inner_text.strip():
+        if not raw_inner_text.strip() or raw_inner_text == raw_inner_text.strip():
             yield start, end, display_text, raw_inner_text
         search_index = end
 

@@ -6,13 +6,16 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
-from tools.workflow.cli import build_parser, main
+from tools.workflow.cli import _selected_checks, build_parser, main
 from tools.workflow.workflow_runner import WorkflowSummary
-from tools.target_text_checker.check_target_text import ABNORMAL_PUNCTUATION_RULE
+from tools.target_text_checker.check_target_text import (
+    ABNORMAL_PUNCTUATION_RULE,
+    LEADING_TRAILING_SPACES_RULE,
+)
 
 
 class WorkflowCliTests(unittest.TestCase):
-    def test_parser_defaults_to_all_checks(self) -> None:
+    def test_parser_uses_default_check_set_when_check_is_omitted(self) -> None:
         args = build_parser().parse_args(
             ["input.xlsx", "-c", "A", "-t", "B"]
         )
@@ -20,6 +23,47 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertIsNone(args.check)
         self.assertEqual(args.start_row, 2)
         self.assertFalse(args.no_term_mark)
+
+    def test_default_selection_enables_content_checks_but_not_reverse_consistency(self) -> None:
+        checks = _selected_checks(None)
+
+        self.assertIn("number", checks)
+        self.assertIn("url", checks)
+        self.assertNotIn("target-consistency", checks)
+
+    def test_parser_accepts_new_quality_checks(self) -> None:
+        args = build_parser().parse_args(
+            [
+                "input.xlsx",
+                "-c",
+                "A",
+                "-t",
+                "B",
+                "--check",
+                "target-consistency",
+                "--check",
+                "number",
+                "--check",
+                "url",
+            ]
+        )
+
+        self.assertEqual(args.check, ["target-consistency", "number", "url"])
+
+    def test_parser_accepts_leading_trailing_spaces_rule(self) -> None:
+        args = build_parser().parse_args(
+            [
+                "input.xlsx",
+                "-c",
+                "A",
+                "-t",
+                "B",
+                "--text-rule",
+                LEADING_TRAILING_SPACES_RULE,
+            ]
+        )
+
+        self.assertEqual(args.text_rule, [LEADING_TRAILING_SPACES_RULE])
 
     def test_main_maps_selected_checks_and_options_to_runner(self) -> None:
         summary = WorkflowSummary(
@@ -85,6 +129,9 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertTrue(kwargs["run_tag_check"])
         self.assertFalse(kwargs["run_line_break_check"])
         self.assertFalse(kwargs["run_source_consistency_check"])
+        self.assertFalse(kwargs["run_target_consistency_check"])
+        self.assertFalse(kwargs["run_number_check"])
+        self.assertFalse(kwargs["run_url_check"])
         self.assertTrue(kwargs["run_chinese_target_check"])
         self.assertTrue(kwargs["run_target_text_check"])
         self.assertEqual(kwargs["target_text_rules"], [ABNORMAL_PUNCTUATION_RULE])

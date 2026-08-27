@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFrame,
     QFormLayout,
@@ -24,6 +26,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSpinBox,
     QTabWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -52,6 +55,7 @@ from tools.french_nbsp_restorer.restore_french_nbsp import (
 from tools.qt_gui_common import (
     AsyncPage,
     PathPicker,
+    horizontal_rule,
     muted_label,
     primary_button,
     section,
@@ -62,6 +66,7 @@ from tools.qt_gui_common import (
 from tools.target_text_checker.check_target_text import (
     ABNORMAL_PUNCTUATION_RULE,
     CONSECUTIVE_SPACES_RULE,
+    LEADING_TRAILING_SPACES_RULE,
     MIXED_WIDTH_RULE,
 )
 from tools.tb_projects import TbProject, TbProjectStore
@@ -768,6 +773,7 @@ class WorkflowPage(AsyncPage):
         super().__init__(parent)
         self.last_workflow_output_path = ""
         self.tb_store = TbProjectStore()
+        self._settings_snapshots: dict[str, dict[str, Any]] = {}
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -828,69 +834,186 @@ class WorkflowPage(AsyncPage):
         layout.addLayout(scope)
         self.content_layout.addWidget(box)
 
-    def _task_row(self, checkbox: QCheckBox, settings_button: QPushButton | None = None) -> QWidget:
+    def _task_row(
+        self,
+        checkbox: QCheckBox,
+        settings_button: QToolButton | None = None,
+    ) -> QWidget:
         widget = QWidget()
         row = QHBoxLayout(widget)
         row.setContentsMargins(0, 0, 0, 0)
         row.addWidget(checkbox)
         if settings_button is not None:
-            settings_button.setCheckable(True)
+            row.addSpacing(6)
             row.addWidget(settings_button)
         row.addStretch(1)
         return widget
 
+    @staticmethod
+    def _settings_button(tool_tip: str) -> QToolButton:
+        button = QToolButton()
+        button.setArrowType(Qt.ArrowType.DownArrow)
+        button.setToolTip(tool_tip)
+        button.setAccessibleName(tool_tip)
+        button.setProperty("settingsButton", True)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setFixedSize(30, 30)
+        return button
+
     def _build_task_section(self) -> None:
-        box, layout = section("质量检查项目")
+        box, layout = section()
         header = QHBoxLayout()
-        header.addWidget(muted_label("默认全部选中，可按需取消"))
         header.addStretch(1)
         select_all = QPushButton("全选")
-        clear_all = QPushButton("取消全选")
+        clear_all = QPushButton("清空")
         select_all.clicked.connect(lambda: self.set_all_tasks(True))
         clear_all.clicked.connect(lambda: self.set_all_tasks(False))
         header.addWidget(select_all)
         header.addWidget(clear_all)
         layout.addLayout(header)
-        grid = QGridLayout()
+
         self.term_check = QCheckBox("术语检查")
-        self.tag_check = QCheckBox("Tag 检查")
-        self.line_break_check = QCheckBox("换行数量检查")
-        self.consistency_check = QCheckBox("同源译文一致性")
-        self.chinese_check = QCheckBox("Target 中文检查")
-        self.target_text_check = QCheckBox("Target 文本规范检查")
+        self.consistency_check = QCheckBox("同 Source 不同 Target")
+        self.target_consistency_check = QCheckBox("同 Target 不同 Source")
+        self.tag_check = QCheckBox("Tag / Placeholder")
+        self.line_break_check = QCheckBox("换行数量")
+        self.number_check = QCheckBox("数字一致性")
+        self.url_check = QCheckBox("URL 一致性")
+        self.chinese_check = QCheckBox("Target 中文")
+        self.target_text_check = QCheckBox("Target 文本规范")
         self.task_checks = (
             self.term_check,
+            self.consistency_check,
+            self.target_consistency_check,
             self.tag_check,
             self.line_break_check,
-            self.consistency_check,
+            self.number_check,
+            self.url_check,
             self.chinese_check,
             self.target_text_check,
         )
         for check in self.task_checks:
             check.setChecked(True)
-        self.term_settings_button = QPushButton("展开设置")
-        self.tag_settings_button = QPushButton("展开设置")
-        self.target_settings_button = QPushButton("展开设置")
-        grid.addWidget(self._task_row(self.term_check, self.term_settings_button), 0, 0)
-        grid.addWidget(self._task_row(self.tag_check, self.tag_settings_button), 0, 1)
-        grid.addWidget(self._task_row(self.line_break_check), 1, 0)
-        grid.addWidget(self._task_row(self.consistency_check), 1, 1)
-        grid.addWidget(self._task_row(self.chinese_check), 2, 0)
-        grid.addWidget(self._task_row(self.target_text_check, self.target_settings_button), 2, 1)
+        self.target_consistency_check.setChecked(False)
+
+        self.term_settings_button = self._settings_button("术语检查设置")
+        self.tag_settings_button = self._settings_button("Tag / Placeholder 设置")
+        self.target_settings_button = self._settings_button("Target 文本规范设置")
+
+        translation_heading = QLabel("术语与翻译一致性")
+        translation_heading.setObjectName("sectionTitle")
+        layout.addWidget(translation_heading)
+        translation_grid = QGridLayout()
+        translation_grid.addWidget(
+            self._task_row(self.term_check, self.term_settings_button), 0, 0
+        )
+        translation_grid.addWidget(self._task_row(self.consistency_check), 1, 0)
+        translation_grid.addWidget(
+            self._task_row(self.target_consistency_check), 1, 1
+        )
         for column in range(2):
-            grid.setColumnStretch(column, 1)
-        layout.addLayout(grid)
+            translation_grid.setColumnStretch(column, 1)
+        layout.addLayout(translation_grid)
+
+        layout.addWidget(horizontal_rule())
+        fidelity_heading = QLabel("内容保真检查")
+        fidelity_heading.setObjectName("sectionTitle")
+        layout.addWidget(fidelity_heading)
+        fidelity_grid = QGridLayout()
+        fidelity_grid.addWidget(
+            self._task_row(self.tag_check, self.tag_settings_button), 0, 0
+        )
+        fidelity_grid.addWidget(self._task_row(self.line_break_check), 0, 1)
+        fidelity_grid.addWidget(self._task_row(self.number_check), 1, 0)
+        fidelity_grid.addWidget(self._task_row(self.url_check), 1, 1)
+        for column in range(2):
+            fidelity_grid.setColumnStretch(column, 1)
+        layout.addLayout(fidelity_grid)
+
+        layout.addWidget(horizontal_rule())
+        target_heading = QLabel("Target 文本质量")
+        target_heading.setObjectName("sectionTitle")
+        layout.addWidget(target_heading)
+        target_grid = QGridLayout()
+        target_grid.addWidget(self._task_row(self.chinese_check), 0, 0)
+        target_grid.addWidget(
+            self._task_row(self.target_text_check, self.target_settings_button),
+            0,
+            1,
+        )
+        for column in range(2):
+            target_grid.setColumnStretch(column, 1)
+        layout.addLayout(target_grid)
         self.content_layout.addWidget(box)
 
-        self.term_settings_button.toggled.connect(lambda visible: self._toggle_settings("term", visible))
-        self.tag_settings_button.toggled.connect(lambda visible: self._toggle_settings("tag", visible))
-        self.target_settings_button.toggled.connect(lambda visible: self._toggle_settings("target", visible))
-        self.term_check.toggled.connect(lambda enabled: self._task_toggled(enabled, self.term_settings_button))
-        self.tag_check.toggled.connect(lambda enabled: self._task_toggled(enabled, self.tag_settings_button))
-        self.target_text_check.toggled.connect(lambda enabled: self._task_toggled(enabled, self.target_settings_button))
+        self.term_settings_button.clicked.connect(
+            lambda: self._open_settings_dialog("term")
+        )
+        self.tag_settings_button.clicked.connect(
+            lambda: self._open_settings_dialog("tag")
+        )
+        self.target_settings_button.clicked.connect(
+            lambda: self._open_settings_dialog("target")
+        )
+        self.term_check.toggled.connect(
+            lambda enabled: self.term_settings_button.setEnabled(enabled)
+        )
+        self.tag_check.toggled.connect(
+            lambda enabled: self.tag_settings_button.setEnabled(enabled)
+        )
+        self.target_text_check.toggled.connect(
+            lambda enabled: self.target_settings_button.setEnabled(enabled)
+        )
+
+    def _create_settings_dialog(
+        self,
+        name: str,
+        title: str,
+        *,
+        minimum_width: int,
+    ) -> tuple[QDialog, QVBoxLayout]:
+        dialog = QDialog(self)
+        dialog.setObjectName("settingsDialog")
+        dialog.setWindowTitle(title)
+        dialog.setModal(True)
+        dialog.setMinimumWidth(minimum_width)
+        dialog.setSizeGripEnabled(False)
+
+        outer = QVBoxLayout(dialog)
+        outer.setContentsMargins(16, 14, 16, 14)
+        outer.setSpacing(12)
+        content = QVBoxLayout()
+        content.setContentsMargins(0, 0, 0, 0)
+        content.setSpacing(9)
+        outer.addLayout(content)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        cancel_button = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        ok_button.setText("确定")
+        ok_button.setProperty("primary", True)
+        cancel_button.setText("取消")
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        outer.addWidget(horizontal_rule())
+        outer.addWidget(buttons)
+        dialog.finished.connect(
+            lambda result, dialog_name=name: self._settings_dialog_finished(
+                dialog_name,
+                result,
+            )
+        )
+        return dialog, content
 
     def _build_term_settings(self) -> None:
-        self.term_settings_box, layout = section("术语检查设置")
+        self.term_settings_dialog, layout = self._create_settings_dialog(
+            "term",
+            "术语检查设置",
+            minimum_width=780,
+        )
         mark_row = QHBoxLayout()
         mark_row.addWidget(QLabel("术语标记"))
         self.mark_book = QCheckBox("中文方括号【】")
@@ -945,12 +1068,14 @@ class WorkflowPage(AsyncPage):
         history_scope.addStretch(1)
         layout.addLayout(history_scope)
         layout.addWidget(muted_label("未选择术语标记时，必须提供历史 TB。"))
-        self.term_settings_box.hide()
-        self.content_layout.addWidget(self.term_settings_box)
         self.refresh_tb_projects()
 
     def _build_tag_settings(self) -> None:
-        self.tag_settings_box, layout = section("Tag 检查设置")
+        self.tag_settings_dialog, layout = self._create_settings_dialog(
+            "tag",
+            "Tag / Placeholder 设置",
+            minimum_width=620,
+        )
         mode_row = QHBoxLayout()
         mode_row.addWidget(QLabel("检查模式"))
         mode_switch = QFrame()
@@ -990,19 +1115,23 @@ class WorkflowPage(AsyncPage):
         self.angle_config = PathPicker("尖括号过滤配置", allow_clear=True)
         self.angle_config.choose_button.clicked.connect(self.choose_angle_config)
         layout.addWidget(self.angle_config)
-        self.tag_settings_box.hide()
-        self.content_layout.addWidget(self.tag_settings_box)
 
     def _build_target_text_settings(self) -> None:
-        self.target_settings_box, layout = section("Target 文本规范检查设置")
+        self.target_settings_dialog, layout = self._create_settings_dialog(
+            "target",
+            "Target 文本规范设置",
+            minimum_width=620,
+        )
         layout.addWidget(QLabel("检查规则"))
         grid = QGridLayout()
         self.abnormal_rule = QCheckBox("异常标点符号（.. / ,, / 。。等）")
         self.spaces_rule = QCheckBox("连续空格（2 个及以上）")
+        self.edge_spaces_rule = QCheckBox("首尾空格")
         self.width_rule = QCheckBox("全半角混用")
         self.rule_checks = {
             ABNORMAL_PUNCTUATION_RULE: self.abnormal_rule,
             CONSECUTIVE_SPACES_RULE: self.spaces_rule,
+            LEADING_TRAILING_SPACES_RULE: self.edge_spaces_rule,
             MIXED_WIDTH_RULE: self.width_rule,
         }
         for index, check in enumerate(self.rule_checks.values()):
@@ -1011,31 +1140,108 @@ class WorkflowPage(AsyncPage):
         for column in range(2):
             grid.setColumnStretch(column, 1)
         layout.addLayout(grid)
-        self.target_settings_box.hide()
-        self.content_layout.addWidget(self.target_settings_box)
 
-    def _toggle_settings(self, name: str, visible: bool) -> None:
-        mapping = {
-            "term": (self.term_settings_box, self.term_settings_button),
-            "tag": (self.tag_settings_box, self.tag_settings_button),
-            "target": (self.target_settings_box, self.target_settings_button),
+    def _open_settings_dialog(self, name: str) -> None:
+        dialogs = {
+            "term": self.term_settings_dialog,
+            "tag": self.tag_settings_dialog,
+            "target": self.target_settings_dialog,
         }
-        box, button = mapping[name]
-        if visible:
-            for other_name, (other_box, other_button) in mapping.items():
-                if other_name != name:
-                    other_button.blockSignals(True)
-                    other_button.setChecked(False)
-                    other_button.setText("展开设置")
-                    other_button.blockSignals(False)
-                    other_box.hide()
-        box.setVisible(visible)
-        button.setText("收起设置" if visible else "展开设置")
+        self._settings_snapshots[name] = self._capture_settings_state(name)
+        dialog = dialogs[name]
+        dialog.adjustSize()
+        dialog.open()
+        dialog.raise_()
+        dialog.activateWindow()
 
-    def _task_toggled(self, enabled: bool, button: QPushButton) -> None:
-        button.setEnabled(enabled)
-        if not enabled:
-            button.setChecked(False)
+    def _capture_settings_state(self, name: str) -> dict[str, Any]:
+        if name == "term":
+            return {
+                "mark_book": self.mark_book.isChecked(),
+                "mark_square": self.mark_square.isChecked(),
+                "tb_project": self.tb_project.currentText(),
+                "history_path": self.history_picker.path(),
+                "history_sheets": tuple(
+                    self.history_sheet.itemText(index)
+                    for index in range(self.history_sheet.count())
+                ),
+                "history_sheet": self.history_sheet.currentText(),
+                "history_source": self.history_source.text(),
+                "history_target": self.history_target.text(),
+                "history_start_row": self.history_start_row.value(),
+            }
+        if name == "tag":
+            return {
+                "memoq_mode": self.memoq_mode.isChecked(),
+                "tag_checks": tuple(
+                    check.isChecked() for check in self.standard_tag_checks
+                ),
+                "angle_config": self.angle_config.path(),
+            }
+        if name == "target":
+            return {
+                "rules": {
+                    rule: check.isChecked()
+                    for rule, check in self.rule_checks.items()
+                }
+            }
+        raise ValueError(f"未知设置窗口: {name}")
+
+    @staticmethod
+    def _restore_combo(
+        combo: QComboBox,
+        values: tuple[str, ...],
+        selected: str,
+    ) -> None:
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItems(values)
+        if selected in values:
+            combo.setCurrentText(selected)
+        elif not selected:
+            combo.setCurrentIndex(-1)
+        combo.blockSignals(False)
+
+    def _restore_settings_state(self, name: str) -> None:
+        snapshot = self._settings_snapshots.get(name)
+        if snapshot is None:
+            return
+        if name == "term":
+            self.mark_book.setChecked(snapshot["mark_book"])
+            self.mark_square.setChecked(snapshot["mark_square"])
+            self.history_picker.set_path(snapshot["history_path"])
+            self._restore_combo(
+                self.history_sheet,
+                snapshot["history_sheets"],
+                snapshot["history_sheet"],
+            )
+            self.history_source.setText(snapshot["history_source"])
+            self.history_target.setText(snapshot["history_target"])
+            self.history_start_row.setValue(snapshot["history_start_row"])
+            self.refresh_tb_projects(snapshot["tb_project"])
+            return
+        if name == "tag":
+            if snapshot["memoq_mode"]:
+                self.memoq_mode.setChecked(True)
+            else:
+                self.standard_mode.setChecked(True)
+            for check, checked in zip(
+                self.standard_tag_checks,
+                snapshot["tag_checks"],
+                strict=True,
+            ):
+                check.setChecked(checked)
+            self.angle_config.set_path(snapshot["angle_config"])
+            self.update_tag_mode(not snapshot["memoq_mode"])
+            return
+        if name == "target":
+            for rule, checked in snapshot["rules"].items():
+                self.rule_checks[rule].setChecked(checked)
+
+    def _settings_dialog_finished(self, name: str, result: int) -> None:
+        if result == int(QDialog.DialogCode.Rejected):
+            self._restore_settings_state(name)
+        self._settings_snapshots.pop(name, None)
 
     def set_all_tasks(self, checked: bool) -> None:
         for checkbox in self.task_checks:
@@ -1044,6 +1250,15 @@ class WorkflowPage(AsyncPage):
     def choose_input_file(self) -> None:
         if path := _choose_excel(self, "选择 Excel 文件"):
             self.load_input_file(path)
+
+    def _settings_parent(self, name: str) -> QWidget:
+        dialogs = {
+            "term": self.term_settings_dialog,
+            "tag": self.tag_settings_dialog,
+            "target": self.target_settings_dialog,
+        }
+        dialog = dialogs[name]
+        return dialog if dialog.isVisible() else self
 
     def load_input_file(self, path: str, *, show_error: bool = True) -> None:
         self.input_picker.set_path(path)
@@ -1075,7 +1290,10 @@ class WorkflowPage(AsyncPage):
             self.target_column.setText(columns.detected_target_column)
 
     def choose_history_file(self) -> None:
-        if path := _choose_excel(self, "选择术语历史 TB Excel 文件"):
+        if path := _choose_excel(
+            self._settings_parent("term"),
+            "选择术语历史 TB Excel 文件",
+        ):
             self.history_picker.set_path(path)
             self.refresh_history_sheets()
 
@@ -1115,7 +1333,12 @@ class WorkflowPage(AsyncPage):
             self.history_target.setText(columns.target_column)
 
     def choose_angle_config(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "选择尖括号 Tag 过滤配置", "", "JSON 文件 (*.json);;所有文件 (*)")
+        path, _ = QFileDialog.getOpenFileName(
+            self._settings_parent("tag"),
+            "选择尖括号 Tag 过滤配置",
+            "",
+            "JSON 文件 (*.json);;所有文件 (*)",
+        )
         if path:
             self.angle_config.set_path(path)
 
@@ -1187,39 +1410,50 @@ class WorkflowPage(AsyncPage):
         )
 
     def save_tb_project(self) -> None:
-        name, accepted = QInputDialog.getText(self, "保存 TB 项目", "项目名称：", text=self.tb_project.currentText())
+        parent = self._settings_parent("term")
+        name, accepted = QInputDialog.getText(
+            parent,
+            "保存 TB 项目",
+            "项目名称：",
+            text=self.tb_project.currentText(),
+        )
         name = name.strip()
         if not accepted:
             return
         if not name:
-            show_error(self, "项目名称为空", "请输入项目名称。")
+            show_error(parent, "项目名称为空", "请输入项目名称。")
             return
         try:
             project = self._capture_tb_project(name)
             existing = self.tb_store.find_project(name)
             if existing is not None and QMessageBox.question(
-                self,
+                parent,
                 "更新 TB 项目",
                 f"项目“{existing.name}”已存在，是否用当前设置更新？",
             ) != QMessageBox.StandardButton.Yes:
                 return
             self.tb_store.save_project(project)
         except (OSError, ValueError) as exc:
-            show_error(self, "无法保存 TB 项目", str(exc))
+            show_error(parent, "无法保存 TB 项目", str(exc))
             return
         self.refresh_tb_projects(name)
 
     def delete_tb_project(self) -> None:
+        parent = self._settings_parent("term")
         name = self.tb_project.currentText().strip()
         if not name:
-            show_info(self, "未选择项目", "请先选择要删除的 TB 项目。")
+            show_info(parent, "未选择项目", "请先选择要删除的 TB 项目。")
             return
-        if QMessageBox.question(self, "删除 TB 项目", f"确定删除项目“{name}”吗？\n不会删除原始 TB 文件。") != QMessageBox.StandardButton.Yes:
+        if QMessageBox.question(
+            parent,
+            "删除 TB 项目",
+            f"确定删除项目“{name}”吗？\n不会删除原始 TB 文件。",
+        ) != QMessageBox.StandardButton.Yes:
             return
         try:
             self.tb_store.delete_project(name)
         except (OSError, ValueError) as exc:
-            show_error(self, "无法删除 TB 项目", str(exc))
+            show_error(parent, "无法删除 TB 项目", str(exc))
             return
         self.refresh_tb_projects()
 
@@ -1275,6 +1509,9 @@ class WorkflowPage(AsyncPage):
                 "tag_angle_config_file": self.angle_config.path() or None if "angle" in tag_types else None,
                 "run_line_break_check": self.line_break_check.isChecked(),
                 "run_source_consistency_check": self.consistency_check.isChecked(),
+                "run_target_consistency_check": self.target_consistency_check.isChecked(),
+                "run_number_check": self.number_check.isChecked(),
+                "run_url_check": self.url_check.isChecked(),
                 "run_chinese_target_check": self.chinese_check.isChecked(),
                 "run_target_text_check": self.target_text_check.isChecked(),
                 "target_text_rules": target_rules,
@@ -1304,9 +1541,18 @@ class WorkflowPage(AsyncPage):
             lines.append(f"换行数量问题行数: {summary.line_break_problem_count}")
         if summary.ran_source_consistency_check:
             lines.extend((
-                f"同源译文不一致 source 数: {summary.source_consistency_problem_count}",
-                f"同源译文不一致涉及行数: {summary.source_consistency_problem_rows}",
+                f"同 Source 不同 Target 组数: {summary.source_consistency_problem_count}",
+                f"同 Source 不同 Target 涉及行数: {summary.source_consistency_problem_rows}",
             ))
+        if summary.ran_target_consistency_check:
+            lines.extend((
+                f"同 Target 不同 Source 组数: {summary.target_consistency_problem_count}",
+                f"同 Target 不同 Source 涉及行数: {summary.target_consistency_problem_rows}",
+            ))
+        if summary.ran_number_check:
+            lines.append(f"数字一致性问题行数: {summary.number_problem_rows}")
+        if summary.ran_url_check:
+            lines.append(f"URL 一致性问题行数: {summary.url_problem_rows}")
         if summary.ran_chinese_target_check:
             lines.append(f"Target 中文问题行数: {summary.chinese_target_problem_count}")
         if summary.ran_target_text_check:

@@ -68,7 +68,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         name="consistency-check",
-        summary="检查相同 source 的 target 是否一致",
+        summary="检查同 Source 是否对应不同 Target",
         module="tools.source_consistency_checker.check_source_consistency",
         mode="legacy",
         aliases=("source-consistency",),

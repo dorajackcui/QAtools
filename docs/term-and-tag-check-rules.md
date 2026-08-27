@@ -59,9 +59,9 @@ Tag 检查用于逐行比较 source / target 中 tag、placeholder 和 mark toke
 
 | 内部类型 | UI 名称 | 可识别形式 |
 | --- | --- | --- |
-| `angle` | `<...> tag` | `<...>` |
+| `angle` | `<...> tag` | `<...>`，包括空 tag `<>` 和仅含空白的 tag `< >` |
 | `square_color` | `[color=...] tag` | `[color=...]`、`[/color]` |
-| `brace` | `{...} placeholder` | `{name}`、`{{name}}`、`{count}`、`{1}` 等花括号 placeholder |
+| `brace` | `{...} placeholder` | `{name}`、`{{name}}`、`{count}`、`{1}`、空 placeholder `{}` 等花括号 placeholder |
 | `newline` | `\n mark` | 字面量 `\n` |
 | `memoq` | memoQ marker | `{1}`、`{2>`、`<3}` |
 
@@ -77,7 +77,7 @@ GUI 提供互斥的“常规 Tag”和“memoQ Marker”两种模式。常规模
 
 ### Tag token 过滤
 
-- `angle` 默认检查 `<...>`，能跳过引号属性中的 `>`；尖括号内侧首尾带空白的普通比较表达式不作为 tag。
+- `angle` 默认检查 `<...>`，包括空 tag `<>` 和仅含空白的 tag `< >`，能跳过引号属性中的 `>`；尖括号内含非空白内容且首尾带空白的普通比较表达式不作为 tag。
 - `square_color` 只检查 `[color=...]` 和 `[/color]`，不会把普通 `[stage1]` 或术语 mark `[]` 都当成 tag。
 - 常规模式会把 `{1}` 和完整的 `{2>...<3}` 包络分别当作一个花括号 placeholder，但不会单独捕获 `{2>`、`<3}` 两侧半 marker。
 - memoQ 模式会提取 `{1}`、`{2>`、`<3}`。显式同时选择 `brace` 和 `memoq` 时，纯数字 `{1}` 只归入 `memoq`，避免重复报告。

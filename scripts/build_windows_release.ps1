@@ -14,6 +14,7 @@ $guiEntry = Join-Path $projectRoot "toolshub_gui.py"
 $cliEntry = Join-Path $projectRoot "qatools_cli.py"
 $originalTemp = [Environment]::GetEnvironmentVariable("TEMP", "Process")
 $originalTmp = [Environment]::GetEnvironmentVariable("TMP", "Process")
+$originalPath = [Environment]::GetEnvironmentVariable("PATH", "Process")
 
 function Invoke-ProjectPython {
     param(
@@ -50,6 +51,13 @@ function Remove-ProjectArtifact {
 
 Push-Location $projectRoot
 try {
+    # Put Windows system DLLs ahead of unrelated native toolchains that may be
+    # injected into PATH by the build host. Otherwise PyInstaller can bundle a
+    # third-party DLL with the same name as a Windows DLL (for example ICU),
+    # leaving the frozen Qt runtime unable to load.
+    $system32Path = Join-Path $env:SystemRoot "System32"
+    $env:PATH = "$system32Path;$originalPath"
+
     if (-not $Version) {
         $versionOutput = & $PythonCommand -c "from qatools import __version__; print(__version__)"
         if ($LASTEXITCODE -ne 0) {
@@ -212,6 +220,12 @@ finally {
     }
     else {
         $env:TMP = $originalTmp
+    }
+    if ($null -eq $originalPath) {
+        Remove-Item Env:PATH -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:PATH = $originalPath
     }
     Pop-Location
 }

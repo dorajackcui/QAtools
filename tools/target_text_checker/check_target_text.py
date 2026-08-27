@@ -28,10 +28,12 @@ ABNORMAL_PUNCTUATION_RULE = "abnormal-punctuation"
 ABNORMAL_ELLIPSIS_RULE = ABNORMAL_PUNCTUATION_RULE
 LEGACY_ABNORMAL_ELLIPSIS_RULE = "abnormal-ellipsis"
 CONSECUTIVE_SPACES_RULE = "consecutive-spaces"
+LEADING_TRAILING_SPACES_RULE = "leading-trailing-spaces"
 MIXED_WIDTH_RULE = "mixed-width"
 SUPPORTED_RULES = (
     ABNORMAL_PUNCTUATION_RULE,
     CONSECUTIVE_SPACES_RULE,
+    LEADING_TRAILING_SPACES_RULE,
     MIXED_WIDTH_RULE,
 )
 RULE_ALIASES = {
@@ -41,13 +43,14 @@ SUPPORTED_RULE_INPUTS = SUPPORTED_RULES + tuple(RULE_ALIASES)
 RULE_LABELS = {
     ABNORMAL_PUNCTUATION_RULE: "异常标点符号",
     CONSECUTIVE_SPACES_RULE: "连续空格",
+    LEADING_TRAILING_SPACES_RULE: "首尾空格",
     MIXED_WIDTH_RULE: "全半角混用",
 }
 
 _REPEATED_PUNCTUATION_PATTERN = re.compile(
     r"[.．。]{2,}|[,，、]{2,}|[:：]{2,}|[;；]{2,}"
 )
-_INTERNAL_SPACE_RUN_PATTERN = re.compile(r"(?<=\S) {2,}(?=\S)")
+_CONSECUTIVE_SPACE_RUN_PATTERN = re.compile(r" {2,}")
 
 # Only compare equivalent character families. This avoids flagging ordinary text
 # merely because, for example, it contains ASCII words and Chinese punctuation.
@@ -146,15 +149,41 @@ def _find_abnormal_punctuation(text: str) -> TextIssue | None:
 
 
 def _find_consecutive_spaces(text: str) -> TextIssue | None:
-    matches = [match.group(0) for match in _INTERNAL_SPACE_RUN_PATTERN.finditer(text)]
+    matches = [
+        match.group(0) for match in _CONSECUTIVE_SPACE_RUN_PATTERN.finditer(text)
+    ]
     if not matches:
         return None
     lengths = _format_unique(f"{len(match)} 个空格" for match in matches)
     return TextIssue(
         rule=CONSECUTIVE_SPACES_RULE,
         issue_type=RULE_LABELS[CONSECUTIVE_SPACES_RULE],
-        description="Target 的文本内容之间存在连续空格。",
+        description="Target 中存在连续空格。",
         matched_content=lengths,
+    )
+
+
+def _find_leading_trailing_spaces(text: str) -> TextIssue | None:
+    leading_count = len(text) - len(text.lstrip(" "))
+    trailing_count = len(text) - len(text.rstrip(" "))
+    if not leading_count and not trailing_count:
+        return None
+
+    if leading_count == len(text):
+        matched_content = f"首尾 {leading_count} 个空格"
+    else:
+        positions = []
+        if leading_count:
+            positions.append(f"开头 {leading_count} 个空格")
+        if trailing_count:
+            positions.append(f"结尾 {trailing_count} 个空格")
+        matched_content = "、".join(positions)
+
+    return TextIssue(
+        rule=LEADING_TRAILING_SPACES_RULE,
+        issue_type=RULE_LABELS[LEADING_TRAILING_SPACES_RULE],
+        description="Target 开头或结尾存在普通空格。",
+        matched_content=matched_content,
     )
 
 
@@ -184,6 +213,7 @@ def _find_mixed_width(text: str) -> TextIssue | None:
 _RULE_CHECKERS = {
     ABNORMAL_PUNCTUATION_RULE: _find_abnormal_punctuation,
     CONSECUTIVE_SPACES_RULE: _find_consecutive_spaces,
+    LEADING_TRAILING_SPACES_RULE: _find_leading_trailing_spaces,
     MIXED_WIDTH_RULE: _find_mixed_width,
 }
 
@@ -282,6 +312,7 @@ __all__ = [
     "ABNORMAL_ELLIPSIS_RULE",
     "ABNORMAL_PUNCTUATION_RULE",
     "CONSECUTIVE_SPACES_RULE",
+    "LEADING_TRAILING_SPACES_RULE",
     "MIXED_WIDTH_RULE",
     "PROBLEM_SHEET_NAME",
     "RULE_LABELS",

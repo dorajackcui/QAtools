@@ -42,7 +42,7 @@ qatools tag-check --help
 | `qatools term-check` | 术语 mark 与历史 TB 检查 |
 | `qatools tag-check` | 常规 Tag、Placeholder、换行标记与 memoQ Marker 检查 |
 | `qatools line-break-check` | 真实换行数量检查 |
-| `qatools consistency-check` | 同源译文一致性检查 |
+| `qatools consistency-check` | 同 Source 不同 Target 检查 |
 | `qatools chinese-check` | Target 中文字符与中文标点检查 |
 | `qatools french-nbsp` | 法语 NBSP 恢复 |
 | `qatools batch` | 按行拆分 Excel batch，并在处理后复原 |
@@ -70,7 +70,9 @@ qatools tag-check --help
 
 ## 一键质量检查
 
-默认运行术语、Tag、换行数量、同源译文一致性、Target 中文和 Target 文本规范检查：
+默认运行八项常用检查：术语、同 Source 不同 Target、Tag、换行数量、数字、
+URL、Target 中文和 Target 文本规范。“同 Target 不同 Source”属于辅助检查，
+默认关闭：
 
 ```bash
 qatools qa ./input.xlsx \
@@ -94,20 +96,44 @@ qatools qa ./input.xlsx -c A -t B \
 
 ```text
 term
+consistency
+target-consistency
 tag
 line-break
-consistency
+number
+url
 chinese
 text
 ```
 
-Target 文本规范检查支持单独选择规则；不传 `--text-rule` 时默认运行全部三项：
+双向文本一致性检查：
+
+```bash
+qatools qa ./input.xlsx -c A -t B \
+  --check consistency \
+  --check target-consistency
+```
+
+数字与 URL 一致性检查：
+
+```bash
+qatools qa ./input.xlsx -c A -t B \
+  --check number \
+  --check url
+```
+
+`consistency` 表示“同 Source 不同 Target”，`target-consistency` 表示“同
+Target 不同 Source”。数字和 URL 的提取与比较规则见
+[内容保真检查 README](../tools/content_fidelity_checker/README.md)。
+
+Target 文本规范检查支持单独选择规则；不传 `--text-rule` 时默认运行全部四项：
 
 ```bash
 qatools qa ./input.xlsx -c A -t B \
   --check text \
   --text-rule abnormal-punctuation \
   --text-rule consecutive-spaces \
+  --text-rule leading-trailing-spaces \
   --text-rule mixed-width
 ```
 
@@ -198,7 +224,7 @@ qatools line-break-check ./input.xlsx \
   -o ./artifacts/line_break_check_input.xlsx
 ```
 
-同源译文一致性：
+同 Source 不同 Target：
 
 ```bash
 qatools consistency-check ./input.xlsx \

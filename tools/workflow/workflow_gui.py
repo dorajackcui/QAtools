@@ -10,6 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
 from tools.gui_common import (
     APP_MAIN_BACKGROUND,
+    CATEGORY_FONT,
     PRIMARY_BUTTON_STYLE,
     SECTION_FRAME_STYLE,
     add_optional_status_label,
@@ -24,6 +25,7 @@ from tools.tb_projects import TbProject
 from tools.target_text_checker.check_target_text import (
     ABNORMAL_PUNCTUATION_RULE,
     CONSECUTIVE_SPACES_RULE,
+    LEADING_TRAILING_SPACES_RULE,
     MIXED_WIDTH_RULE,
 )
 from tools.term_pair_checker.extract_terms_from_excel import (
@@ -55,6 +57,9 @@ class WorkflowRunnerApp(ttk.Frame):
         self.run_tag_check_var = tk.BooleanVar(value=True)
         self.run_line_break_check_var = tk.BooleanVar(value=True)
         self.run_source_consistency_check_var = tk.BooleanVar(value=True)
+        self.run_target_consistency_check_var = tk.BooleanVar(value=False)
+        self.run_number_check_var = tk.BooleanVar(value=True)
+        self.run_url_check_var = tk.BooleanVar(value=True)
         self.run_chinese_target_check_var = tk.BooleanVar(value=True)
         self.run_target_text_check_var = tk.BooleanVar(value=True)
         self.output_preview_var = tk.StringVar()
@@ -78,6 +83,7 @@ class WorkflowRunnerApp(ttk.Frame):
         self.target_text_rule_vars = {
             ABNORMAL_PUNCTUATION_RULE: tk.BooleanVar(value=True),
             CONSECUTIVE_SPACES_RULE: tk.BooleanVar(value=True),
+            LEADING_TRAILING_SPACES_RULE: tk.BooleanVar(value=True),
             MIXED_WIDTH_RULE: tk.BooleanVar(value=True),
         }
 
@@ -162,21 +168,15 @@ class WorkflowRunnerApp(ttk.Frame):
             to=1_000_000,
         ).grid(row=0, column=7, sticky="w", padx=(8, 0))
 
-        task_frame = ttk.LabelFrame(
+        task_frame = ttk.Frame(
             self.scroll_content,
-            text="质量检查项目",
             padding=12,
-            style=SECTION_FRAME_STYLE,
         )
         task_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        for column in range(3):
-            task_frame.columnconfigure(column, weight=1, uniform="quality-checks")
+        task_frame.columnconfigure(0, weight=1)
 
-        ttk.Label(task_frame, text="默认全部选中，可按需取消").grid(
-            row=0, column=0, sticky="w"
-        )
         selection_buttons = ttk.Frame(task_frame)
-        selection_buttons.grid(row=0, column=2, sticky="e")
+        selection_buttons.grid(row=0, column=0, sticky="e")
         ttk.Button(selection_buttons, text="全选", command=self.select_all_tasks).grid(
             row=0, column=0
         )
@@ -184,8 +184,22 @@ class WorkflowRunnerApp(ttk.Frame):
             row=0, column=1, padx=(6, 0)
         )
 
-        term_item = ttk.Frame(task_frame)
-        term_item.grid(row=1, column=0, sticky="w", pady=(12, 4))
+        ttk.Label(
+            task_frame,
+            text="术语与翻译一致性",
+            font=CATEGORY_FONT,
+        ).grid(row=1, column=0, sticky="w", pady=(10, 0))
+        translation_frame = ttk.Frame(task_frame)
+        translation_frame.grid(row=2, column=0, sticky="ew", pady=(6, 0))
+        for column in range(2):
+            translation_frame.columnconfigure(
+                column,
+                weight=1,
+                uniform="translation-checks",
+            )
+
+        term_item = ttk.Frame(translation_frame)
+        term_item.grid(row=0, column=0, sticky="w")
         ttk.Checkbutton(
             term_item,
             text="术语检查",
@@ -200,11 +214,40 @@ class WorkflowRunnerApp(ttk.Frame):
         )
         self.term_settings_button.grid(row=0, column=1, padx=(8, 0))
 
-        tag_item = ttk.Frame(task_frame)
-        tag_item.grid(row=1, column=1, sticky="w", pady=(12, 4))
+        ttk.Checkbutton(
+            translation_frame,
+            text="同 Source 不同 Target",
+            variable=self.run_source_consistency_check_var,
+        ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+        ttk.Checkbutton(
+            translation_frame,
+            text="同 Target 不同 Source",
+            variable=self.run_target_consistency_check_var,
+        ).grid(row=1, column=1, sticky="w", pady=(8, 0))
+
+        ttk.Separator(task_frame, orient="horizontal").grid(
+            row=3, column=0, sticky="ew", pady=(12, 0)
+        )
+
+        ttk.Label(
+            task_frame,
+            text="内容保真检查",
+            font=CATEGORY_FONT,
+        ).grid(row=4, column=0, sticky="w", pady=(10, 0))
+        fidelity_frame = ttk.Frame(task_frame)
+        fidelity_frame.grid(row=5, column=0, sticky="ew", pady=(6, 0))
+        for column in range(2):
+            fidelity_frame.columnconfigure(
+                column,
+                weight=1,
+                uniform="fidelity-checks",
+            )
+
+        tag_item = ttk.Frame(fidelity_frame)
+        tag_item.grid(row=0, column=0, sticky="w")
         ttk.Checkbutton(
             tag_item,
-            text="Tag 检查",
+            text="Tag / Placeholder",
             variable=self.run_tag_check_var,
             command=self.handle_tag_check_toggled,
         ).grid(row=0, column=0, sticky="w")
@@ -217,26 +260,49 @@ class WorkflowRunnerApp(ttk.Frame):
         self.tag_settings_button.grid(row=0, column=1, padx=(8, 0))
 
         ttk.Checkbutton(
-            task_frame,
-            text="换行数量检查",
+            fidelity_frame,
+            text="换行数量",
             variable=self.run_line_break_check_var,
-        ).grid(row=1, column=2, sticky="w", pady=(12, 4))
+        ).grid(row=0, column=1, sticky="w")
         ttk.Checkbutton(
-            task_frame,
-            text="同源译文一致性",
-            variable=self.run_source_consistency_check_var,
-        ).grid(row=2, column=0, sticky="w", pady=(8, 0))
+            fidelity_frame,
+            text="数字一致性",
+            variable=self.run_number_check_var,
+        ).grid(row=1, column=0, sticky="w", pady=(8, 0))
         ttk.Checkbutton(
-            task_frame,
-            text="Target 中文检查",
-            variable=self.run_chinese_target_check_var,
-        ).grid(row=2, column=1, sticky="w", pady=(8, 0))
+            fidelity_frame,
+            text="URL 一致性",
+            variable=self.run_url_check_var,
+        ).grid(row=1, column=1, sticky="w", pady=(8, 0))
 
-        target_text_item = ttk.Frame(task_frame)
-        target_text_item.grid(row=2, column=2, sticky="w", pady=(8, 0))
+        ttk.Separator(task_frame, orient="horizontal").grid(
+            row=6, column=0, sticky="ew", pady=(12, 0)
+        )
+
+        ttk.Label(
+            task_frame,
+            text="Target 文本质量",
+            font=CATEGORY_FONT,
+        ).grid(row=7, column=0, sticky="w", pady=(10, 0))
+        target_frame = ttk.Frame(task_frame)
+        target_frame.grid(row=8, column=0, sticky="ew", pady=(6, 0))
+        for column in range(2):
+            target_frame.columnconfigure(
+                column,
+                weight=1,
+                uniform="target-checks",
+            )
+        ttk.Checkbutton(
+            target_frame,
+            text="Target 中文",
+            variable=self.run_chinese_target_check_var,
+        ).grid(row=0, column=0, sticky="w")
+
+        target_text_item = ttk.Frame(target_frame)
+        target_text_item.grid(row=0, column=1, sticky="w")
         ttk.Checkbutton(
             target_text_item,
-            text="Target 文本规范检查",
+            text="Target 文本规范",
             variable=self.run_target_text_check_var,
             command=self.handle_target_text_check_toggled,
         ).grid(row=0, column=0, sticky="w")
@@ -450,6 +516,7 @@ class WorkflowRunnerApp(ttk.Frame):
                     "异常标点符号（.. / ,, / 。。等）",
                 ),
                 (CONSECUTIVE_SPACES_RULE, "连续空格（2 个及以上）"),
+                (LEADING_TRAILING_SPACES_RULE, "首尾空格"),
                 (MIXED_WIDTH_RULE, "全半角混用"),
             )
         ):
@@ -458,10 +525,11 @@ class WorkflowRunnerApp(ttk.Frame):
                 text=label,
                 variable=self.target_text_rule_vars[rule],
             ).grid(
-                row=0,
-                column=column,
+                row=column // 2,
+                column=column % 2,
                 sticky="w",
-                padx=(0 if column == 0 else 16, 0),
+                padx=(0 if column % 2 == 0 else 16, 0),
+                pady=(0 if column < 2 else 8, 0),
             )
         self.target_text_settings_frame.grid_remove()
 
@@ -522,9 +590,12 @@ class WorkflowRunnerApp(ttk.Frame):
     def task_vars(self) -> tuple[tk.BooleanVar, ...]:
         return (
             self.run_term_pair_var,
+            self.run_source_consistency_check_var,
+            self.run_target_consistency_check_var,
             self.run_tag_check_var,
             self.run_line_break_check_var,
-            self.run_source_consistency_check_var,
+            self.run_number_check_var,
+            self.run_url_check_var,
             self.run_chinese_target_check_var,
             self.run_target_text_check_var,
         )
@@ -923,6 +994,9 @@ class WorkflowRunnerApp(ttk.Frame):
         run_tag_check = self.run_tag_check_var.get()
         run_line_break_check = self.run_line_break_check_var.get()
         run_source_consistency_check = self.run_source_consistency_check_var.get()
+        run_target_consistency_check = self.run_target_consistency_check_var.get()
+        run_number_check = self.run_number_check_var.get()
+        run_url_check = self.run_url_check_var.get()
         run_chinese_target_check = self.run_chinese_target_check_var.get()
         run_target_text_check = self.run_target_text_check_var.get()
         term_mark_styles = self.get_selected_term_mark_styles()
@@ -948,6 +1022,9 @@ class WorkflowRunnerApp(ttk.Frame):
                 run_tag_check,
                 run_line_break_check,
                 run_source_consistency_check,
+                run_target_consistency_check,
+                run_number_check,
+                run_url_check,
                 run_chinese_target_check,
                 run_target_text_check,
             )
@@ -1010,6 +1087,9 @@ class WorkflowRunnerApp(ttk.Frame):
                 tag_angle_config_file=tag_angle_config_file or None,
                 run_line_break_check=run_line_break_check,
                 run_source_consistency_check=run_source_consistency_check,
+                run_target_consistency_check=run_target_consistency_check,
+                run_number_check=run_number_check,
+                run_url_check=run_url_check,
                 run_chinese_target_check=run_chinese_target_check,
                 run_target_text_check=run_target_text_check,
                 target_text_rules=target_text_rules,
@@ -1037,11 +1117,22 @@ class WorkflowRunnerApp(ttk.Frame):
             lines.append(f"换行数量问题行数: {summary.line_break_problem_count}")
         if summary.ran_source_consistency_check:
             lines.append(
-                f"同源译文不一致 source 数: {summary.source_consistency_problem_count}"
+                f"同 Source 不同 Target 组数: {summary.source_consistency_problem_count}"
             )
             lines.append(
-                f"同源译文不一致涉及行数: {summary.source_consistency_problem_rows}"
+                f"同 Source 不同 Target 涉及行数: {summary.source_consistency_problem_rows}"
             )
+        if summary.ran_target_consistency_check:
+            lines.append(
+                f"同 Target 不同 Source 组数: {summary.target_consistency_problem_count}"
+            )
+            lines.append(
+                f"同 Target 不同 Source 涉及行数: {summary.target_consistency_problem_rows}"
+            )
+        if summary.ran_number_check:
+            lines.append(f"数字一致性问题行数: {summary.number_problem_rows}")
+        if summary.ran_url_check:
+            lines.append(f"URL 一致性问题行数: {summary.url_problem_rows}")
         if summary.ran_chinese_target_check:
             lines.append(f"Target 中文问题行数: {summary.chinese_target_problem_count}")
         if summary.ran_target_text_check:

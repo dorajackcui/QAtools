@@ -79,6 +79,9 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertTrue(summary.ran_tag_check)
             self.assertTrue(summary.ran_line_break_check)
             self.assertTrue(summary.ran_source_consistency_check)
+            self.assertFalse(summary.ran_target_consistency_check)
+            self.assertTrue(summary.ran_number_check)
+            self.assertTrue(summary.ran_url_check)
             self.assertTrue(summary.ran_chinese_target_check)
             self.assertTrue(summary.ran_target_text_check)
             self.assertEqual(summary.term_problem_count, 1)
@@ -118,9 +121,11 @@ class WorkflowRunnerTests(unittest.TestCase):
                 [
                     ("检查项", "问题行数"),
                     ("术语检查", 1),
+                    ("同 Source 不同 Target", 2),
                     ("Tag 检查", 1),
                     ("换行数量检查", 1),
-                    ("同源译文一致性", 2),
+                    ("数字一致性", 0),
+                    ("URL 一致性", 0),
                     ("Target 中文检查", 4),
                     ("Target 文本规范检查", 0),
                 ],
@@ -149,7 +154,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(merged_check_items.count("术语检查"), 1)
             self.assertEqual(merged_check_items.count("Tag 检查"), 1)
             self.assertEqual(merged_check_items.count("换行数量检查"), 1)
-            self.assertEqual(merged_check_items.count("同源译文一致性"), 2)
+            self.assertEqual(merged_check_items.count("同 Source 不同 Target"), 2)
             self.assertEqual(merged_check_items.count("Target 中文检查"), 4)
             self.assertEqual(review_sheet["A3"].value, 3)
             self.assertIsNone(review_sheet["D3"].value)
@@ -211,6 +216,108 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(review_sheet["A2"].value, 2)
             self.assertIn("尖括号tag结构不一致", review_sheet["E2"].value)
             self.assertEqual(review_sheet["F2"].value, "Tag 检查")
+            output_workbook.close()
+
+    def test_run_workflow_integrates_reverse_number_and_url_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(
+                [
+                    "Open 10 files at https://old.example/path",
+                    "打开 11 个文件：https://new.example/path",
+                ]
+            )
+            worksheet.append(["Save", "保存"])
+            worksheet.append(["Store", "保存"])
+            workbook.save(input_path)
+            workbook.close()
+
+            summary = run_workflow(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                run_term_pair_check=False,
+                run_tag_check=False,
+                run_line_break_check=False,
+                run_source_consistency_check=False,
+                run_target_consistency_check=True,
+                run_number_check=True,
+                run_url_check=True,
+                run_chinese_target_check=False,
+                run_target_text_check=False,
+            )
+
+            self.assertEqual(summary.target_consistency_problem_count, 1)
+            self.assertEqual(summary.target_consistency_problem_rows, 2)
+            self.assertEqual(summary.number_problem_rows, 1)
+            self.assertEqual(summary.url_problem_rows, 1)
+            output_workbook = load_workbook(summary.output_path)
+            try:
+                review_sheet = output_workbook[WORKFLOW_REVIEW_SHEET_NAME]
+                self.assertEqual(
+                    [review_sheet[f"A{row}"].value for row in range(2, 5)],
+                    [2, 3, 4],
+                )
+                self.assertEqual(
+                    review_sheet["F2"].value,
+                    "数字一致性；URL 一致性",
+                )
+                self.assertEqual(review_sheet["F3"].value, "同 Target 不同 Source")
+                self.assertIn("Target 缺少：10", review_sheet["E2"].value)
+                self.assertIn(
+                    "Target 多出：https://new.example/path",
+                    review_sheet["E2"].value,
+                )
+                self.assertEqual(
+                    list(output_workbook[WORKFLOW_SUMMARY_SHEET_NAME].values),
+                    [
+                        ("检查项", "问题行数"),
+                        ("同 Target 不同 Source", 2),
+                        ("数字一致性", 1),
+                        ("URL 一致性", 1),
+                    ],
+                )
+            finally:
+                output_workbook.close()
+
+    def test_run_workflow_surfaces_empty_angle_and_brace_tokens(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(["保留 {}、<> 和 < >", "全部缺少"])
+            workbook.save(input_path)
+            workbook.close()
+
+            summary = run_workflow(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                run_term_pair_check=False,
+                run_tag_check=True,
+                tag_token_types=("angle", "brace"),
+                run_line_break_check=False,
+                run_source_consistency_check=False,
+                run_chinese_target_check=False,
+                run_target_text_check=False,
+            )
+
+            self.assertEqual(summary.tag_problem_count, 2)
+            self.assertEqual(summary.tag_problem_rows, 1)
+            output_workbook = load_workbook(summary.output_path)
+            review_sheet = output_workbook[WORKFLOW_REVIEW_SHEET_NAME]
+            self.assertIn("target缺少=< >、<>", review_sheet["E2"].value)
+            self.assertIn("target缺少={}", review_sheet["E2"].value)
+            self.assertEqual(review_sheet["F2"].value, "Tag 检查")
+            output_workbook.close()
 
     def test_run_workflow_passes_the_angle_filter_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -448,6 +555,9 @@ class WorkflowRunnerTests(unittest.TestCase):
                     run_tag_check=False,
                     run_line_break_check=False,
                     run_source_consistency_check=False,
+                    run_target_consistency_check=False,
+                    run_number_check=False,
+                    run_url_check=False,
                     run_chinese_target_check=False,
                     run_target_text_check=False,
                 )
@@ -600,6 +710,8 @@ class WorkflowRunnerTests(unittest.TestCase):
                 run_tag_check=False,
                 run_line_break_check=False,
                 run_source_consistency_check=False,
+                run_number_check=False,
+                run_url_check=False,
                 run_chinese_target_check=False,
                 run_target_text_check=True,
                 target_text_rules=(ABNORMAL_PUNCTUATION_RULE,),

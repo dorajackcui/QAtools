@@ -177,7 +177,7 @@ class SourceConsistencyCheckerApp(OutputPreviewMixin, ttk.Frame):
             "处理完成",
             "\n".join(
                 [
-                    "相同 source 译文一致性检查已完成。",
+                    "同 Source 不同 Target 检查已完成。",
                     f"检查工作表: {summary.worksheet_title}",
                     f"重复 source 数: {summary.repeated_source_count}",
                     f"不一致 source 数: {summary.inconsistent_source_count}",
@@ -190,7 +190,7 @@ class SourceConsistencyCheckerApp(OutputPreviewMixin, ttk.Frame):
 
 def main() -> None:
     root = create_application_root()
-    root.title("相同 Source 译文一致性检查")
+    root.title("同 Source 不同 Target 检查")
     root.resizable(True, True)
     app = SourceConsistencyCheckerApp(root)
     app.grid(row=0, column=0, sticky="nsew")

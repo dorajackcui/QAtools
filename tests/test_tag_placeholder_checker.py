@@ -61,6 +61,15 @@ class ExtractTokensTests(unittest.TestCase):
             ["{1}", "{2>", "<3}"],
         )
 
+    def test_extract_tokens_includes_empty_or_blank_angle_and_brace_tokens(self) -> None:
+        self.assertEqual(
+            extract_tokens(
+                "空 tag <>、空白 tag < > 和空 placeholder {}",
+                token_types=("angle", "brace"),
+            ),
+            ["<>", "< >", "{}"],
+        )
+
     def test_default_standard_tags_do_not_capture_memoq_half_markers(self) -> None:
         text = "{1}{2>Glace du Néant<3} <text>"
 
@@ -259,6 +268,39 @@ class ProcessExcelTests(unittest.TestCase):
             problem_sheet = workbook["标签占位问题"]
             self.assertEqual(problem_sheet.max_row, 3)
             self.assertEqual(problem_sheet["E2"].value, "尖括号tag不一致")
+
+    def test_process_excel_reports_missing_empty_angle_and_brace_tokens(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["source", "target"])
+            worksheet.append(["保留 {}、<> 和 < >", "全部缺少"])
+            workbook.save(input_path)
+            workbook.close()
+
+            summary = process_excel(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                token_types=("angle", "brace"),
+            )
+
+            self.assertEqual(summary.rows_with_selected_tokens, 1)
+            self.assertEqual(summary.angle_rows, 1)
+            self.assertEqual(summary.brace_rows, 1)
+            self.assertEqual(summary.problem_rows, 1)
+            self.assertEqual(summary.problem_count, 2)
+            output_workbook = load_workbook(summary.output_path)
+            problem_sheet = output_workbook["标签占位问题"]
+            self.assertIn("target缺少=< >、<>", problem_sheet["D2"].value)
+            self.assertIn("target缺少={}", problem_sheet["D2"].value)
+            self.assertEqual(
+                problem_sheet["E2"].value,
+                "尖括号tag不一致；花括号placeholder不一致",
+            )
+            output_workbook.close()
 
     def test_process_excel_supports_newline_selected_type(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

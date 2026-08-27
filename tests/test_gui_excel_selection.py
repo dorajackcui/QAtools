@@ -17,6 +17,7 @@ from tools.tag_placeholder_checker.check_tags_and_placeholders_gui import TagPla
 from tools.target_text_checker.check_target_text import (
     ABNORMAL_PUNCTUATION_RULE,
     CONSECUTIVE_SPACES_RULE,
+    LEADING_TRAILING_SPACES_RULE,
     MIXED_WIDTH_RULE,
 )
 from tools.tb_projects import TbProject
@@ -773,6 +774,9 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.run_tag_check_var = FakeBoolVar(True)
         app.run_line_break_check_var = FakeBoolVar(True)
         app.run_source_consistency_check_var = FakeBoolVar(True)
+        app.run_target_consistency_check_var = FakeBoolVar(False)
+        app.run_number_check_var = FakeBoolVar(True)
+        app.run_url_check_var = FakeBoolVar(True)
         app.run_chinese_target_check_var = FakeBoolVar(True)
         app.run_target_text_check_var = FakeBoolVar(True)
         app.term_mark_style_vars = {
@@ -786,6 +790,7 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.target_text_rule_vars = {
             ABNORMAL_PUNCTUATION_RULE: FakeBoolVar(True),
             CONSECUTIVE_SPACES_RULE: FakeBoolVar(False),
+            LEADING_TRAILING_SPACES_RULE: FakeBoolVar(True),
             MIXED_WIDTH_RULE: FakeBoolVar(True),
         }
         app.tag_mode_var = FakeVar("standard")
@@ -799,6 +804,9 @@ class GuiSheetSelectionTests(unittest.TestCase):
             ran_tag_check=True,
             ran_line_break_check=True,
             ran_source_consistency_check=True,
+            ran_target_consistency_check=False,
+            ran_number_check=True,
+            ran_url_check=True,
             ran_chinese_target_check=True,
             ran_target_text_check=True,
             term_count=3,
@@ -809,6 +817,10 @@ class GuiSheetSelectionTests(unittest.TestCase):
             line_break_problem_count=0,
             source_consistency_problem_count=0,
             source_consistency_problem_rows=0,
+            target_consistency_problem_count=0,
+            target_consistency_problem_rows=0,
+            number_problem_rows=0,
+            url_problem_rows=0,
             chinese_target_problem_count=0,
             target_text_problem_count=0,
             target_text_problem_rows=0,
@@ -830,14 +842,21 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertEqual(run_workflow_mock.call_args.kwargs["term_history_start_row"], 2)
         self.assertTrue(run_workflow_mock.call_args.kwargs["run_line_break_check"])
         self.assertTrue(run_workflow_mock.call_args.kwargs["run_source_consistency_check"])
+        self.assertFalse(run_workflow_mock.call_args.kwargs["run_target_consistency_check"])
+        self.assertTrue(run_workflow_mock.call_args.kwargs["run_number_check"])
+        self.assertTrue(run_workflow_mock.call_args.kwargs["run_url_check"])
         self.assertTrue(run_workflow_mock.call_args.kwargs["run_chinese_target_check"])
         self.assertTrue(run_workflow_mock.call_args.kwargs["run_target_text_check"])
         self.assertEqual(
             run_workflow_mock.call_args.kwargs["target_text_rules"],
-            (ABNORMAL_PUNCTUATION_RULE, MIXED_WIDTH_RULE),
+            (
+                ABNORMAL_PUNCTUATION_RULE,
+                LEADING_TRAILING_SPACES_RULE,
+                MIXED_WIDTH_RULE,
+            ),
         )
 
-    def test_workflow_defaults_to_all_quality_checks(self) -> None:
+    def test_workflow_defaults_to_common_quality_checks(self) -> None:
         app = WorkflowRunnerApp.__new__(WorkflowRunnerApp)
         with (
             patch.object(WorkflowRunnerApp, "_build_ui", lambda self: None),
@@ -854,9 +873,16 @@ class GuiSheetSelectionTests(unittest.TestCase):
         self.assertTrue(app.run_tag_check_var.get())
         self.assertTrue(app.run_line_break_check_var.get())
         self.assertTrue(app.run_source_consistency_check_var.get())
+        self.assertFalse(app.run_target_consistency_check_var.get())
+        self.assertTrue(app.run_number_check_var.get())
+        self.assertTrue(app.run_url_check_var.get())
         self.assertTrue(app.run_chinese_target_check_var.get())
         self.assertTrue(app.run_target_text_check_var.get())
         self.assertTrue(all(var.get() for var in app.target_text_rule_vars.values()))
+        self.assertIn(
+            LEADING_TRAILING_SPACES_RULE,
+            app.target_text_rule_vars,
+        )
         self.assertFalse(app.term_settings_expanded)
         self.assertFalse(app.tag_settings_expanded)
         self.assertFalse(app.target_text_settings_expanded)
@@ -912,6 +938,9 @@ class GuiSheetSelectionTests(unittest.TestCase):
         app.run_tag_check_var = FakeBoolVar(True)
         app.run_line_break_check_var = FakeBoolVar(True)
         app.run_source_consistency_check_var = FakeBoolVar(True)
+        app.run_target_consistency_check_var = FakeBoolVar(False)
+        app.run_number_check_var = FakeBoolVar(True)
+        app.run_url_check_var = FakeBoolVar(True)
         app.run_chinese_target_check_var = FakeBoolVar(True)
         app.run_target_text_check_var = FakeBoolVar(True)
         app.term_settings_expanded = True

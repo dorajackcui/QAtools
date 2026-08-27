@@ -8,8 +8,17 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QPoint, Qt  # noqa: E402
 from PySide6.QtGui import QCloseEvent  # noqa: E402
-from PySide6.QtWidgets import QApplication, QLineEdit, QStackedWidget  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QApplication,
+    QDialog,
+    QFrame,
+    QLabel,
+    QLineEdit,
+    QStackedWidget,
+    QToolButton,
+)
 
 from toolshub_gui import (  # noqa: E402
     SIDEBAR_WIDTH,
@@ -140,10 +149,12 @@ class ToolshubLayoutTests(unittest.TestCase):
                 window.nav_buttons["workflow"].property("navItem"),
                 True,
             )
+            self.assertIsInstance(workflow.term_settings_dialog, QDialog)
             self.assertEqual(
-                workflow.term_settings_box.objectName(),
-                "sectionCard",
+                workflow.term_settings_dialog.objectName(),
+                "settingsDialog",
             )
+            self.assertFalse(workflow.term_settings_dialog.isVisible())
             self.assertEqual(workflow.action_bar.objectName(), "pageActionBar")
             self.assertEqual(workflow.action_bar.height(), 46)
             self.assertIs(workflow.run_button.parentWidget(), workflow.action_bar)
@@ -157,14 +168,22 @@ class ToolshubLayoutTests(unittest.TestCase):
             )
 
             action_geometry = workflow.action_bar.geometry().getRect()
-            workflow.term_settings_button.setChecked(True)
+            workflow.term_settings_button.click()
             self.qt_app.processEvents()
 
-            self.assertTrue(workflow.term_settings_box.isVisible())
+            self.assertTrue(workflow.term_settings_dialog.isVisible())
+            self.assertTrue(workflow.term_settings_dialog.isModal())
+            with patch("tools.qt_pages._choose_excel", return_value="") as choose:
+                workflow.choose_history_file()
+            self.assertIs(
+                choose.call_args.args[0],
+                workflow.term_settings_dialog,
+            )
             self.assertEqual(
                 workflow.action_bar.geometry().getRect(),
                 action_geometry,
             )
+            workflow.term_settings_dialog.reject()
         finally:
             window.close()
 
@@ -229,15 +248,124 @@ class ToolshubLayoutTests(unittest.TestCase):
         finally:
             window.close()
 
+    def test_workflow_groups_quality_checks_and_keeps_reverse_check_optional(self) -> None:
+        window = self.make_app()
+        try:
+            window.resize(1000, 760)
+            window.show()
+            workflow = window.tool_frames["workflow"]
+            self.qt_app.processEvents()
+
+            headings = {
+                label.text()
+                for label in workflow.findChildren(QLabel)
+                if label.objectName() == "sectionTitle"
+            }
+            labels = {label.text() for label in workflow.findChildren(QLabel)}
+            self.assertTrue(
+                {
+                    "术语与翻译一致性",
+                    "内容保真检查",
+                    "Target 文本质量",
+                }.issubset(headings)
+            )
+            self.assertEqual(workflow.consistency_check.text(), "同 Source 不同 Target")
+            self.assertEqual(
+                workflow.target_consistency_check.text(),
+                "同 Target 不同 Source",
+            )
+            self.assertEqual(
+                workflow.consistency_check.y(),
+                workflow.target_consistency_check.y(),
+            )
+            self.assertTrue(workflow.consistency_check.isChecked())
+            self.assertFalse(workflow.target_consistency_check.isChecked())
+            self.assertTrue(workflow.number_check.isChecked())
+            self.assertTrue(workflow.url_check.isChecked())
+            self.assertIsInstance(workflow.term_settings_button, QToolButton)
+            self.assertEqual(workflow.term_settings_button.text(), "")
+            self.assertEqual(
+                workflow.term_settings_button.arrowType(),
+                Qt.ArrowType.DownArrow,
+            )
+            self.assertEqual(
+                workflow.term_settings_button.toolTip(),
+                "术语检查设置",
+            )
+            self.assertEqual(
+                workflow.tag_settings_button.toolTip(),
+                "Tag / Placeholder 设置",
+            )
+            self.assertEqual(
+                workflow.target_settings_button.toolTip(),
+                "Target 文本规范设置",
+            )
+            for check, button in (
+                (workflow.term_check, workflow.term_settings_button),
+                (workflow.tag_check, workflow.tag_settings_button),
+                (workflow.target_text_check, workflow.target_settings_button),
+            ):
+                gap = button.mapTo(workflow, QPoint(0, 0)).x() - (
+                    check.mapTo(workflow, QPoint(0, 0)).x() + check.width()
+                )
+                self.assertLessEqual(gap, 12)
+            self.assertNotIn("双向文本一致性：", labels)
+            self.assertNotIn("常用检查默认开启，可按需调整", labels)
+            self.assertNotIn("质量检查项目", labels)
+            self.assertNotIn("展开设置", labels)
+            self.assertNotIn("收起设置", labels)
+            second_column_positions = {
+                check.mapTo(workflow, QPoint(0, 0)).x()
+                for check in (
+                    workflow.target_consistency_check,
+                    workflow.line_break_check,
+                    workflow.url_check,
+                    workflow.target_text_check,
+                )
+            }
+            self.assertEqual(len(second_column_positions), 1)
+            separators = [
+                frame
+                for frame in workflow.findChildren(QFrame)
+                if frame.frameShape() == QFrame.Shape.HLine
+            ]
+            self.assertGreaterEqual(len(separators), 2)
+
+            workflow.set_all_tasks(False)
+            self.assertTrue(
+                all(
+                    not button.isEnabled()
+                    for button in (
+                        workflow.term_settings_button,
+                        workflow.tag_settings_button,
+                        workflow.target_settings_button,
+                    )
+                )
+            )
+            workflow.set_all_tasks(True)
+            self.assertTrue(
+                all(
+                    button.isEnabled()
+                    for button in (
+                        workflow.term_settings_button,
+                        workflow.tag_settings_button,
+                        workflow.target_settings_button,
+                    )
+                )
+            )
+        finally:
+            window.close()
+
     def test_tag_modes_are_visually_grouped_and_strictly_exclusive(self) -> None:
         window = self.make_app()
         try:
             window.resize(1000, 660)
             window.show()
             workflow = window.tool_frames["workflow"]
-            workflow.tag_settings_button.setChecked(True)
+            workflow.tag_settings_button.click()
             self.qt_app.processEvents()
 
+            self.assertTrue(workflow.tag_settings_dialog.isVisible())
             self.assertTrue(workflow.tag_mode_group.exclusive())
             self.assertEqual(workflow.standard_mode.property("segmentedMode"), True)
             self.assertEqual(workflow.memoq_mode.property("segmentedMode"), True)
@@ -269,6 +397,33 @@ class ToolshubLayoutTests(unittest.TestCase):
         finally:
             window.close()
 
+    def test_workflow_settings_dialog_cancel_restores_previous_values(self) -> None:
+        window = self.make_app()
+        try:
+            window.resize(1000, 660)
+            window.show()
+            workflow = window.tool_frames["workflow"]
+            workflow.target_settings_button.click()
+            self.qt_app.processEvents()
+
+            workflow.abnormal_rule.setChecked(False)
+            workflow.edge_spaces_rule.setChecked(False)
+            workflow.target_settings_dialog.reject()
+            self.qt_app.processEvents()
+
+            self.assertTrue(workflow.abnormal_rule.isChecked())
+            self.assertTrue(workflow.edge_spaces_rule.isChecked())
+
+            workflow.target_settings_button.click()
+            self.qt_app.processEvents()
+            workflow.abnormal_rule.setChecked(False)
+            workflow.target_settings_dialog.accept()
+            self.qt_app.processEvents()
+
+            self.assertFalse(workflow.abnormal_rule.isChecked())
+        finally:
+            window.close()
+
     def test_workflow_runs_excel_processing_through_background_worker(self) -> None:
         window = self.make_app()
         try:
@@ -287,6 +442,10 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertEqual(call_kwargs["kwargs"]["sheet"], "Sheet1")
             self.assertTrue(call_kwargs["kwargs"]["run_term_pair_check"])
             self.assertTrue(call_kwargs["kwargs"]["run_target_text_check"])
+            self.assertTrue(call_kwargs["kwargs"]["run_source_consistency_check"])
+            self.assertFalse(call_kwargs["kwargs"]["run_target_consistency_check"])
+            self.assertTrue(call_kwargs["kwargs"]["run_number_check"])
+            self.assertTrue(call_kwargs["kwargs"]["run_url_check"])
             self.assertEqual(call_kwargs["kwargs"]["term_mark_styles"], ("【】", "[]"))
             self.assertEqual(
                 call_kwargs["kwargs"]["tag_token_types"],

@@ -44,7 +44,7 @@ python -m qatools gui
 | 术语检查 | `qatools term-check` | 是 | [术语检查](tools/term_pair_checker/README.md) |
 | Tag / Placeholder 检查 | `qatools tag-check` | 是 | [Tag 检查](tools/tag_placeholder_checker/README.md) |
 | 换行数量检查 | `qatools line-break-check` | 是 | [换行检查](tools/line_break_checker/README.md) |
-| 同源译文一致性 | `qatools consistency-check` | 是 | [一致性检查](tools/source_consistency_checker/README.md) |
+| 同 Source 不同 Target | `qatools consistency-check` | 是 | [一致性检查](tools/source_consistency_checker/README.md) |
 | Target 中文检查 | `qatools chinese-check` | 是 | [中文检查](tools/chinese_target_checker/README.md) |
 | 法语 NBSP 恢复 | `qatools french-nbsp` | 是 | [法语 NBSP](tools/french_nbsp_restorer/README.md) |
 | Excel batch 拆分与复原 | `qatools batch` | 是 | [batch 工具](tools/excel_batcher/README.md) |
@@ -61,6 +61,10 @@ python -m qatools gui
 ```bash
 qatools qa input.xlsx -s Sheet1 -c A -t B -o workflow_check_input.xlsx
 ```
+
+GUI 将检查项分为“术语与翻译一致性”“内容保真检查”和“Target 文本质量”。
+数字与 URL 一致性属于常用默认检查；容易产生合理复用提示的“同 Target 不同
+Source”默认关闭，可按需开启。
 
 只执行部分检查：
 

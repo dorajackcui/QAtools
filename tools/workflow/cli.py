@@ -13,7 +13,18 @@ from tools.term_pair_checker.term_marks import SUPPORTED_MARKS
 from tools.workflow.workflow_runner import WorkflowSummary, run_workflow
 
 
-CHECKS = ("term", "tag", "line-break", "consistency", "chinese", "text")
+CHECKS = (
+    "term",
+    "consistency",
+    "target-consistency",
+    "tag",
+    "line-break",
+    "number",
+    "url",
+    "chinese",
+    "text",
+)
+DEFAULT_CHECKS = tuple(check for check in CHECKS if check != "target-consistency")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -45,7 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--check",
         action="append",
         choices=CHECKS,
-        help="只运行指定检查；可重复传入。不传时运行全部检查。",
+        help="只运行指定检查；可重复传入。不传时运行全部常用检查。",
     )
 
     term_mark_group = parser.add_mutually_exclusive_group()
@@ -89,7 +100,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _selected_checks(values: Sequence[str] | None) -> set[str]:
-    return set(values or CHECKS)
+    return set(values or DEFAULT_CHECKS)
 
 
 def _print_summary(summary: WorkflowSummary) -> None:
@@ -111,9 +122,18 @@ def _print_summary(summary: WorkflowSummary) -> None:
         print(f"换行数量检查: {summary.line_break_problem_count} 个问题行")
     if summary.ran_source_consistency_check:
         print(
-            "同源译文一致性: "
+            "同 Source 不同 Target: "
             f"{summary.source_consistency_problem_rows} 个问题行"
         )
+    if summary.ran_target_consistency_check:
+        print(
+            "同 Target 不同 Source: "
+            f"{summary.target_consistency_problem_rows} 个问题行"
+        )
+    if summary.ran_number_check:
+        print(f"数字一致性: {summary.number_problem_rows} 个问题行")
+    if summary.ran_url_check:
+        print(f"URL 一致性: {summary.url_problem_rows} 个问题行")
     if summary.ran_chinese_target_check:
         print(f"Target 中文检查: {summary.chinese_target_problem_count} 个问题行")
     if summary.ran_target_text_check:
@@ -148,6 +168,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         tag_angle_config_file=args.tag_angle_config,
         run_line_break_check="line-break" in checks,
         run_source_consistency_check="consistency" in checks,
+        run_target_consistency_check="target-consistency" in checks,
+        run_number_check="number" in checks,
+        run_url_check="url" in checks,
         run_chinese_target_check="chinese" in checks,
         run_target_text_check="text" in checks,
         target_text_rules=args.text_rule,

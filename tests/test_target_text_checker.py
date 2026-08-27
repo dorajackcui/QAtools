@@ -9,6 +9,7 @@ from openpyxl import Workbook, load_workbook
 from tools.target_text_checker.check_target_text import (
     ABNORMAL_PUNCTUATION_RULE,
     CONSECUTIVE_SPACES_RULE,
+    LEADING_TRAILING_SPACES_RULE,
     MIXED_WIDTH_RULE,
     PROBLEM_SHEET_NAME,
     find_text_issues,
@@ -45,13 +46,79 @@ class TargetTextRuleTests(unittest.TestCase):
 
         self.assertEqual([issue.rule for issue in issues], [ABNORMAL_PUNCTUATION_RULE])
 
-    def test_consecutive_spaces_only_checks_internal_ascii_space_runs(self) -> None:
-        issues = find_text_issues("  Hello  world   again  ")
+    def test_consecutive_spaces_checks_ascii_space_runs_at_any_position(self) -> None:
+        issues = find_text_issues(
+            "  Hello  world   again  ",
+            rules=(CONSECUTIVE_SPACES_RULE,),
+        )
 
         self.assertEqual([issue.rule for issue in issues], [CONSECUTIVE_SPACES_RULE])
         self.assertEqual(issues[0].matched_content, "2 个空格、3 个空格")
-        self.assertEqual(find_text_issues("Hello world"), ())
-        self.assertEqual(find_text_issues("Hello\u00a0\u00a0world"), ())
+        self.assertEqual(
+            find_text_issues("Hello world", rules=(CONSECUTIVE_SPACES_RULE,)),
+            (),
+        )
+        self.assertEqual(
+            find_text_issues(
+                "Hello  ",
+                rules=(CONSECUTIVE_SPACES_RULE,),
+            )[0].matched_content,
+            "2 个空格",
+        )
+        self.assertEqual(
+            find_text_issues(" Hello ", rules=(CONSECUTIVE_SPACES_RULE,)),
+            (),
+        )
+        self.assertEqual(
+            find_text_issues(
+                "Hello\u00a0\u00a0world",
+                rules=(CONSECUTIVE_SPACES_RULE,),
+            ),
+            (),
+        )
+
+    def test_leading_trailing_spaces_reports_each_edge_and_ignores_nbsp(self) -> None:
+        issues = find_text_issues(
+            " Hello  ",
+            rules=(LEADING_TRAILING_SPACES_RULE,),
+        )
+
+        self.assertEqual(
+            [issue.rule for issue in issues],
+            [LEADING_TRAILING_SPACES_RULE],
+        )
+        self.assertEqual(issues[0].matched_content, "开头 1 个空格、结尾 2 个空格")
+        self.assertEqual(
+            find_text_issues(
+                "Hello ",
+                rules=(LEADING_TRAILING_SPACES_RULE,),
+            )[0].matched_content,
+            "结尾 1 个空格",
+        )
+        self.assertEqual(
+            find_text_issues(
+                "   ",
+                rules=(LEADING_TRAILING_SPACES_RULE,),
+            )[0].matched_content,
+            "首尾 3 个空格",
+        )
+        self.assertEqual(
+            find_text_issues(
+                "\u00a0Hello\u00a0",
+                rules=(LEADING_TRAILING_SPACES_RULE,),
+            ),
+            (),
+        )
+
+    def test_edge_rule_complements_consecutive_spaces_at_text_boundaries(self) -> None:
+        self.assertEqual(
+            [issue.rule for issue in find_text_issues("Hello  ")],
+            [CONSECUTIVE_SPACES_RULE, LEADING_TRAILING_SPACES_RULE],
+        )
+        self.assertEqual(
+            [issue.rule for issue in find_text_issues("Hello ")],
+            [LEADING_TRAILING_SPACES_RULE],
+        )
 
     def test_mixed_width_compares_equivalent_character_families(self) -> None:
         issues = find_text_issues("Hello, world，（test) ABC12１２")
@@ -121,7 +188,7 @@ class TargetTextExcelTests(unittest.TestCase):
                         "异常标点符号",
                         "..、,，",
                     ),
-                    (2, "row 2", "Wait..  now,，", "Target 的文本内容之间存在连续空格。", "连续空格", "2 个空格"),
+                    (2, "row 2", "Wait..  now,，", "Target 中存在连续空格。", "连续空格", "2 个空格"),
                     (
                         2,
                         "row 2",
@@ -156,6 +223,32 @@ class TargetTextExcelTests(unittest.TestCase):
 
             self.assertEqual(summary.problem_count, 1)
             self.assertEqual(summary.problem_rows, 1)
+
+    def test_process_excel_reports_leading_trailing_spaces(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            output_path = Path(tmp_dir) / "output.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.append(["source", "target"])
+            worksheet.append(["row 2", "Done  "])
+            workbook.save(input_path)
+            workbook.close()
+
+            summary = process_excel(
+                input_path,
+                source_column="A",
+                target_column="B",
+                rules=(LEADING_TRAILING_SPACES_RULE,),
+                output_file=output_path,
+            )
+
+            self.assertEqual(summary.problem_count, 1)
+            output_workbook = load_workbook(output_path)
+            problem_sheet = output_workbook[PROBLEM_SHEET_NAME]
+            self.assertEqual(problem_sheet["E2"].value, "首尾空格")
+            self.assertEqual(problem_sheet["F2"].value, "结尾 2 个空格")
+            output_workbook.close()
 
 
 if __name__ == "__main__":

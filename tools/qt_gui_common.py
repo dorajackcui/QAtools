@@ -183,6 +183,9 @@ def configure_qt_application(app: QApplication) -> None:
             border: 1px solid {BORDER_COLOR};
             border-radius: 8px;
         }}
+        QDialog#settingsDialog {{
+            background: {CARD_BACKGROUND};
+        }}
         QFrame#pageActionBar {{
             background: {APP_BACKGROUND};
             border: none;
@@ -271,6 +274,30 @@ def configure_qt_application(app: QApplication) -> None:
             background: #e6b9a7;
             border-color: #e6b9a7;
         }}
+        QToolButton[settingsButton="true"] {{
+            color: #777771;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            padding: 0;
+        }}
+        QToolButton[settingsButton="true"]:hover {{
+            color: {ACCENT_HOVER_COLOR};
+            background: #f5e8e2;
+            border-color: #e4cabe;
+        }}
+        QToolButton[settingsButton="true"]:focus {{
+            border-color: {ACCENT_COLOR};
+        }}
+        QToolButton[settingsButton="true"]:pressed {{
+            color: {ACCENT_PRESSED_COLOR};
+            background: #ecd9d0;
+        }}
+        QToolButton[settingsButton="true"]:disabled {{
+            color: #b8b8b2;
+            background: transparent;
+            border-color: transparent;
+        }}
         QPushButton[navItem="true"] {{
             color: #73736e;
             text-align: left;
@@ -350,7 +377,7 @@ def create_qt_application(argv: list[str] | None = None) -> tuple[QApplication, 
     return app, True
 
 
-def section(title: str) -> tuple[QFrame, QVBoxLayout]:
+def section(title: str = "") -> tuple[QFrame, QVBoxLayout]:
     """Build a quiet surface with an internal heading instead of a fieldset."""
 
     box = QFrame()
@@ -358,9 +385,10 @@ def section(title: str) -> tuple[QFrame, QVBoxLayout]:
     outer = QVBoxLayout(box)
     outer.setContentsMargins(12, 10, 12, 10)
     outer.setSpacing(7)
-    heading = QLabel(title)
-    heading.setObjectName("sectionTitle")
-    outer.addWidget(heading)
+    if title:
+        heading = QLabel(title)
+        heading.setObjectName("sectionTitle")
+        outer.addWidget(heading)
     layout = QVBoxLayout()
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(7)
