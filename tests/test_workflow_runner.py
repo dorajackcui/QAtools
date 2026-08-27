@@ -221,6 +221,46 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(shared_workbook.save.call_count, 1)
             self.assertEqual(shared_workbook.save.call_args.args, (output_path.resolve(),))
 
+    def test_workflow_closes_the_main_workbook_when_a_check_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            output_path = Path(tmp_dir) / "workflow_output.xlsx"
+            self.create_workbook(input_path)
+            shared_workbook = load_workbook(input_path)
+            real_close = shared_workbook.close
+            shared_workbook.close = Mock(wraps=real_close)
+
+            with (
+                patch(
+                    "tools.workflow.workflow_runner.load_workbook_for_editing",
+                    return_value=shared_workbook,
+                ),
+                patch(
+                    "tools.workflow.workflow_runner.run_tag_check_workbook",
+                    side_effect=RuntimeError("check failed"),
+                ),
+                self.assertRaisesRegex(RuntimeError, "check failed"),
+            ):
+                run_workflow(
+                    input_file=input_path,
+                    output_file=output_path,
+                    source_column="A",
+                    target_column="B",
+                    sheet="Data",
+                    run_term_pair_check=False,
+                    run_tag_check=True,
+                    run_line_break_check=False,
+                    run_source_consistency_check=False,
+                    run_target_consistency_check=False,
+                    run_number_check=False,
+                    run_url_check=False,
+                    run_chinese_target_check=False,
+                    run_target_text_check=False,
+                )
+
+            shared_workbook.close.assert_called_once_with()
+            self.assertFalse(output_path.exists())
+
     def test_run_workflow_surfaces_angle_tag_structure_mismatches(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"

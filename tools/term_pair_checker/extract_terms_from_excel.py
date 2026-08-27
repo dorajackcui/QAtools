@@ -541,8 +541,11 @@ def sorted_output_term_pairs(term_pairs: Iterable[RecordedTermPair]) -> list[Rec
     return sorted(term_pairs, key=term_source_sort_key)
 
 
-def process_excel(
+def process_workbook(
+    *,
+    workbook,
     input_file: str | Path,
+    output_path: Path,
     source_column: str,
     target_column: str,
     sheet: str | None = None,
@@ -556,12 +559,10 @@ def process_excel(
     history_source_column: str | None = None,
     history_target_column: str | None = None,
     history_start_row: int = 2,
-    output_file: str | Path | None = None,
     include_row_problem_column: bool = True,
-    *,
-    workbook=None,
-    save_output: bool = True,
+    format_output: bool = True,
 ) -> tuple[str, str, str, Path, int, int]:
+    """Run terminology checks against an already-open workbook without saving it."""
     if start_row < 1:
         raise ValueError("开始行必须大于等于 1。")
 
@@ -602,15 +603,7 @@ def process_excel(
         if history_tb_file
         else {}
     )
-    output_path = (
-        Path(output_file).expanduser().resolve()
-        if output_file
-        else build_default_output_path(input_path)
-    )
-
-    owns_workbook = workbook is None
-    if owns_workbook:
-        workbook = load_workbook_for_editing(input_path)
+    output_path = Path(output_path).expanduser().resolve()
     worksheet = workbook[sheet] if sheet else workbook.active
     last_row = find_last_value_row(
         worksheet,
@@ -817,14 +810,12 @@ def process_excel(
         worksheet.title,
         target_column,
         sorted_problem_entries,
+        format_output=format_output,
     )
 
     delete_legacy_term_sheets(workbook)
 
-    if save_output:
-        workbook.save(output_path)
-
-    result = (
+    return (
         worksheet.title,
         source_column,
         target_column,
@@ -832,16 +823,10 @@ def process_excel(
         len(output_term_mapping),
         len(problem_entries),
     )
-    if owns_workbook:
-        workbook.close()
-    return result
 
 
-def process_workbook(
-    *,
-    workbook,
+def process_excel(
     input_file: str | Path,
-    output_path: Path,
     source_column: str,
     target_column: str,
     sheet: str | None = None,
@@ -855,29 +840,53 @@ def process_workbook(
     history_source_column: str | None = None,
     history_target_column: str | None = None,
     history_start_row: int = 2,
+    output_file: str | Path | None = None,
     include_row_problem_column: bool = True,
 ) -> tuple[str, str, str, Path, int, int]:
-    """Run terminology checks against an already-open workbook without saving it."""
-    return process_excel(
-        input_file=input_file,
-        source_column=source_column,
-        target_column=target_column,
-        sheet=sheet,
-        start_row=start_row,
-        mark_styles=mark_styles,
-        mark_style=mark_style,
-        exclusion_patterns=exclusion_patterns,
-        exclusion_config_file=exclusion_config_file,
-        history_tb_file=history_tb_file,
-        history_sheet=history_sheet,
-        history_source_column=history_source_column,
-        history_target_column=history_target_column,
-        history_start_row=history_start_row,
-        output_file=output_path,
-        include_row_problem_column=include_row_problem_column,
-        workbook=workbook,
-        save_output=False,
+    if start_row < 1:
+        raise ValueError("开始行必须大于等于 1。")
+
+    input_path = Path(input_file).expanduser().resolve()
+    if not input_path.exists():
+        raise FileNotFoundError(f"输入文件不存在: {input_path}")
+
+    normalized_source_column = normalize_column(source_column)
+    normalized_target_column = normalize_column(target_column)
+    validate_distinct_source_target_columns(
+        normalized_source_column,
+        normalized_target_column,
     )
+    output_path = (
+        Path(output_file).expanduser().resolve()
+        if output_file
+        else build_default_output_path(input_path)
+    )
+
+    workbook = load_workbook_for_editing(input_path)
+    try:
+        result = process_workbook(
+            workbook=workbook,
+            input_file=input_path,
+            output_path=output_path,
+            source_column=normalized_source_column,
+            target_column=normalized_target_column,
+            sheet=sheet,
+            start_row=start_row,
+            mark_styles=mark_styles,
+            mark_style=mark_style,
+            exclusion_patterns=exclusion_patterns,
+            exclusion_config_file=exclusion_config_file,
+            history_tb_file=history_tb_file,
+            history_sheet=history_sheet,
+            history_source_column=history_source_column,
+            history_target_column=history_target_column,
+            history_start_row=history_start_row,
+            include_row_problem_column=include_row_problem_column,
+        )
+        workbook.save(output_path)
+        return result
+    finally:
+        workbook.close()
 
 
 def main() -> None:

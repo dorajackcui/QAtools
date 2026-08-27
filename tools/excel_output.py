@@ -16,6 +16,9 @@ ROW_PROBLEM_COLUMN_HEADER = "术语QA问题"
 ROW_PROBLEM_SEPARATOR = "；"
 PROBLEM_BASE_HEADERS = ("行号", "source原文", "target原文", "问题描述")
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="D9EAF7")
+HEADER_FONT = Font(bold=True)
+HEADER_ALIGNMENT = Alignment(vertical="center", wrap_text=True)
+BODY_ALIGNMENT = Alignment(vertical="top", wrap_text=True)
 
 
 def load_workbook_for_editing(input_file: str | Path):
@@ -100,26 +103,32 @@ def write_output_table(
     headers,
     rows,
     row_link_target_column: str | None = None,
+    format_output: bool = True,
 ):
-    """Write a consistently formatted output table and return its worksheet."""
+    """Write an output table, optionally applying user-facing formatting."""
     worksheet = rebuild_output_sheet(workbook, current_sheet_name, sheet_name)
     normalized_headers = tuple(headers)
     for column_index, header in enumerate(normalized_headers, start=1):
         cell = worksheet.cell(1, column_index, header)
-        cell.font = Font(bold=True)
-        cell.fill = HEADER_FILL
-        cell.alignment = Alignment(vertical="center", wrap_text=True)
+        if format_output:
+            cell.font = HEADER_FONT
+            cell.fill = HEADER_FILL
+            cell.alignment = HEADER_ALIGNMENT
 
     max_lengths = [len(str(header)) for header in normalized_headers]
     for row_index, row in enumerate(rows, start=2):
         for column_index, value in enumerate(row, start=1):
             cell = worksheet.cell(row_index, column_index, value)
-            cell.alignment = Alignment(vertical="top", wrap_text=True)
-            if value is not None:
+            if format_output:
+                cell.alignment = BODY_ALIGNMENT
+            if format_output and value is not None:
                 max_lengths[column_index - 1] = max(
                     max_lengths[column_index - 1],
                     max(len(line) for line in str(value).splitlines() or [""]),
                 )
+
+    if not format_output:
+        return worksheet
 
     preferred_widths = {1: 10, 2: 52, 3: 52, 4: 48}
     for column_index, max_length in enumerate(max_lengths, start=1):

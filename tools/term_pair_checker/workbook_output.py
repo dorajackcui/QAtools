@@ -75,6 +75,8 @@ def write_problem_sheet(
     worksheet_title: str,
     target_column: str,
     problem_entries: Iterable["ProblemEntry"],
+    *,
+    format_output: bool = True,
 ) -> None:
     entries_by_row: dict[int, list["ProblemEntry"]] = {}
     for problem_entry in problem_entries:
@@ -111,6 +113,7 @@ def write_problem_sheet(
         + ("source术语", "预期target术语", "术语来源"),
         rows=rows,
         row_link_target_column=target_column,
+        format_output=format_output,
     )
 
 

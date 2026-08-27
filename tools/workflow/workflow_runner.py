@@ -330,192 +330,203 @@ def run_workflow(
     target_text_problem_rows = 0
 
     workflow_workbook = load_workbook_for_editing(input_path)
+    try:
+        # Each checker sheet is transient: the finalizer merges its values into
+        # 问题处理 and deletes it. Skip styling and hyperlinks that cannot survive.
+        if run_term_pair_check:
+            (
+                worksheet_title,
+                normalized_source_column,
+                normalized_target_column,
+                _saved_path,
+                term_count,
+                term_problem_count,
+            ) = run_term_pair_check_workbook(
+                workbook=workflow_workbook,
+                input_file=input_path,
+                output_path=output_path,
+                source_column=normalized_source_column,
+                target_column=normalized_target_column,
+                sheet=sheet,
+                start_row=start_row,
+                mark_styles=term_mark_styles,
+                history_tb_file=term_history_tb_file,
+                history_sheet=term_history_sheet,
+                history_source_column=term_history_source_column,
+                history_target_column=term_history_target_column,
+                history_start_row=term_history_start_row,
+                include_row_problem_column=False,
+                format_output=False,
+            )
 
-    if run_term_pair_check:
-        (
-            worksheet_title,
-            normalized_source_column,
-            normalized_target_column,
-            _saved_path,
-            term_count,
-            term_problem_count,
-        ) = run_term_pair_check_workbook(
-            workbook=workflow_workbook,
+        if run_tag_check:
+            tag_summary = run_tag_check_workbook(
+                workbook=workflow_workbook,
+                output_path=output_path,
+                source_column=normalized_source_column,
+                target_column=normalized_target_column,
+                sheet=sheet,
+                start_row=start_row,
+                token_types=tag_token_types,
+                angle_config_file=tag_angle_config_file,
+                format_output=False,
+            )
+            worksheet_title = tag_summary.worksheet_title
+            tag_problem_count = tag_summary.problem_count
+            tag_problem_rows = tag_summary.problem_rows
+
+        if run_line_break_check:
+            line_break_summary = run_line_break_check_workbook(
+                workbook=workflow_workbook,
+                output_path=output_path,
+                source_column=normalized_source_column,
+                target_column=normalized_target_column,
+                sheet=sheet,
+                start_row=start_row,
+                format_output=False,
+            )
+            worksheet_title = line_break_summary.worksheet_title
+            line_break_problem_count = line_break_summary.problem_rows
+
+        if run_source_consistency_check:
+            source_consistency_summary = run_source_consistency_check_workbook(
+                workbook=workflow_workbook,
+                output_path=output_path,
+                source_column=normalized_source_column,
+                target_column=normalized_target_column,
+                sheet=sheet,
+                start_row=start_row,
+                format_output=False,
+            )
+            worksheet_title = source_consistency_summary.worksheet_title
+            source_consistency_problem_count = (
+                source_consistency_summary.inconsistent_source_count
+            )
+            source_consistency_problem_rows = source_consistency_summary.problem_rows
+
+        if run_target_consistency_check:
+            target_consistency_summary = run_target_consistency_check_workbook(
+                workbook=workflow_workbook,
+                output_path=output_path,
+                source_column=normalized_source_column,
+                target_column=normalized_target_column,
+                sheet=sheet,
+                start_row=start_row,
+                format_output=False,
+            )
+            worksheet_title = target_consistency_summary.worksheet_title
+            target_consistency_problem_count = (
+                target_consistency_summary.inconsistent_target_count
+            )
+            target_consistency_problem_rows = target_consistency_summary.problem_rows
+
+        if run_number_check or run_url_check:
+            content_fidelity_summary = run_content_fidelity_check_workbook(
+                workbook=workflow_workbook,
+                output_path=output_path,
+                source_column=normalized_source_column,
+                target_column=normalized_target_column,
+                sheet=sheet,
+                start_row=start_row,
+                rules=tuple(
+                    rule
+                    for rule, enabled in (
+                        (NUMBER_RULE, run_number_check),
+                        (URL_RULE, run_url_check),
+                    )
+                    if enabled
+                ),
+                format_output=False,
+            )
+            worksheet_title = content_fidelity_summary.worksheet_title
+            number_problem_rows = content_fidelity_summary.number_problem_rows
+            url_problem_rows = content_fidelity_summary.url_problem_rows
+
+        if run_chinese_target_check:
+            chinese_target_summary = run_chinese_target_check_workbook(
+                workbook=workflow_workbook,
+                output_path=output_path,
+                source_column=normalized_source_column,
+                target_column=normalized_target_column,
+                sheet=sheet,
+                start_row=start_row,
+                format_output=False,
+            )
+            worksheet_title = chinese_target_summary.worksheet_title
+            chinese_target_problem_count = chinese_target_summary.matched_count
+
+        if run_target_text_check:
+            target_text_summary = run_target_text_check_workbook(
+                workbook=workflow_workbook,
+                output_path=output_path,
+                source_column=normalized_source_column,
+                target_column=normalized_target_column,
+                sheet=sheet,
+                start_row=start_row,
+                rules=target_text_rules,
+                format_output=False,
+            )
+            worksheet_title = target_text_summary.worksheet_title
+            target_text_problem_count = target_text_summary.problem_count
+            target_text_problem_rows = target_text_summary.problem_rows
+
+        term_problem_rows = finalize_workflow_output(
+            output_path=output_path,
+            worksheet_title=worksheet_title,
+            run_term_pair_check=run_term_pair_check,
+            run_tag_check=run_tag_check,
+            run_line_break_check=run_line_break_check,
+            run_source_consistency_check=run_source_consistency_check,
+            run_target_consistency_check=run_target_consistency_check,
+            run_number_check=run_number_check,
+            run_url_check=run_url_check,
+            run_chinese_target_check=run_chinese_target_check,
+            run_target_text_check=run_target_text_check,
+            tag_problem_rows=tag_problem_rows,
+            line_break_problem_rows=line_break_problem_count,
+            source_consistency_problem_rows=source_consistency_problem_rows,
+            target_consistency_problem_rows=target_consistency_problem_rows,
+            number_problem_rows=number_problem_rows,
+            url_problem_rows=url_problem_rows,
+            chinese_target_problem_rows=chinese_target_problem_count,
+            target_text_problem_rows=target_text_problem_rows,
             input_file=input_path,
-            output_path=output_path,
             source_column=normalized_source_column,
             target_column=normalized_target_column,
-            sheet=sheet,
             start_row=start_row,
-            mark_styles=term_mark_styles,
-            history_tb_file=term_history_tb_file,
-            history_sheet=term_history_sheet,
-            history_source_column=term_history_source_column,
-            history_target_column=term_history_target_column,
-            history_start_row=term_history_start_row,
-            include_row_problem_column=False,
-        )
-
-    if run_tag_check:
-        tag_summary = run_tag_check_workbook(
             workbook=workflow_workbook,
+        )
+        return WorkflowSummary(
             output_path=output_path,
+            worksheet_title=worksheet_title,
             source_column=normalized_source_column,
             target_column=normalized_target_column,
-            sheet=sheet,
             start_row=start_row,
-            token_types=tag_token_types,
-            angle_config_file=tag_angle_config_file,
+            ran_term_pair_check=run_term_pair_check,
+            ran_tag_check=run_tag_check,
+            ran_line_break_check=run_line_break_check,
+            ran_source_consistency_check=run_source_consistency_check,
+            ran_target_consistency_check=run_target_consistency_check,
+            ran_number_check=run_number_check,
+            ran_url_check=run_url_check,
+            ran_chinese_target_check=run_chinese_target_check,
+            ran_target_text_check=run_target_text_check,
+            term_count=term_count,
+            term_problem_count=term_problem_count,
+            term_problem_rows=term_problem_rows,
+            tag_problem_count=tag_problem_count,
+            tag_problem_rows=tag_problem_rows,
+            line_break_problem_count=line_break_problem_count,
+            source_consistency_problem_count=source_consistency_problem_count,
+            source_consistency_problem_rows=source_consistency_problem_rows,
+            target_consistency_problem_count=target_consistency_problem_count,
+            target_consistency_problem_rows=target_consistency_problem_rows,
+            number_problem_rows=number_problem_rows,
+            url_problem_rows=url_problem_rows,
+            chinese_target_problem_count=chinese_target_problem_count,
+            target_text_problem_count=target_text_problem_count,
+            target_text_problem_rows=target_text_problem_rows,
         )
-        worksheet_title = tag_summary.worksheet_title
-        tag_problem_count = tag_summary.problem_count
-        tag_problem_rows = tag_summary.problem_rows
 
-    if run_line_break_check:
-        line_break_summary = run_line_break_check_workbook(
-            workbook=workflow_workbook,
-            output_path=output_path,
-            source_column=normalized_source_column,
-            target_column=normalized_target_column,
-            sheet=sheet,
-            start_row=start_row,
-        )
-        worksheet_title = line_break_summary.worksheet_title
-        line_break_problem_count = line_break_summary.problem_rows
-
-    if run_source_consistency_check:
-        source_consistency_summary = run_source_consistency_check_workbook(
-            workbook=workflow_workbook,
-            output_path=output_path,
-            source_column=normalized_source_column,
-            target_column=normalized_target_column,
-            sheet=sheet,
-            start_row=start_row,
-        )
-        worksheet_title = source_consistency_summary.worksheet_title
-        source_consistency_problem_count = (
-            source_consistency_summary.inconsistent_source_count
-        )
-        source_consistency_problem_rows = source_consistency_summary.problem_rows
-
-    if run_target_consistency_check:
-        target_consistency_summary = run_target_consistency_check_workbook(
-            workbook=workflow_workbook,
-            output_path=output_path,
-            source_column=normalized_source_column,
-            target_column=normalized_target_column,
-            sheet=sheet,
-            start_row=start_row,
-        )
-        worksheet_title = target_consistency_summary.worksheet_title
-        target_consistency_problem_count = (
-            target_consistency_summary.inconsistent_target_count
-        )
-        target_consistency_problem_rows = target_consistency_summary.problem_rows
-
-    if run_number_check or run_url_check:
-        content_fidelity_summary = run_content_fidelity_check_workbook(
-            workbook=workflow_workbook,
-            output_path=output_path,
-            source_column=normalized_source_column,
-            target_column=normalized_target_column,
-            sheet=sheet,
-            start_row=start_row,
-            rules=tuple(
-                rule
-                for rule, enabled in (
-                    (NUMBER_RULE, run_number_check),
-                    (URL_RULE, run_url_check),
-                )
-                if enabled
-            ),
-        )
-        worksheet_title = content_fidelity_summary.worksheet_title
-        number_problem_rows = content_fidelity_summary.number_problem_rows
-        url_problem_rows = content_fidelity_summary.url_problem_rows
-
-    if run_chinese_target_check:
-        chinese_target_summary = run_chinese_target_check_workbook(
-            workbook=workflow_workbook,
-            output_path=output_path,
-            source_column=normalized_source_column,
-            target_column=normalized_target_column,
-            sheet=sheet,
-            start_row=start_row,
-        )
-        worksheet_title = chinese_target_summary.worksheet_title
-        chinese_target_problem_count = chinese_target_summary.matched_count
-
-    if run_target_text_check:
-        target_text_summary = run_target_text_check_workbook(
-            workbook=workflow_workbook,
-            output_path=output_path,
-            source_column=normalized_source_column,
-            target_column=normalized_target_column,
-            sheet=sheet,
-            start_row=start_row,
-            rules=target_text_rules,
-        )
-        worksheet_title = target_text_summary.worksheet_title
-        target_text_problem_count = target_text_summary.problem_count
-        target_text_problem_rows = target_text_summary.problem_rows
-
-    term_problem_rows = finalize_workflow_output(
-        output_path=output_path,
-        worksheet_title=worksheet_title,
-        run_term_pair_check=run_term_pair_check,
-        run_tag_check=run_tag_check,
-        run_line_break_check=run_line_break_check,
-        run_source_consistency_check=run_source_consistency_check,
-        run_target_consistency_check=run_target_consistency_check,
-        run_number_check=run_number_check,
-        run_url_check=run_url_check,
-        run_chinese_target_check=run_chinese_target_check,
-        run_target_text_check=run_target_text_check,
-        tag_problem_rows=tag_problem_rows,
-        line_break_problem_rows=line_break_problem_count,
-        source_consistency_problem_rows=source_consistency_problem_rows,
-        target_consistency_problem_rows=target_consistency_problem_rows,
-        number_problem_rows=number_problem_rows,
-        url_problem_rows=url_problem_rows,
-        chinese_target_problem_rows=chinese_target_problem_count,
-        target_text_problem_rows=target_text_problem_rows,
-        input_file=input_path,
-        source_column=normalized_source_column,
-        target_column=normalized_target_column,
-        start_row=start_row,
-        workbook=workflow_workbook,
-    )
-    workflow_workbook.close()
-
-    return WorkflowSummary(
-        output_path=output_path,
-        worksheet_title=worksheet_title,
-        source_column=normalized_source_column,
-        target_column=normalized_target_column,
-        start_row=start_row,
-        ran_term_pair_check=run_term_pair_check,
-        ran_tag_check=run_tag_check,
-        ran_line_break_check=run_line_break_check,
-        ran_source_consistency_check=run_source_consistency_check,
-        ran_target_consistency_check=run_target_consistency_check,
-        ran_number_check=run_number_check,
-        ran_url_check=run_url_check,
-        ran_chinese_target_check=run_chinese_target_check,
-        ran_target_text_check=run_target_text_check,
-        term_count=term_count,
-        term_problem_count=term_problem_count,
-        term_problem_rows=term_problem_rows,
-        tag_problem_count=tag_problem_count,
-        tag_problem_rows=tag_problem_rows,
-        line_break_problem_count=line_break_problem_count,
-        source_consistency_problem_count=source_consistency_problem_count,
-        source_consistency_problem_rows=source_consistency_problem_rows,
-        target_consistency_problem_count=target_consistency_problem_count,
-        target_consistency_problem_rows=target_consistency_problem_rows,
-        number_problem_rows=number_problem_rows,
-        url_problem_rows=url_problem_rows,
-        chinese_target_problem_count=chinese_target_problem_count,
-        target_text_problem_count=target_text_problem_count,
-        target_text_problem_rows=target_text_problem_rows,
-    )
+    finally:
+        workflow_workbook.close()

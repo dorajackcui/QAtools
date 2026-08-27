@@ -191,9 +191,16 @@ def process_excel(
     rules: Iterable[str] | None = None,
     output_file: str | Path | None = None,
 ) -> CheckSummary:
+    if start_row < 1:
+        raise ValueError("开始行必须大于等于 1。")
+
     input_path = Path(input_file).expanduser().resolve()
     if not input_path.exists():
         raise FileNotFoundError(f"输入文件不存在: {input_path}")
+    source_column = normalize_column(source_column)
+    target_column = normalize_column(target_column)
+    validate_distinct_source_target_columns(source_column, target_column)
+    rules = normalize_rules(rules)
     output_path = (
         Path(output_file).expanduser().resolve()
         if output_file
@@ -226,6 +233,7 @@ def process_workbook(
     sheet: str | None = None,
     start_row: int = 2,
     rules: Iterable[str] | None = None,
+    format_output: bool = True,
 ) -> CheckSummary:
     """Run the selected checks against an already-open workbook without saving it."""
     if start_row < 1:
@@ -285,6 +293,7 @@ def process_workbook(
             headers=PROBLEM_BASE_HEADERS + detail_headers,
             rows=number_entries,
             row_link_target_column=target_column,
+            format_output=format_output,
         )
     if URL_RULE in selected_rules:
         write_output_table(
@@ -294,6 +303,7 @@ def process_workbook(
             headers=PROBLEM_BASE_HEADERS + detail_headers,
             rows=url_entries,
             row_link_target_column=target_column,
+            format_output=format_output,
         )
 
     return CheckSummary(

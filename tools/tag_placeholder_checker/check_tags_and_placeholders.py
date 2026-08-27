@@ -453,6 +453,8 @@ def write_problem_sheet(
     worksheet_title: str,
     target_column: str,
     problem_entries: list[tuple[int, str, str, str, str]],
+    *,
+    format_output: bool = True,
 ) -> None:
     entries_by_row: dict[int, list[tuple[int, str, str, str, str]]] = {}
     for entry in problem_entries:
@@ -480,6 +482,7 @@ def write_problem_sheet(
         headers=PROBLEM_BASE_HEADERS + ("问题类型",),
         rows=rows,
         row_link_target_column=target_column,
+        format_output=format_output,
     )
 
 
@@ -587,9 +590,22 @@ def process_excel(
     angle_config_file: str | Path | None = None,
     output_file: str | Path | None = None,
 ) -> CheckSummary:
+    if start_row < 1:
+        raise ValueError("开始行必须大于等于 1。")
+
     input_path = Path(input_file).expanduser().resolve()
     if not input_path.exists():
         raise FileNotFoundError(f"输入文件不存在: {input_path}")
+
+    source_column = normalize_column(source_column)
+    target_column = normalize_column(target_column)
+    validate_distinct_source_target_columns(source_column, target_column)
+    token_types = normalize_token_types(token_types)
+    angle_regexes = (
+        compile_angle_patterns(angle_patterns, angle_config_file)
+        if "angle" in token_types
+        else ()
+    )
 
     output_path = (
         Path(output_file).expanduser().resolve()
@@ -609,6 +625,7 @@ def process_excel(
             token_types=token_types,
             angle_patterns=angle_patterns,
             angle_config_file=angle_config_file,
+            _angle_regexes=angle_regexes,
         )
         workbook.save(output_path)
         return summary
@@ -627,6 +644,8 @@ def process_workbook(
     token_types: tuple[str, ...] | list[str] | None = None,
     angle_patterns: tuple[str, ...] | list[str] | None = None,
     angle_config_file: str | Path | None = None,
+    format_output: bool = True,
+    _angle_regexes: tuple[re.Pattern[str], ...] | None = None,
 ) -> CheckSummary:
     """Run the selected checks against an already-open workbook without saving it."""
     if start_row < 1:
@@ -636,11 +655,13 @@ def process_workbook(
     source_column = normalize_column(source_column)
     target_column = normalize_column(target_column)
     validate_distinct_source_target_columns(source_column, target_column)
-    angle_regexes = (
-        compile_angle_patterns(angle_patterns, angle_config_file)
-        if "angle" in normalized_token_types
-        else ()
-    )
+    angle_regexes = _angle_regexes
+    if angle_regexes is None:
+        angle_regexes = (
+            compile_angle_patterns(angle_patterns, angle_config_file)
+            if "angle" in normalized_token_types
+            else ()
+        )
     worksheet = workbook[sheet] if sheet else workbook.active
 
     last_row = find_last_value_row(
@@ -745,7 +766,13 @@ def process_workbook(
         selected_token_types=normalized_token_types,
     )
 
-    write_problem_sheet(workbook, worksheet.title, target_column, problem_entries)
+    write_problem_sheet(
+        workbook,
+        worksheet.title,
+        target_column,
+        problem_entries,
+        format_output=format_output,
+    )
     write_summary_sheet(
         workbook=workbook,
         worksheet_title=worksheet.title,

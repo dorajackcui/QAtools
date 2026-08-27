@@ -6,7 +6,11 @@ from unittest.mock import patch
 
 from openpyxl import Workbook
 
-from tools.excel_output import find_last_value_row, load_workbook_for_editing
+from tools.excel_output import (
+    find_last_value_row,
+    load_workbook_for_editing,
+    write_output_table,
+)
 
 from tools.chinese_target_checker.check_chinese_target import (
     build_default_output_path as build_chinese_target_output_path,
@@ -80,6 +84,28 @@ class ExcelOutputPathTests(unittest.TestCase):
                 Path("plain.xlsx"),
                 keep_vba=False,
             )
+
+    def test_unformatted_output_table_keeps_values_without_transient_formatting(self) -> None:
+        workbook = Workbook()
+        workbook.active.title = "Data"
+
+        worksheet = write_output_table(
+            workbook,
+            current_sheet_name="Data",
+            sheet_name="Temporary problems",
+            headers=("行号", "问题描述"),
+            rows=((2, "problem"),),
+            row_link_target_column="B",
+            format_output=False,
+        )
+
+        self.assertEqual(
+            tuple(worksheet.values),
+            (("行号", "问题描述"), (2, "problem")),
+        )
+        self.assertIsNone(worksheet.freeze_panes)
+        self.assertIsNone(worksheet["A2"].hyperlink)
+        self.assertEqual(worksheet["A2"].style_id, 0)
 
 
 if __name__ == "__main__":
