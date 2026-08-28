@@ -47,3 +47,6 @@ python3 tools/french_nbsp_restorer/restore_french_nbsp_gui.py
 ```bash
 qatools gui
 ```
+
+统一 GUI 会自动识别工作表首行的 Target 列；非标准表头可通过
+[GUI 表头别名设置](../../README.md#自定义表头识别)配置。

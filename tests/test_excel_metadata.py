@@ -8,6 +8,7 @@ from openpyxl import Workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
+from tools.header_aliases import HeaderAliases
 
 
 class WorkbookMetadataTests(unittest.TestCase):
@@ -72,6 +73,27 @@ class WorkbookMetadataTests(unittest.TestCase):
 
             self.assertEqual(detected_columns.detected_source_column, "F")
             self.assertIsNone(detected_columns.detected_target_column)
+
+    def test_detect_source_target_columns_matches_configured_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workbook_path = Path(tmp_dir) / "aliases.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Localized"
+            worksheet.append(["ID", " Original Text ", "TRANSLATION"])
+            workbook.save(workbook_path)
+
+            detected_columns = detect_source_target_columns(
+                workbook_path,
+                sheet="Localized",
+                header_aliases=HeaderAliases.create(
+                    source=("Original Text",),
+                    target=("Translation",),
+                ),
+            )
+
+            self.assertEqual(detected_columns.detected_source_column, "B")
+            self.assertEqual(detected_columns.detected_target_column, "C")
 
     def test_list_workbook_sheets_rejects_missing_file(self) -> None:
         with self.assertRaisesRegex(FileNotFoundError, "输入文件不存在"):

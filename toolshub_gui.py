@@ -33,7 +33,8 @@ from tools.qt_gui_common import (
     show_error,
     show_warning,
 )
-from tools.qt_pages import FrenchNbspPage, PAGE_FACTORIES, WorkflowPage
+from tools.header_aliases import HeaderAliasStore
+from tools.qt_pages import FrenchNbspPage, PAGE_FACTORIES, SettingsPage, WorkflowPage
 from tools.workflow.file_receiver import (
     FRENCH_NBSP_RESTORE_ACTION,
     QA_WORKFLOW_ACTION,
@@ -86,22 +87,30 @@ TOOL_GROUPS = (
         ),
     ),
 )
+SETTINGS_ITEM = ToolItem(key="settings", title="设置")
 
 
 class ToolshubApp(QMainWindow):
     """One native Qt window with persistent pages in a QStackedWidget."""
 
-    def __init__(self, *, show_window: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        show_window: bool = True,
+        header_alias_store: HeaderAliasStore | None = None,
+    ) -> None:
         super().__init__()
         self.setWindowTitle("Toolshub")
         self.setMinimumSize(MINIMUM_WINDOW_WIDTH, MINIMUM_WINDOW_HEIGHT)
         self.setAutoFillBackground(True)
+        self.header_alias_store = header_alias_store or HeaderAliasStore()
         self.tool_groups = TOOL_GROUPS
         self.tools_by_key = {
             tool.key: tool
             for group in self.tool_groups
             for tool in group.tools
         }
+        self.tools_by_key[SETTINGS_ITEM.key] = SETTINGS_ITEM
         self.tool_frames: dict[str, QWidget] = {}
         self.nav_buttons: dict[str, QPushButton] = {}
         self.current_tool_key = ""
@@ -145,10 +154,22 @@ class ToolshubApp(QMainWindow):
 
         for group in self.tool_groups:
             for tool in group.tools:
-                page = PAGE_FACTORIES[tool.key]()
+                page_factory = PAGE_FACTORIES[tool.key]
+                if tool.key in {"workflow", "french_nbsp"}:
+                    page = page_factory(header_alias_store=self.header_alias_store)
+                else:
+                    page = page_factory()
                 page.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
                 self.page_stack.addWidget(page)
                 self.tool_frames[tool.key] = page
+        settings_page = PAGE_FACTORIES[SETTINGS_ITEM.key](
+            header_alias_store=self.header_alias_store
+        )
+        settings_page.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.page_stack.addWidget(settings_page)
+        self.tool_frames[SETTINGS_ITEM.key] = settings_page
+        if isinstance(settings_page, SettingsPage):
+            settings_page.settings_saved.connect(self._refresh_header_detection)
 
     def _build_sidebar(self) -> QWidget:
         sidebar = QWidget()
@@ -178,7 +199,26 @@ class ToolshubApp(QMainWindow):
                 self.nav_buttons[tool.key] = button
                 layout.addWidget(button)
         layout.addStretch(1)
+        settings_button = QPushButton("⚙  设置")
+        settings_button.setObjectName("settingsNavButton")
+        settings_button.setProperty("navItem", True)
+        settings_button.setCheckable(True)
+        settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        settings_button.clicked.connect(
+            lambda _checked=False: self.select_tool(SETTINGS_ITEM.key)
+        )
+        self.nav_group.addButton(settings_button)
+        self.nav_buttons[SETTINGS_ITEM.key] = settings_button
+        layout.addWidget(settings_button)
         return sidebar
+
+    def _refresh_header_detection(self) -> None:
+        workflow_page = self.tool_frames.get("workflow")
+        if isinstance(workflow_page, WorkflowPage):
+            workflow_page.detect_main_columns()
+        french_page = self.tool_frames.get("french_nbsp")
+        if isinstance(french_page, FrenchNbspPage):
+            french_page.detect_columns()
 
     def select_tool(self, key: str) -> None:
         tool = self.tools_by_key[key]

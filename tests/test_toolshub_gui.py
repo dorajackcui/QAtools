@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from openpyxl import Workbook
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QPoint, Qt  # noqa: E402
@@ -28,6 +30,7 @@ from toolshub_gui import (  # noqa: E402
     calculate_initial_window_size,
     main,
 )
+from tools.header_aliases import HeaderAliasStore  # noqa: E402
 from tools.qt_gui_common import (  # noqa: E402
     ACCENT_COLOR,
     ACCENT_FOREGROUND_COLOR,
@@ -35,7 +38,12 @@ from tools.qt_gui_common import (  # noqa: E402
     TEXT_COLOR,
     configure_qt_application,
 )
-from tools.qt_pages import FrenchNbspPage, PhraseLoomPage, WorkflowPage  # noqa: E402
+from tools.qt_pages import (  # noqa: E402
+    FrenchNbspPage,
+    PhraseLoomPage,
+    SettingsPage,
+    WorkflowPage,
+)
 
 
 class ToolshubLayoutTests(unittest.TestCase):
@@ -118,11 +126,13 @@ class ToolshubLayoutTests(unittest.TestCase):
                     "excel_batcher",
                     "excel_merger",
                     "xbench_report",
+                    "settings",
                 },
             )
-            self.assertEqual(window.page_stack.count(), 6)
+            self.assertEqual(window.page_stack.count(), 7)
             self.assertIsInstance(window.tool_frames["workflow"], WorkflowPage)
             self.assertIsInstance(window.tool_frames["phraseloom"], PhraseLoomPage)
+            self.assertIsInstance(window.tool_frames["settings"], SettingsPage)
         finally:
             window.close()
 
@@ -201,6 +211,60 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertTrue(window.nav_buttons["french_nbsp"].isChecked())
         finally:
             window.close()
+
+    def test_settings_gear_is_pinned_to_sidebar_bottom(self) -> None:
+        window = self.make_app()
+        try:
+            window.resize(1000, 660)
+            window.show()
+            self.qt_app.processEvents()
+
+            settings_button = window.nav_buttons["settings"]
+            self.assertEqual(settings_button.text(), "⚙  设置")
+            self.assertEqual(settings_button.objectName(), "settingsNavButton")
+            self.assertGreater(
+                settings_button.y(),
+                window.nav_buttons["xbench_report"].y(),
+            )
+
+            settings_button.click()
+            self.assertEqual(window.current_tool_key, "settings")
+            self.assertEqual(window.title_label.text(), "设置")
+            self.assertTrue(settings_button.isChecked())
+        finally:
+            window.close()
+
+    def test_saved_header_aliases_refresh_loaded_workbook_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            temp_path = Path(tmp_dir)
+            workbook_path = temp_path / "localized.xlsx"
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Data"
+            worksheet.append(["ID", "Notes", "Original Text", "Translation"])
+            workbook.save(workbook_path)
+            store = HeaderAliasStore(temp_path / "header_aliases.json")
+            window = ToolshubApp(show_window=False, header_alias_store=store)
+            try:
+                workflow = window.tool_frames["workflow"]
+                settings = window.tool_frames["settings"]
+                self.assertIsInstance(workflow, WorkflowPage)
+                self.assertIsInstance(settings, SettingsPage)
+                workflow.load_input_file(str(workbook_path))
+                self.assertEqual(workflow.source_column.text(), "A")
+                self.assertEqual(workflow.target_column.text(), "B")
+
+                settings.source_aliases.setPlainText("Original Text")
+                settings.target_aliases.setPlainText("Translation")
+                settings.save_button.click()
+                self.qt_app.processEvents()
+
+                self.assertEqual(workflow.source_column.text(), "C")
+                self.assertEqual(workflow.target_column.text(), "D")
+                self.assertEqual(store.load().source, ("Original Text",))
+                self.assertEqual(store.load().target, ("Translation",))
+            finally:
+                window.close()
 
     def test_all_primary_page_actions_live_in_fixed_action_bars(self) -> None:
         window = self.make_app()

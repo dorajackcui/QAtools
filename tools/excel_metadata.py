@@ -12,6 +12,8 @@ from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.exceptions import InvalidFileException
 
+from tools.header_aliases import HeaderAliases, HeaderAliasStore
+
 
 @dataclass(frozen=True)
 class WorkbookSheetChoices:
@@ -76,7 +78,16 @@ def list_workbook_sheets(input_file: str | Path) -> WorkbookSheetChoices:
 def detect_source_target_columns(
     input_file: str | Path,
     sheet: str | None = None,
+    *,
+    header_aliases: HeaderAliases | None = None,
 ) -> SourceTargetColumns:
+    configured_aliases = (
+        header_aliases if header_aliases is not None else HeaderAliasStore().load()
+    )
+    aliases = HeaderAliases.create(
+        source=configured_aliases.source,
+        target=configured_aliases.target,
+    )
     workbook_path = resolve_workbook_path(input_file)
     workbook = load_workbook(workbook_path, read_only=True)
 
@@ -94,9 +105,9 @@ def detect_source_target_columns(
         target_columns: list[str] = []
         for column_index, value in enumerate(header_row, start=1):
             normalized_value = normalize_header(value)
-            if normalized_value == "source":
+            if normalized_value in aliases.source_headers:
                 source_columns.append(get_column_letter(column_index))
-            elif normalized_value == "target":
+            if normalized_value in aliases.target_headers:
                 target_columns.append(get_column_letter(column_index))
 
         return SourceTargetColumns(
