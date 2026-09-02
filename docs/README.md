@@ -6,6 +6,7 @@
 | 任务 | 读取 |
 |---|---|
 | 首次使用或了解能力 | [项目 README](../README.md) |
+| 按 GUI 运行一键质量检查 | [一键质量检查 GUI 使用指南](qa-workflow-guide/index.html) |
 | 调用 CLI、编写脚本 | [CLI 使用指南](cli-usage.md) |
 | 运行一键检查、理解统一报告 | [workflow README](../tools/workflow/README.md) |
 | 导出或回填 Strings | [PhraseLoom README](../phraseloom/README.md) |

@@ -46,7 +46,8 @@ GUI 默认从工作表首行自动识别 `source` 和 `target` 列。需要兼�
 | Target 文本质量 | Target 文本规范 | 开 | 检查异常标点、空格和全半角混用 |
 
 报告中的 `问题处理` 会把同一原始行的多个问题合并。填写 `修改后target` 后，
-可以在 GUI 中应用修订并生成新的工作簿。完整选择参数见
+可以在 GUI 中应用修订并生成新的工作簿。界面操作见
+[GUI 使用指南](docs/qa-workflow-guide/index.html)，完整选择参数见
 [CLI 使用指南](docs/cli-usage.md#一键质量检查)，报告与回填规则见
 [workflow README](tools/workflow/README.md)。
 
