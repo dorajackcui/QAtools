@@ -2,6 +2,7 @@
 param(
     [string]$Version = "",
     [string]$PythonCommand = "python",
+    [string]$InnoSetupCommand = "",
     [switch]$SkipTests
 )
 
@@ -11,6 +12,7 @@ Set-StrictMode -Version Latest
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $tagRulesPath = Join-Path $projectRoot "phraseloom\tag_rules.toml"
 $iconPath = Join-Path $projectRoot "packaging\QAtools.ico"
+$installerScript = Join-Path $projectRoot "packaging\QAtools.iss"
 $guiEntry = Join-Path $projectRoot "toolshub_gui.py"
 $cliEntry = Join-Path $projectRoot "qatools_cli.py"
 $originalTemp = [Environment]::GetEnvironmentVariable("TEMP", "Process")
@@ -29,6 +31,34 @@ function Invoke-ProjectPython {
     if ($LASTEXITCODE -ne 0) {
         throw "$Description failed with exit code $LASTEXITCODE"
     }
+}
+
+function Resolve-InnoSetupCompiler {
+    if ($InnoSetupCommand) {
+        $requestedCompiler = Get-Command $InnoSetupCommand -ErrorAction SilentlyContinue
+        if ($requestedCompiler) {
+            return $requestedCompiler.Source
+        }
+        if (Test-Path -LiteralPath $InnoSetupCommand -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $InnoSetupCommand).Path
+        }
+        throw "Inno Setup compiler not found: $InnoSetupCommand"
+    }
+
+    $availableCompiler = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
+    if ($availableCompiler) {
+        return $availableCompiler.Source
+    }
+    foreach ($candidate in @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
+        "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+        "C:\Program Files\Inno Setup 6\ISCC.exe"
+    )) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+    throw "Inno Setup 6 is required to build the Windows installer."
 }
 
 function Remove-ProjectArtifact {
@@ -84,6 +114,7 @@ try {
     Invoke-ProjectPython `
         -Description "PyInstaller check" `
         -Arguments @("-m", "PyInstaller", "--version")
+    $innoSetupCompiler = Resolve-InnoSetupCompiler
 
     if (-not $SkipTests) {
         Invoke-ProjectPython `
@@ -91,19 +122,22 @@ try {
             -Arguments @("-m", "unittest", "discover", "-s", "tests", "-v")
     }
 
-    $releaseName = "QAtools-v$Version-windows-$architecture"
+    $installerName = "QAtools-v$Version-windows-$architecture-setup"
+    $legacyReleaseName = "QAtools-v$Version-windows-$architecture"
     $distRoot = Join-Path $projectRoot "dist"
-    $releaseDir = Join-Path $distRoot $releaseName
-    $zipPath = Join-Path $distRoot "$releaseName.zip"
+    $installerPath = Join-Path $distRoot "$installerName.exe"
+    $legacyReleaseDir = Join-Path $distRoot $legacyReleaseName
+    $legacyZipPath = Join-Path $distRoot "$legacyReleaseName.zip"
     $buildRoot = Join-Path $projectRoot "build\windows-release"
+    $appDir = Join-Path $buildRoot "installer-app"
     $exeDir = Join-Path $buildRoot "executables"
     $workDir = Join-Path $buildRoot "work"
     $specDir = Join-Path $buildRoot "spec"
 
-    foreach ($path in @($releaseDir, $zipPath, $buildRoot)) {
+    foreach ($path in @($installerPath, $legacyReleaseDir, $legacyZipPath, $buildRoot)) {
         Remove-ProjectArtifact -Path $path
     }
-    New-Item -ItemType Directory -Path $releaseDir, $exeDir, $workDir, $specDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $distRoot, $appDir, $exeDir, $workDir, $specDir -Force | Out-Null
 
     Invoke-ProjectPython `
         -Description "PySide6 runtime check" `
@@ -116,7 +150,6 @@ try {
         "-m", "PyInstaller",
         "--noconfirm",
         "--clean",
-        "--onefile",
         "--icon", $iconPath,
         "--paths", $projectRoot,
         "--distpath", $exeDir,
@@ -128,6 +161,8 @@ try {
     Invoke-ProjectPython `
         -Description "GUI build" `
         -Arguments ($commonArguments + @(
+            "--onedir",
+            "--contents-directory", "_internal",
             "--windowed",
             "--name", "QAtools",
             $guiEntry
@@ -148,6 +183,7 @@ try {
         "tools.xbench_report_transformer.transform_xbench_report"
     )
     $cliArguments = $commonArguments + @(
+        "--onefile",
         "--console",
         "--name", "QAtools-CLI"
     )
@@ -158,10 +194,12 @@ try {
 
     Invoke-ProjectPython -Description "CLI build" -Arguments $cliArguments
 
-    Copy-Item -LiteralPath (Join-Path $exeDir "QAtools.exe") -Destination $releaseDir
-    Copy-Item -LiteralPath (Join-Path $exeDir "QAtools-CLI.exe") -Destination $releaseDir
-    Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\QAtools-CLI.cmd") -Destination $releaseDir
-    Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\README-Windows.txt") -Destination $releaseDir
+    $guiBundleDir = Join-Path $exeDir "QAtools"
+    Copy-Item -LiteralPath (Join-Path $guiBundleDir "QAtools.exe") -Destination $appDir
+    Copy-Item -LiteralPath (Join-Path $guiBundleDir "_internal") -Destination $appDir -Recurse
+    Copy-Item -LiteralPath (Join-Path $exeDir "QAtools-CLI.exe") -Destination $appDir
+    Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\QAtools-CLI.cmd") -Destination $appDir
+    Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\README-Windows.txt") -Destination $appDir
 
     # Verify the frozen programs, including every persistent Qt page, without
     # showing the application window.
@@ -170,12 +208,12 @@ try {
     $env:TEMP = $smokeTemp
     $env:TMP = $smokeTemp
 
-    & (Join-Path $releaseDir "QAtools-CLI.exe") --version
+    & (Join-Path $appDir "QAtools-CLI.exe") --version
     if ($LASTEXITCODE -ne 0) {
         throw "Frozen CLI smoke test failed with exit code $LASTEXITCODE"
     }
     $guiSmokeProcess = Start-Process `
-        -FilePath (Join-Path $releaseDir "QAtools.exe") `
+        -FilePath (Join-Path $appDir "QAtools.exe") `
         -ArgumentList "--smoke-test" `
         -WindowStyle Hidden `
         -Wait `
@@ -190,25 +228,32 @@ try {
         "Windows $architecture",
         "Built at $builtAt",
         "Python $((& $PythonCommand --version) -replace '^Python\s+', '')"
-    ) | Set-Content -LiteralPath (Join-Path $releaseDir "VERSION.txt") -Encoding UTF8
+    ) | Set-Content -LiteralPath (Join-Path $appDir "VERSION.txt") -Encoding UTF8
 
-    $hashLines = Get-ChildItem -LiteralPath $releaseDir -Filter "*.exe" |
+    $hashLines = Get-ChildItem -LiteralPath $appDir -Filter "*.exe" |
         Sort-Object Name |
         ForEach-Object {
             $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($_.Name)"
         }
-    $hashLines | Set-Content -LiteralPath (Join-Path $releaseDir "SHA256SUMS.txt") -Encoding ASCII
+    $hashLines | Set-Content -LiteralPath (Join-Path $appDir "SHA256SUMS.txt") -Encoding ASCII
 
-    Compress-Archive `
-        -Path (Join-Path $releaseDir "*") `
-        -DestinationPath $zipPath `
-        -CompressionLevel Optimal
+    & $innoSetupCompiler `
+        "/DAppVersion=$Version" `
+        "/DSourceDir=$appDir" `
+        "/O$distRoot" `
+        "/F$installerName" `
+        $installerScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "Windows installer build failed with exit code $LASTEXITCODE"
+    }
+    if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) {
+        throw "Windows installer was not created: $installerPath"
+    }
 
     Write-Host ""
-    Write-Host "Windows portable release created:"
-    Write-Host "  Directory: $releaseDir"
-    Write-Host "  Archive:   $zipPath"
+    Write-Host "Windows installer created:"
+    Write-Host "  Installer: $installerPath"
 }
 finally {
     if ($null -eq $originalTemp) {

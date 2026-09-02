@@ -26,6 +26,30 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn('"packaging\\QAtools.ico"', build_script)
         self.assertIn('"--icon", $iconPath', build_script)
 
+    def test_release_build_wraps_fast_gui_bundle_in_one_installer(self) -> None:
+        build_script = (
+            PROJECT_ROOT / "scripts" / "build_windows_release.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('"--onedir"', build_script)
+        self.assertIn('"--contents-directory", "_internal"', build_script)
+        self.assertIn('$guiBundleDir = Join-Path $exeDir "QAtools"', build_script)
+        self.assertIn('$cliArguments = $commonArguments + @(\n        "--onefile"', build_script)
+        self.assertIn('$installerName = "QAtools-v$Version-windows-$architecture-setup"', build_script)
+        self.assertIn('& $innoSetupCompiler', build_script)
+        self.assertNotIn('Compress-Archive', build_script)
+
+    def test_installer_supports_per_user_overwrite_upgrades(self) -> None:
+        installer_script = (
+            PROJECT_ROOT / "packaging" / "QAtools.iss"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("AppId={{9A854BDD-9184-4B8D-9622-130C28E39182}", installer_script)
+        self.assertIn("DefaultDirName={localappdata}\\Programs\\QAtools", installer_script)
+        self.assertIn("PrivilegesRequired=lowest", installer_script)
+        self.assertIn("UsePreviousAppDir=yes", installer_script)
+        self.assertIn('Source: "{#SourceDir}\\*"', installer_script)
+
     def test_project_icon_contains_multiple_windows_sizes(self) -> None:
         icon_data = (PROJECT_ROOT / "packaging" / "QAtools.ico").read_bytes()
         reserved, image_type, image_count = struct.unpack_from("<HHH", icon_data)

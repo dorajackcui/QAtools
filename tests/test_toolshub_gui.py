@@ -26,6 +26,7 @@ from toolshub_gui import (  # noqa: E402
     SIDEBAR_WIDTH,
     TOOL_GROUPS,
     ToolshubApp,
+    _acquire_gui_instance_lock,
     build_argument_parser,
     calculate_initial_window_size,
     main,
@@ -573,6 +574,17 @@ class ToolshubLayoutTests(unittest.TestCase):
     def test_nbsp_restore_argument_accepts_finder_excel_path(self) -> None:
         args = build_argument_parser().parse_args(["--nbsp-restore", "/tmp/French input.xlsx"])
         self.assertEqual(args.nbsp_restore, "/tmp/French input.xlsx")
+
+    def test_gui_instance_lock_rejects_a_second_instance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            lock_path = str(Path(tmp_dir) / "gui.lock")
+            first_lock = _acquire_gui_instance_lock(lock_path)
+            try:
+                self.assertIsNotNone(first_lock)
+                self.assertIsNone(_acquire_gui_instance_lock(lock_path))
+            finally:
+                if first_lock is not None:
+                    first_lock.unlock()
 
     def test_nbsp_finder_action_loads_safe_defaults_and_schedules_restore(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

@@ -28,7 +28,7 @@
   [合并表格](../tools/excel_merger/README.md)、
   [Xbench QA 转换](../tools/xbench_report_transformer/README.md)
 
-平台说明：[Windows 便携版](../packaging/README-Windows.txt)、
+平台说明：[Windows 安装版](../packaging/README-Windows.txt)、
 [macOS Finder 工作流](macos-finder-workflow.md)。
 
 ## 文档契约

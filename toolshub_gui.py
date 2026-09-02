@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import os
 import sys
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QLockFile, QStandardPaths, Qt, QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from tools.header_aliases import HeaderAliasStore
 from tools.qt_gui_common import (
     AsyncPage,
     BORDER_COLOR,
@@ -33,7 +34,6 @@ from tools.qt_gui_common import (
     show_error,
     show_warning,
 )
-from tools.header_aliases import HeaderAliasStore
 from tools.qt_pages import FrenchNbspPage, PAGE_FACTORIES, SettingsPage, WorkflowPage
 from tools.workflow.file_receiver import (
     FRENCH_NBSP_RESTORE_ACTION,
@@ -52,6 +52,7 @@ MINIMUM_WINDOW_HEIGHT = 540
 SIDEBAR_WIDTH = 184
 WINDOW_HORIZONTAL_BREATHING_ROOM = 16
 WINDOW_VERTICAL_BREATHING_ROOM = 16
+GUI_INSTANCE_LOCK_NAME = "qatools-toolshub-gui.lock"
 
 
 @dataclass(frozen=True)
@@ -374,6 +375,16 @@ def _initial_request(args: argparse.Namespace) -> ToolFileRequest | None:
     return None
 
 
+def _acquire_gui_instance_lock(lock_path: str | None = None) -> QLockFile | None:
+    if lock_path is None:
+        temp_directory = QStandardPaths.writableLocation(
+            QStandardPaths.StandardLocation.TempLocation
+        )
+        lock_path = os.path.join(temp_directory, GUI_INSTANCE_LOCK_NAME)
+    instance_lock = QLockFile(lock_path)
+    return instance_lock if instance_lock.tryLock(0) else None
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_argument_parser().parse_args(argv)
     if args.smoke_test:
@@ -387,12 +398,21 @@ def main(argv: list[str] | None = None) -> int:
     if initial_request and send_tool_input_file(initial_request.action, initial_request.file_path):
         return 0
 
+    app, owns_app = create_qt_application([sys.argv[0]])
+    instance_lock: QLockFile | None = None
+    if not args.smoke_test:
+        instance_lock = _acquire_gui_instance_lock()
+        if instance_lock is None:
+            return 0
+
     receiver = WorkflowFileReceiver()
     receiver_started = receiver.start()
     if initial_request and not receiver_started and send_tool_input_file(initial_request.action, initial_request.file_path):
+        receiver.close()
+        if instance_lock is not None:
+            instance_lock.unlock()
         return 0
 
-    app, owns_app = create_qt_application([sys.argv[0]])
     window = ToolshubApp(show_window=not args.smoke_test)
     if receiver_started:
         window.attach_receiver(receiver)
@@ -423,6 +443,8 @@ def main(argv: list[str] | None = None) -> int:
         return app.exec()
     finally:
         receiver.close()
+        if instance_lock is not None:
+            instance_lock.unlock()
 
 
 if __name__ == "__main__":

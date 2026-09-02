@@ -76,14 +76,15 @@ GUI 默认从工作表首行自动识别 `source` 和 `target` 列。需要兼�
 文档按 AI-first 原则维护：根 README 负责入口，CLI 手册负责调用，工具 README
 负责业务规则；`docs/archive/` 仅用于追溯，不代表当前行为。
 
-## Windows 便携版构建
+## Windows 安装包构建
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build_windows_release.ps1
 ```
 
-脚本会运行回归测试，并在 `dist/` 生成 `QAtools.exe`、`QAtools-CLI.exe` 和完整
-ZIP。包内说明见 [README-Windows.txt](packaging/README-Windows.txt)。
+脚本会运行回归测试，并在 `dist/` 生成单个 Windows 安装包。安装程序按当前用户
+安装；后续版本直接运行新安装包即可覆盖升级。安装说明见
+[README-Windows.txt](packaging/README-Windows.txt)。
 
 ## 开发验证
 
