@@ -17,6 +17,9 @@ ENV/
 !.env.example
 /.codex/python-packages/
 
+# Local agent settings
+/.claude/settings.local.json
+
 # Packaging / build artifacts
 build/
 dist/
