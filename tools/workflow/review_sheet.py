@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Iterator
 
 from openpyxl.comments import Comment
 from openpyxl.styles import PatternFill
@@ -50,6 +50,32 @@ def _normalized_row_number(value: object) -> int | None:
     except (TypeError, ValueError):
         return None
     return row_number if row_number >= 1 else None
+
+
+def _ordered_review_entries(
+    entries_by_row: dict[int, _ReviewEntry],
+) -> Iterator[tuple[int, _ReviewEntry]]:
+    """Put consistency groups first, preserving first occurrence within each tier."""
+    source_groups: dict[str, dict[str, list[tuple[int, _ReviewEntry]]]] = {}
+    target_groups: dict[str, list[tuple[int, _ReviewEntry]]] = {}
+    other_entries: list[tuple[int, _ReviewEntry]] = []
+    for row_number, entry in sorted(entries_by_row.items()):
+        item = (row_number, entry)
+        # A row in both checks belongs to its Source group and is emitted once.
+        if "同 Source 不同 Target" in entry.check_items:
+            variants = source_groups.setdefault(entry.source_text, {})
+            variants.setdefault(entry.target_text, []).append(item)
+        elif "同 Target 不同 Source" in entry.check_items:
+            target_groups.setdefault(entry.target_text, []).append(item)
+        else:
+            other_entries.append(item)
+
+    for variants in source_groups.values():
+        for entries in variants.values():
+            yield from entries
+    for entries in target_groups.values():
+        yield from entries
+    yield from other_entries
 
 
 def collect_review_rows(
@@ -123,7 +149,7 @@ def collect_review_rows(
             join_unique_text(entry.descriptions),
             join_unique_text(entry.check_items),
         )
-        for row_number, entry in sorted(entries_by_row.items())
+        for row_number, entry in _ordered_review_entries(entries_by_row)
     ]
 
 

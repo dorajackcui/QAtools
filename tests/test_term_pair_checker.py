@@ -965,6 +965,11 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(term_sheet["E2"].value, "历史TB")
             self.assertEqual(term_sheet["E3"].value, "历史TB")
 
+            self.assertEqual(term_sheet["F2"].value, "无问题")
+            self.assertEqual(term_sheet["F3"].value, "有问题")
+            self.assertIsNone(term_sheet["A2"].hyperlink)
+            self.assertIsNone(term_sheet["A3"].hyperlink)
+
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet.max_row, 2)
             self.assertEqual(problem_sheet["A2"].value, 3)

@@ -973,7 +973,7 @@ class WorkflowRunnerApp(ttk.Frame):
         ]
         if summary.conflict_rows:
             lines.append(
-                "因原 target 已变化而跳过: "
+                "因行号对应的 source 不匹配而跳过: "
                 + "、".join(str(row) for row in summary.conflict_rows)
             )
         lines.append(f"输出文件: {summary.output_path}")

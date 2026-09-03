@@ -683,7 +683,7 @@
           <article class="card"><h3>原工作表</h3><p>输入工作簿中的业务工作表会完整保留，检查结果以新增工作表呈现。</p></article>
           <article class="card"><h3>问题处理</h3><p>同一原始行命中多个检查时只保留一行，检查项和问题描述合并展示。</p></article>
           <article class="card"><h3>质量检查汇总</h3><p>按本次启用的检查列出问题行数，便于快速判断重点。</p></article>
-          <article class="card"><h3>术语表（可选）</h3><p>仅启用术语检查时生成，包含本次涉及的术语映射及来源。</p></article>
+          <article class="card"><h3>术语表（可选）</h3><p>显示术语映射、来源及本批次问题状态；<a href="../../tools/term_pair_checker/README.md#术语问题状态">查看规则</a>。</p></article>
         </div>
 
         <div class="report-preview" aria-label="问题处理工作表示意">
@@ -728,12 +728,12 @@
             <ul>
               <li>“修改后target”为空：忽略。</li>
               <li>修改值与现有 Target 相同：计为内容未变化。</li>
-              <li>填写了新值且原 Target 未变化：写入修订稿。</li>
+              <li>填写了新值且行号对应的 Source 匹配：写入修订稿。</li>
             </ul>
           </article>
           <article class="card">
-            <h3>冲突保护</h3>
-            <p>如果报告记录的原 Target 与当前数据表内容不同，该行会跳过并在完成提示中列出，避免覆盖报告生成后发生的其他修改。</p>
+            <h3>行号与 Source 校验</h3>
+            <p>按行号定位原数据，再核对 Source；原 Target 列仅供参考，误改或清空不会影响回填。完整规则见 <a href="../../tools/workflow/README.md#修订回填">修订回填说明</a>。</p>
           </article>
         </div>
       </section>

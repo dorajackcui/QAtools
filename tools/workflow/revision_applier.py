@@ -91,74 +91,79 @@ def apply_workflow_revisions(
         raise ValueError("修订稿输出路径不能与检查报告相同。")
 
     workbook = load_workbook_for_editing(report_path)
-    if WORKFLOW_REVIEW_SHEET_NAME not in workbook.sheetnames:
-        raise ValueError("未找到“问题处理”工作表，请选择 workflow 检查报告。")
-    review_sheet = workbook[WORKFLOW_REVIEW_SHEET_NAME]
-    metadata = _required_metadata(review_sheet)
-    data_sheet_name = str(metadata["data_sheet_name"])
-    target_column = str(metadata["target_column"]).strip().upper()
-    if data_sheet_name not in workbook.sheetnames:
-        raise ValueError(f"未找到原数据工作表: {data_sheet_name}")
-    data_sheet = workbook[data_sheet_name]
+    try:
+        if WORKFLOW_REVIEW_SHEET_NAME not in workbook.sheetnames:
+            raise ValueError("未找到“问题处理”工作表，请选择 workflow 检查报告。")
+        review_sheet = workbook[WORKFLOW_REVIEW_SHEET_NAME]
+        metadata = _required_metadata(review_sheet)
+        data_sheet_name = str(metadata["data_sheet_name"])
+        source_column = str(metadata["source_column"]).strip().upper()
+        target_column = str(metadata["target_column"]).strip().upper()
+        if data_sheet_name not in workbook.sheetnames:
+            raise ValueError(f"未找到原数据工作表: {data_sheet_name}")
+        data_sheet = workbook[data_sheet_name]
 
-    revised_count = 0
-    ignored_count = 0
-    unchanged_count = 0
-    conflict_rows: list[int] = []
-    last_review_row = find_last_value_row(
-        review_sheet,
-        ("A",),
-        start_row=2,
-    )
+        revised_count = 0
+        ignored_count = 0
+        unchanged_count = 0
+        conflict_rows: list[int] = []
+        last_review_row = find_last_value_row(
+            review_sheet,
+            ("A",),
+            start_row=2,
+        )
 
-    for review_row in range(2, last_review_row + 1):
-        raw_row_number = review_sheet.cell(review_row, 1).value
-        if raw_row_number is None:
-            continue
-        try:
-            source_row = int(raw_row_number)
-        except (TypeError, ValueError):
-            continue
-        original_target = review_sheet.cell(review_row, 3).value
-        revised_target = review_sheet.cell(review_row, 4).value
+        for review_row in range(2, last_review_row + 1):
+            raw_row_number = review_sheet.cell(review_row, 1).value
+            if raw_row_number is None:
+                continue
+            try:
+                source_row = int(raw_row_number)
+            except (TypeError, ValueError):
+                continue
+            original_source = review_sheet.cell(review_row, 2).value
+            revised_target = review_sheet.cell(review_row, 4).value
 
-        if revised_target is None or (
-            isinstance(revised_target, str) and not revised_target.strip()
-        ):
-            ignored_count += 1
-            continue
+            if revised_target is None or (
+                isinstance(revised_target, str) and not revised_target.strip()
+            ):
+                ignored_count += 1
+                continue
 
-        target_cell = data_sheet[f"{target_column}{source_row}"]
-        if cell_text(target_cell.value) != cell_text(original_target):
-            conflict_rows.append(source_row)
-            continue
+            source_cell = data_sheet[f"{source_column}{source_row}"]
+            if cell_text(source_cell.value) != cell_text(original_source):
+                conflict_rows.append(source_row)
+                continue
 
-        if cell_text(target_cell.value) == cell_text(revised_target):
-            unchanged_count += 1
-            continue
-        target_cell.value = revised_target
-        revised_count += 1
+            target_cell = data_sheet[f"{target_column}{source_row}"]
+            if cell_text(target_cell.value) == cell_text(revised_target):
+                unchanged_count += 1
+                continue
+            target_cell.value = revised_target
+            revised_count += 1
 
-    generated_sheet_names = {
-        name
-        for name in cell_text(metadata.get("generated_sheet_names")).splitlines()
-        if name
-    }
-    generated_sheet_names.add(WORKFLOW_REVIEW_SHEET_NAME)
-    _remove_workflow_artifacts(
-        workbook,
-        data_sheet_name,
-        target_column,
-        generated_sheet_names,
-        remove_term_helper=cell_text(metadata.get("remove_term_helper")) == "1",
-    )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    workbook.save(output_path)
-    return RevisionSummary(
-        output_path=output_path,
-        worksheet_title=data_sheet_name,
-        revised_count=revised_count,
-        ignored_count=ignored_count,
-        unchanged_count=unchanged_count,
-        conflict_rows=tuple(dict.fromkeys(conflict_rows)),
-    )
+        generated_sheet_names = {
+            name
+            for name in cell_text(metadata.get("generated_sheet_names")).splitlines()
+            if name
+        }
+        generated_sheet_names.add(WORKFLOW_REVIEW_SHEET_NAME)
+        _remove_workflow_artifacts(
+            workbook,
+            data_sheet_name,
+            target_column,
+            generated_sheet_names,
+            remove_term_helper=cell_text(metadata.get("remove_term_helper")) == "1",
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        workbook.save(output_path)
+        return RevisionSummary(
+            output_path=output_path,
+            worksheet_title=data_sheet_name,
+            revised_count=revised_count,
+            ignored_count=ignored_count,
+            unchanged_count=unchanged_count,
+            conflict_rows=tuple(dict.fromkeys(conflict_rows)),
+        )
+    finally:
+        workbook.close()

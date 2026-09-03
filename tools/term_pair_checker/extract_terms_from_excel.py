@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 if __package__ in {None, ""}:
@@ -79,6 +79,7 @@ class ProblemEntry:
     description: str
     source_snapshot: str
     target_snapshot: str
+    affected_source_terms: tuple[str, ...] | None = field(default=None, compare=False)
 
 
 def parse_args() -> argparse.Namespace:
@@ -331,6 +332,8 @@ def append_problem(
     problem_description: str,
     source_snapshot: str,
     target_snapshot: str,
+    *,
+    affected_source_terms: Iterable[str] | None = None,
 ) -> None:
     problem_entries.append(
         ProblemEntry(
@@ -341,6 +344,11 @@ def append_problem(
             description=problem_description,
             source_snapshot=source_snapshot,
             target_snapshot=target_snapshot,
+            affected_source_terms=(
+                tuple(affected_source_terms)
+                if affected_source_terms is not None
+                else (problem_source_term,) if problem_source_term else ()
+            ),
         )
     )
 
@@ -676,8 +684,9 @@ def process_workbook(
                 term_mapping = candidate_term_mapping
 
     matcher = None
-    if term_mapping:
-        matcher = build_matcher(build_term_mapping_entries(term_mapping.values()))
+    mapping_entries = build_term_mapping_entries(term_mapping.values())
+    if mapping_entries:
+        matcher = build_matcher(mapping_entries)
 
     for row_index in range(start_row, last_row + 1):
         if matcher is None:
@@ -695,6 +704,7 @@ def process_workbook(
                     ),
                     build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                     build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
+                    affected_source_terms=(term.plain_text for term in source_terms),
                 )
             continue
 
@@ -728,6 +738,7 @@ def process_workbook(
                     ),
                     build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                     build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
+                    affected_source_terms=(term.plain_text for term in source_terms),
                 )
             continue
 
@@ -743,6 +754,20 @@ def process_workbook(
                 normalized_target_text,
             )
             if not count_mismatch_resolved:
+                matched_by_source = {
+                    normalize_term_key(entry.source_term): entry for entry in matched_entries
+                }
+                affected_terms = []
+                for term in source_terms:
+                    entry = matched_by_source.get(normalize_term_key(term.plain_text))
+                    if entry is None or not term_has_expected_target(
+                        normalized_source_text,
+                        normalized_target_text,
+                        entry,
+                        match_mode=PAIR_CHECK_MATCH_MODE,
+                        allow_target_plural_variants=True,
+                    ):
+                        affected_terms.append(term.plain_text)
                 append_problem(
                     problem_entries,
                     row_index,
@@ -755,6 +780,7 @@ def process_workbook(
                     ),
                     build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                     build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
+                    affected_source_terms=affected_terms,
                 )
 
         conflict_source_terms = conflict_source_terms_by_row.get(row_index, set())
@@ -790,12 +816,6 @@ def process_workbook(
             build_row_problem_summaries(problem_entries),
         )
 
-    write_term_sheet(
-        workbook,
-        worksheet.title,
-        sorted_output_term_pairs(output_term_mapping.values()),
-    )
-
     sorted_problem_entries = sorted(
         problem_entries,
         key=lambda entry: (
@@ -804,6 +824,12 @@ def process_workbook(
             normalize_text(entry.problem_source_term, case_sensitive=False),
             entry.row_index,
         ),
+    )
+    write_term_sheet(
+        workbook,
+        worksheet.title,
+        sorted_output_term_pairs(output_term_mapping.values()),
+        problem_entries=sorted_problem_entries,
     )
     write_problem_sheet(
         workbook,

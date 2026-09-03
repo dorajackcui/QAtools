@@ -51,6 +51,7 @@ class WorkflowRunnerTests(unittest.TestCase):
         worksheet["Z1000"] = "unrelated tail"
         worksheet["A1001"].number_format = "@"
         workbook.save(path)
+        workbook.close()
 
     def test_run_workflow_writes_all_quality_check_results_into_same_output_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -144,7 +145,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             )
             self.assertEqual(
                 [review_sheet.cell(row, 1).value for row in range(2, 6)],
-                [2, 3, 4, 5],
+                [4, 5, 2, 3],
             )
             merged_check_items = [
                 item
@@ -156,13 +157,13 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(merged_check_items.count("换行数量检查"), 1)
             self.assertEqual(merged_check_items.count("同 Source 不同 Target"), 2)
             self.assertEqual(merged_check_items.count("Target 中文检查"), 4)
-            self.assertEqual(review_sheet["A3"].value, 3)
-            self.assertIsNone(review_sheet["D3"].value)
-            self.assertIn("术语检查", review_sheet["F3"].value)
-            self.assertIn("Tag 检查", review_sheet["F3"].value)
-            self.assertIn("换行数量检查", review_sheet["F3"].value)
-            self.assertIn("Target 中文检查", review_sheet["F3"].value)
-            row_three_description = review_sheet["E3"].value
+            self.assertEqual(review_sheet["A5"].value, 3)
+            self.assertIsNone(review_sheet["D5"].value)
+            self.assertIn("术语检查", review_sheet["F5"].value)
+            self.assertIn("Tag 检查", review_sheet["F5"].value)
+            self.assertIn("换行数量检查", review_sheet["F5"].value)
+            self.assertIn("Target 中文检查", review_sheet["F5"].value)
+            row_three_description = review_sheet["E5"].value
             self.assertIn("source术语：Alpha", row_three_description)
             self.assertIn("预期target术语：阿尔法", row_three_description)
             self.assertIn("术语来源：本批次新增", row_three_description)
@@ -171,11 +172,13 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertIn("target换行数：0", row_three_description)
             self.assertIn("数量差：-1", row_three_description)
             self.assertIn("命中字符：", row_three_description)
-            row_four_description = review_sheet["E4"].value
+            row_four_description = review_sheet["E2"].value
             self.assertIn("target版本数：2", row_four_description)
             self.assertIn("同组行号：4、5", row_four_description)
-            self.assertEqual(review_sheet["A3"].hyperlink.location, "'Data'!B3")
-            self.assertIsNone(review_sheet["A3"].hyperlink.target)
+            for review_row, source_row in enumerate((4, 5, 2, 3), start=2):
+                row_cell = review_sheet.cell(review_row, 1)
+                self.assertEqual(row_cell.hyperlink.location, f"'Data'!B{source_row}")
+                self.assertIsNone(row_cell.hyperlink.target)
             self.assertTrue(review_sheet.column_dimensions["G"].hidden)
             self.assertTrue(review_sheet.column_dimensions["H"].hidden)
             self.assertEqual(len(review_sheet.data_validations.dataValidation), 0)
@@ -184,6 +187,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(metadata["source_column"], "A")
             self.assertEqual(metadata["target_column"], "B")
             self.assertEqual(metadata["remove_term_helper"], "0")
+            workbook.close()
 
     def test_workflow_loads_and_saves_the_main_workbook_once(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -337,17 +341,17 @@ class WorkflowRunnerTests(unittest.TestCase):
                 review_sheet = output_workbook[WORKFLOW_REVIEW_SHEET_NAME]
                 self.assertEqual(
                     [review_sheet[f"A{row}"].value for row in range(2, 5)],
-                    [2, 3, 4],
+                    [3, 4, 2],
                 )
                 self.assertEqual(
-                    review_sheet["F2"].value,
+                    review_sheet["F4"].value,
                     "数字一致性；URL 一致性",
                 )
-                self.assertEqual(review_sheet["F3"].value, "同 Target 不同 Source")
-                self.assertIn("Target 缺少：10", review_sheet["E2"].value)
+                self.assertEqual(review_sheet["F2"].value, "同 Target 不同 Source")
+                self.assertIn("Target 缺少：10", review_sheet["E4"].value)
                 self.assertIn(
                     "Target 多出：https://new.example/path",
-                    review_sheet["E2"].value,
+                    review_sheet["E4"].value,
                 )
                 self.assertEqual(
                     list(output_workbook[WORKFLOW_SUMMARY_SHEET_NAME].values),
@@ -444,11 +448,14 @@ class WorkflowRunnerTests(unittest.TestCase):
 
             report_workbook = load_workbook(report_path)
             review_sheet = report_workbook[WORKFLOW_REVIEW_SHEET_NAME]
-            review_sheet["D2"] = "第一行修订"
-            review_sheet["D3"] = "第二行修订"
+            self.assertEqual(review_sheet["A2"].value, 4)
+            self.assertEqual(review_sheet["A5"].value, 3)
+            review_sheet["D2"] = "第四行修订"
+            review_sheet["D5"] = "第三行修订"
             review_sheet["Z1000"] = "unrelated tail"
             review_sheet["A1001"].number_format = "@"
             report_workbook.save(report_path)
+            report_workbook.close()
 
             summary = apply_workflow_revisions(report_path, output_file=revised_path)
 
@@ -459,12 +466,13 @@ class WorkflowRunnerTests(unittest.TestCase):
             revised_workbook = load_workbook(revised_path)
             self.assertEqual(revised_workbook.sheetnames, ["Data"])
             data_sheet = revised_workbook["Data"]
-            self.assertEqual(data_sheet["B2"].value, "第一行修订")
-            self.assertEqual(data_sheet["B3"].value, "第二行修订")
-            self.assertEqual(data_sheet["B4"].value, "译文一")
+            self.assertEqual(data_sheet["B2"].value, "第一行 [阿尔法] 和 <color=red>{name}")
+            self.assertEqual(data_sheet["B3"].value, "第三行修订")
+            self.assertEqual(data_sheet["B4"].value, "第四行修订")
             self.assertEqual(data_sheet["B5"].value, "译文二")
             self.assertEqual(data_sheet["C1"].value, "note")
             self.assertEqual(data_sheet["C3"].value, "keep me")
+            revised_workbook.close()
 
     def test_apply_workflow_revisions_ignores_empty_string_targets(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -487,7 +495,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             review_sheet = report_workbook[WORKFLOW_REVIEW_SHEET_NAME]
             review_sheet["D2"] = ""
             review_sheet["D3"] = " \t"
-            review_sheet["D4"] = "第三行修订"
+            review_sheet["D4"] = "第一行修订"
 
             with patch(
                 "tools.workflow.revision_applier.load_workbook_for_editing",
@@ -497,6 +505,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                     report_path,
                     output_file=revised_path,
                 )
+            report_workbook.close()
 
             self.assertEqual(summary.revised_count, 1)
             self.assertEqual(summary.ignored_count, 3)
@@ -504,12 +513,13 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(summary.conflict_rows, ())
             revised_workbook = load_workbook(revised_path)
             data_sheet = revised_workbook["Data"]
-            self.assertEqual(data_sheet["B2"].value, "第一行 [阿尔法] 和 <color=red>{name}")
+            self.assertEqual(data_sheet["B2"].value, "第一行修订")
             self.assertEqual(data_sheet["B3"].value, "第二行复用 [错误阿尔法] 和 {name}")
-            self.assertEqual(data_sheet["B4"].value, "第三行修订")
+            self.assertEqual(data_sheet["B4"].value, "译文一")
             self.assertEqual(data_sheet["B5"].value, "译文二")
+            revised_workbook.close()
 
-    def test_apply_workflow_revisions_skips_target_conflicts(self) -> None:
+    def test_apply_workflow_revisions_overwrites_changed_target_when_source_matches(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
             report_path = Path(tmp_dir) / "workflow_output.xlsx"
@@ -528,15 +538,114 @@ class WorkflowRunnerTests(unittest.TestCase):
 
             report_workbook = load_workbook(report_path)
             report_workbook["Data"]["B2"] = "人工直接修改"
-            report_workbook[WORKFLOW_REVIEW_SHEET_NAME]["D2"] = "准备回填的修改"
+            report_workbook[WORKFLOW_REVIEW_SHEET_NAME]["D4"] = "准备回填的修改"
             report_workbook.save(report_path)
+            report_workbook.close()
 
             summary = apply_workflow_revisions(report_path, output_file=revised_path)
 
-            self.assertEqual(summary.revised_count, 0)
-            self.assertEqual(summary.conflict_rows, (2,))
+            self.assertEqual(summary.revised_count, 1)
+            self.assertEqual(summary.conflict_rows, ())
             revised_workbook = load_workbook(revised_path)
-            self.assertEqual(revised_workbook["Data"]["B2"].value, "人工直接修改")
+            self.assertEqual(revised_workbook["Data"]["B2"].value, "准备回填的修改")
+            revised_workbook.close()
+
+    def test_apply_workflow_revisions_ignores_edited_review_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            report_path = Path(tmp_dir) / "workflow_output.xlsx"
+            revised_path = Path(tmp_dir) / "revised_input.xlsx"
+            self.create_workbook(input_path)
+            run_workflow(
+                input_file=input_path,
+                output_file=report_path,
+                source_column="A",
+                target_column="B",
+                sheet="Data",
+                term_mark_styles=("[]",),
+                tag_token_types=("angle", "brace"),
+            )
+
+            report_workbook = load_workbook(report_path)
+            try:
+                review_sheet = report_workbook[WORKFLOW_REVIEW_SHEET_NAME]
+                self.assertEqual(
+                    [review_sheet.cell(row, 1).value for row in range(2, 6)],
+                    [4, 5, 2, 3],
+                )
+                review_sheet["C2"] = "误改原 target"
+                review_sheet["D2"] = "第四行修订"
+                review_sheet["C3"] = None
+                review_sheet["D3"] = "第五行修订"
+                review_sheet["C4"] = "只修改参考值，不回填"
+                review_sheet["C5"] = "误改参考值，但最终译文未变化"
+                review_sheet["D5"] = report_workbook["Data"]["B3"].value
+                report_workbook.save(report_path)
+            finally:
+                report_workbook.close()
+
+            summary = apply_workflow_revisions(report_path, output_file=revised_path)
+
+            self.assertEqual(summary.revised_count, 2)
+            self.assertEqual(summary.ignored_count, 1)
+            self.assertEqual(summary.unchanged_count, 1)
+            self.assertEqual(summary.conflict_rows, ())
+            revised_workbook = load_workbook(revised_path)
+            try:
+                data_sheet = revised_workbook["Data"]
+                self.assertEqual(data_sheet["B2"].value, "第一行 [阿尔法] 和 <color=red>{name}")
+                self.assertEqual(data_sheet["B3"].value, "第二行复用 [错误阿尔法] 和 {name}")
+                self.assertEqual(data_sheet["B4"].value, "第四行修订")
+                self.assertEqual(data_sheet["B5"].value, "第五行修订")
+                self.assertEqual(data_sheet["A4"].value, "Same source")
+            finally:
+                revised_workbook.close()
+
+    def test_apply_workflow_revisions_skips_mismatched_sources(self) -> None:
+        for changed_field, conflict_row in (("data_source", 2), ("review_source", 2), ("row_number", 3)):
+            with self.subTest(changed_field=changed_field), tempfile.TemporaryDirectory() as tmp_dir:
+                input_path = Path(tmp_dir) / "input.xlsx"
+                report_path = Path(tmp_dir) / "workflow_output.xlsx"
+                revised_path = Path(tmp_dir) / "revised_input.xlsx"
+                self.create_workbook(input_path)
+                run_workflow(
+                    input_file=input_path,
+                    output_file=report_path,
+                    source_column="A",
+                    target_column="B",
+                    sheet="Data",
+                    term_mark_styles=("[]",),
+                    tag_token_types=("angle", "brace"),
+                )
+
+                report_workbook = load_workbook(report_path)
+                try:
+                    review_sheet = report_workbook[WORKFLOW_REVIEW_SHEET_NAME]
+                    self.assertEqual(review_sheet["A4"].value, 2)
+                    if changed_field == "data_source":
+                        report_workbook["Data"]["A2"] = "原数据原文已变化"
+                    elif changed_field == "review_source":
+                        review_sheet["B4"] = review_sheet["B4"].value + " "
+                    else:
+                        review_sheet["A4"] = 3
+                    review_sheet["D4"] = "不应写入原文不匹配的行"
+                    report_workbook.save(report_path)
+                finally:
+                    report_workbook.close()
+
+                summary = apply_workflow_revisions(report_path, output_file=revised_path)
+
+                self.assertEqual(summary.revised_count, 0)
+                self.assertEqual(summary.conflict_rows, (conflict_row,))
+                revised_workbook = load_workbook(revised_path)
+                try:
+                    data_sheet = revised_workbook["Data"]
+                    self.assertEqual(data_sheet["B2"].value, "第一行 [阿尔法] 和 <color=red>{name}")
+                    self.assertEqual(data_sheet["B3"].value, "第二行复用 [错误阿尔法] 和 {name}")
+                    self.assertEqual(data_sheet["B4"].value, "译文一")
+                    self.assertEqual(data_sheet["B5"].value, "译文二")
+                finally:
+                    revised_workbook.close()
 
     def test_default_revised_output_path_uses_original_input_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -748,6 +857,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             worksheet["B4"] = "Three"
             worksheet["D4"] = "Same"
             workbook.save(input_path)
+            workbook.close()
 
             summary = run_workflow(
                 input_file=input_path,
@@ -766,6 +876,24 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(summary.source_consistency_problem_rows, 2)
             output_workbook = load_workbook(summary.output_path)
             self.assertEqual(output_workbook["Data"]["D1"].value, "source")
+            review_sheet = output_workbook[WORKFLOW_REVIEW_SHEET_NAME]
+            self.assertEqual(review_sheet["A2"].value, 3)
+            review_sheet["C2"] = "误改原 target"
+            review_sheet["D2"] = "Revised"
+            output_workbook.save(summary.output_path)
+            output_workbook.close()
+
+            revision = apply_workflow_revisions(summary.output_path)
+
+            self.assertEqual(revision.revised_count, 1)
+            self.assertEqual(revision.conflict_rows, ())
+            revised_workbook = load_workbook(revision.output_path)
+            try:
+                self.assertEqual(revised_workbook["Data"]["B3"].value, "Revised")
+                self.assertEqual(revised_workbook["Data"]["D3"].value, "Same")
+                self.assertEqual(revised_workbook["Data"]["B4"].value, "Three")
+            finally:
+                revised_workbook.close()
 
     def test_run_workflow_integrates_selected_target_text_rules(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
