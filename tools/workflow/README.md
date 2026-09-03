@@ -21,8 +21,16 @@ qatools qa input.xlsx -s Sheet1 -c A -t B
 
 GUI 将检查分为“术语与翻译一致性”“内容保真检查”和“Target 文本质量”。术语、
 Tag 和 Target 文本规范的详细设置通过各自右侧入口打开。
-工作表首行的 Source / Target 列会自动识别；非标准表头可通过
-[GUI 表头别名设置](../../README.md#自定义表头识别)配置。
+工作表首行的 Source / Target 列会自动识别；匹配优先级、冲突处理及自定义配置见
+[GUI 表头别名设置](../../README.md#自定义表头识别)。
+
+点击“全选 / 清空”旁的“记住选项”，可保存当前页面的全部选择：输入文件、工作表、
+Source / Target 列、开始行、各检查的勾选，以及术语标记和历史 TB、Tag 模式和
+过滤配置、Target 文本规范规则等详细设置。未勾选检查的详细设置也会保留。
+下次打开 GUI 时自动恢复；后续调整只有再次点击“记住选项”才会更新保存内容。
+选项保存在当前用户配置目录的 `Toolshub/workflow_options.json`（Linux 为
+`toolshub/workflow_options.json`）；恢复时不读取 Excel，也不会自动开始检查。
+重新选择输入文件后仍按该文件识别工作表及列。
 
 ## 统一报告
 

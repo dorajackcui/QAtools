@@ -99,6 +99,34 @@ class WorkbookMetadataTests(unittest.TestCase):
         with self.assertRaisesRegex(FileNotFoundError, "输入文件不存在"):
             list_workbook_sheets("missing.xlsx")
 
+    def test_exact_custom_aliases_take_priority_without_guessing_ambiguous_columns(self) -> None:
+        aliases = HeaderAliases.create(
+            source=("MsgStr", "Original"), target=("Translation", "Localized"),
+        )
+        cases = (
+            (("SourceFile", "Key", "MsgStr", "Translation", "Source", "Target"), ("C", "D")),
+            (("Source", "Target", " MSGSTR ", "translation"), ("C", "D")),
+            (("SourceFile", "MsgStrFile", "sOuRcE", "TranslationNotes", "TARGET"), ("C", "E")),
+            (("SourceFile", "TargetFile", "MsgStrFile", "TranslationNotes"), (None, None)),
+            (("Source", "Target", "MsgStr", "MSGSTR", "Translation", "TRANSLATION"), (None, None)),
+            (("Source", "Target", "MsgStr", "Original", "Translation", "Localized"), (None, None)),
+            (("Source", "SOURCE", "Target", "TARGET"), (None, None)),
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "headers.xlsx"
+            for headers, expected in cases:
+                with self.subTest(headers=headers):
+                    workbook = Workbook()
+                    try:
+                        workbook.active.append(headers)
+                        workbook.save(path)
+                    finally:
+                        workbook.close()
+                    columns = detect_source_target_columns(path, header_aliases=aliases)
+                    self.assertEqual(
+                        (columns.detected_source_column, columns.detected_target_column), expected,
+                    )
+
     def test_detect_source_target_columns_rejects_missing_sheet(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workbook_path = Path(tmp_dir) / "input.xlsx"

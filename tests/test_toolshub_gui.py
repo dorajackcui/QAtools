@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -45,6 +46,7 @@ from tools.qt_pages import (  # noqa: E402
     SettingsPage,
     WorkflowPage,
 )
+from tools.tb_projects import TbProject  # noqa: E402
 
 
 class ToolshubLayoutTests(unittest.TestCase):
@@ -52,6 +54,19 @@ class ToolshubLayoutTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.qt_app = QApplication.instance() or QApplication([])
         configure_qt_application(cls.qt_app)
+
+    def setUp(self) -> None:
+        config_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(config_dir.cleanup)
+        self.config_dir = Path(config_dir.name)
+        self.enterContext(patch(
+            "tools.workflow.gui_options.default_header_aliases_path",
+            return_value=self.config_dir / "header_aliases.json",
+        ))
+        self.enterContext(patch(
+            "tools.tb_projects.default_tb_projects_path",
+            return_value=self.config_dir / "tb_projects.json",
+        ))
 
     def make_app(self) -> ToolshubApp:
         return ToolshubApp(show_window=False)
@@ -242,28 +257,53 @@ class ToolshubLayoutTests(unittest.TestCase):
             workbook = Workbook()
             worksheet = workbook.active
             worksheet.title = "Data"
-            worksheet.append(["ID", "Notes", "Original Text", "Translation"])
+            worksheet.append(["SourceFile", "Key", "MsgStr", "Translation", "Source", "Target"])
+            workbook.create_sheet("Missing").append(["SourceFile", "TargetFile"])
+            workbook.create_sheet("Duplicate").append(
+                ["MsgStr", "MSGSTR", "Translation", "TRANSLATION", "Source", "Target"]
+            )
             workbook.save(workbook_path)
+            workbook.close()
             store = HeaderAliasStore(temp_path / "header_aliases.json")
             window = ToolshubApp(show_window=False, header_alias_store=store)
             try:
                 workflow = window.tool_frames["workflow"]
+                restorer = window.tool_frames["french_nbsp"]
                 settings = window.tool_frames["settings"]
                 self.assertIsInstance(workflow, WorkflowPage)
                 self.assertIsInstance(settings, SettingsPage)
                 workflow.load_input_file(str(workbook_path))
-                self.assertEqual(workflow.source_column.text(), "A")
-                self.assertEqual(workflow.target_column.text(), "B")
+                restorer.load_input_file(str(workbook_path))
+                self.assertEqual(workflow.source_column.text(), "E")
+                self.assertEqual(workflow.target_column.text(), "F")
+                self.assertEqual(restorer.target_column.text(), "F")
 
-                settings.source_aliases.setPlainText("Original Text")
+                settings.source_aliases.setPlainText("MsgStr")
                 settings.target_aliases.setPlainText("Translation")
                 settings.save_button.click()
                 self.qt_app.processEvents()
 
                 self.assertEqual(workflow.source_column.text(), "C")
                 self.assertEqual(workflow.target_column.text(), "D")
-                self.assertEqual(store.load().source, ("Original Text",))
+                self.assertEqual(restorer.target_column.text(), "D")
+                self.assertEqual(store.load().source, ("MsgStr",))
                 self.assertEqual(store.load().target, ("Translation",))
+
+                for sheet in ("Missing", "Duplicate"):
+                    with self.subTest(sheet=sheet):
+                        workflow.sheet.setCurrentText(sheet)
+                        restorer.sheet.setCurrentText(sheet)
+                        self.assertEqual(workflow.source_column.text(), "")
+                        self.assertEqual(workflow.target_column.text(), "")
+                        self.assertEqual(restorer.target_column.text(), "")
+                        workflow.run_in_background = Mock()
+                        with patch("tools.qt_pages.show_error"):
+                            workflow.run_selected_tasks()
+                        workflow.run_in_background.assert_not_called()
+
+                workflow.sheet.setCurrentText("Data")
+                self.assertEqual(workflow.source_column.text(), "C")
+                self.assertEqual(workflow.target_column.text(), "D")
             finally:
                 window.close()
 
@@ -486,6 +526,146 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.qt_app.processEvents()
 
             self.assertFalse(workflow.abnormal_rule.isChecked())
+        finally:
+            window.close()
+
+    def test_remember_options_restores_all_choices_without_reading_workbooks(self) -> None:
+        for memoq in (True, False):
+            with self.subTest(memoq=memoq):
+                window = self.make_app()
+                workflow = window.tool_frames["workflow"]
+                try:
+                    workflow.input_picker.set_path(r"C:\input\本批次.xlsx")
+                    workflow._restore_combo(workflow.sheet, ("Sheet1", "Data"), "Data")
+                    workflow.source_column.setText("C")
+                    workflow.target_column.setText("F")
+                    workflow.start_row.setValue(7)
+                    checks = tuple(bool(index % 2) == memoq for index in range(9))
+                    for check, checked in zip(workflow.task_checks, checks, strict=True):
+                        check.setChecked(checked)
+                    workflow.mark_book.setChecked(not memoq)
+                    workflow.mark_square.setChecked(memoq)
+                    workflow.tb_store.save_project(TbProject(
+                        "项目 TB", r"C:\tb\术语.xlsx", "Terms", "D", "H", 5,
+                    ))
+                    workflow.refresh_tb_projects("项目 TB")
+                    workflow.history_picker.set_path(r"C:\tb\术语.xlsx")
+                    workflow._restore_combo(workflow.history_sheet, ("Old", "Terms"), "Terms")
+                    workflow.history_source.setText("D")
+                    workflow.history_target.setText("H")
+                    workflow.history_start_row.setValue(5)
+                    workflow.memoq_mode.setChecked(memoq)
+                    workflow.standard_mode.setChecked(not memoq)
+                    tag_checks = (True, False, True, False)
+                    for check, checked in zip(workflow.standard_tag_checks, tag_checks, strict=True):
+                        check.setChecked(checked)
+                    workflow.angle_config.set_path(r"C:\configs\tags.json")
+                    rule_checks = (False, True, False, True)
+                    for check, checked in zip(workflow.rule_checks.values(), rule_checks, strict=True):
+                        check.setChecked(checked)
+                    workflow.remember_options_button.click()
+                    self.assertIn("已记住", workflow.status.text())
+                    saved_bytes = workflow.options_store.config_path.read_bytes()
+                    workflow.set_all_tasks(not memoq)
+                    workflow.mark_book.setChecked(memoq)
+                    workflow.history_picker.clear()
+                    workflow.angle_config.clear()
+                    workflow.width_rule.setChecked(False)
+                finally:
+                    window.close()
+
+                with (
+                    patch("tools.qt_pages.list_workbook_sheets") as list_sheets,
+                    patch("tools.qt_pages.detect_source_target_columns") as detect_main,
+                    patch("tools.qt_pages.detect_history_tb_columns") as detect_history,
+                ):
+                    restored_window = self.make_app()
+                    list_sheets.assert_not_called()
+                    detect_main.assert_not_called()
+                    detect_history.assert_not_called()
+                try:
+                    restored = restored_window.tool_frames["workflow"]
+                    self.assertEqual(restored.input_picker.path(), r"C:\input\本批次.xlsx")
+                    self.assertEqual(restored.sheet.count(), 2)
+                    self.assertEqual(restored.sheet.currentText(), "Data")
+                    self.assertEqual(restored.source_column.text(), "C")
+                    self.assertEqual(restored.target_column.text(), "F")
+                    self.assertEqual(restored.start_row.value(), 7)
+                    self.assertEqual(tuple(check.isChecked() for check in restored.task_checks), checks)
+                    self.assertEqual(restored.mark_book.isChecked(), not memoq)
+                    self.assertEqual(restored.mark_square.isChecked(), memoq)
+                    self.assertEqual(restored.tb_project.currentText(), "项目 TB")
+                    self.assertEqual(restored.history_picker.path(), r"C:\tb\术语.xlsx")
+                    self.assertEqual(restored.history_sheet.count(), 2)
+                    self.assertEqual(restored.history_sheet.currentText(), "Terms")
+                    self.assertEqual(restored.history_source.text(), "D")
+                    self.assertEqual(restored.history_target.text(), "H")
+                    self.assertEqual(restored.history_start_row.value(), 5)
+                    self.assertEqual(restored.memoq_mode.isChecked(), memoq)
+                    self.assertEqual(tuple(check.isChecked() for check in restored.standard_tag_checks), tag_checks)
+                    self.assertEqual(restored.angle_config.path(), r"C:\configs\tags.json")
+                    self.assertEqual(restored.angle_config.isEnabled(), not memoq)
+                    self.assertEqual(tuple(check.isChecked() for check in restored.rule_checks.values()), rule_checks)
+                    for check, button in (
+                        (restored.term_check, restored.term_settings_button),
+                        (restored.tag_check, restored.tag_settings_button),
+                        (restored.target_text_check, restored.target_settings_button),
+                    ):
+                        self.assertEqual(button.isEnabled(), check.isChecked())
+                    self.assertIn("本批次.xlsx", restored.output_preview.text())
+                    self.assertEqual(restored.last_workflow_output_path, "")
+                    self.assertEqual(restored.options_store.config_path.read_bytes(), saved_bytes)
+
+                    workbook_path = self.config_dir / "new_input.xlsx"
+                    workbook = Workbook()
+                    try:
+                        workbook.active.append(["SourceFile", "SOURCE", "TARGET"])
+                        workbook.save(workbook_path)
+                    finally:
+                        workbook.close()
+                    restored.load_input_file(str(workbook_path))
+                    self.assertEqual(restored.source_column.text(), "B")
+                    self.assertEqual(restored.target_column.text(), "C")
+                finally:
+                    restored_window.close()
+
+    def test_invalid_remembered_options_keep_defaults_without_blocking_startup(self) -> None:
+        config_path = self.config_dir / "workflow_options.json"
+        for payload in (
+            "{invalid",
+            json.dumps({"version": 1, "options": {"checks": [False]}}),
+            json.dumps({"version": 1, "options": {"input": {"start_row": 10**30}}}),
+            json.dumps({"version": 1, "options": {"settings": {"term": {"mark_book": "false"}}}}),
+        ):
+            with self.subTest(payload=payload):
+                config_path.write_text(payload, encoding="utf-8")
+                window = self.make_app()
+                try:
+                    workflow = window.tool_frames["workflow"]
+                    self.assertEqual(workflow.input_picker.path(), "")
+                    self.assertEqual(workflow.start_row.value(), 2)
+                    self.assertTrue(workflow.term_check.isChecked())
+                    self.assertFalse(workflow.target_consistency_check.isChecked())
+                    self.assertTrue(workflow.mark_book.isChecked())
+                    self.assertIn("已使用默认设置", workflow.status.text())
+                finally:
+                    window.close()
+
+    def test_remember_options_write_failure_preserves_previous_saved_choices(self) -> None:
+        window = self.make_app()
+        try:
+            workflow = window.tool_frames["workflow"]
+            workflow.remember_options_button.click()
+            saved = workflow.options_store.config_path.read_bytes()
+            workflow.set_all_tasks(False)
+            with (
+                patch("tools.workflow.gui_options.os.replace", side_effect=OSError("无法写入")),
+                patch("tools.qt_pages.show_error") as error,
+            ):
+                workflow.remember_options_button.click()
+            error.assert_called_once_with(workflow, "记住选项失败", "无法写入")
+            self.assertEqual(workflow.options_store.config_path.read_bytes(), saved)
+            self.assertFalse(workflow.options_store.config_path.with_suffix(".json.tmp").exists())
         finally:
             window.close()
 

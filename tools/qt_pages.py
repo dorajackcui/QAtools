@@ -80,6 +80,7 @@ from tools.workflow.revision_applier import (
     apply_workflow_revisions,
     build_default_revised_output_path,
 )
+from tools.workflow.gui_options import WorkflowOptionsStore
 from tools.workflow.workflow_runner import (
     build_default_output_path as build_workflow_output_path,
     run_workflow,
@@ -180,7 +181,7 @@ class SettingsPage(QWidget):
         alias_layout.addWidget(
             muted_label(
                 "内置表头 source 和 target 始终有效。可在下方每行填写一个额外别名；"
-                "识别时忽略大小写和首尾空格。",
+                "忽略大小写和首尾空格后精确匹配，自定义别名优先于内置表头。",
                 word_wrap=True,
             )
         )
@@ -415,6 +416,8 @@ class FrenchNbspPage(AsyncPage):
         self.sheet.setMinimumWidth(190)
         self.sheet.currentTextChanged.connect(self.detect_columns)
         self.target_column = QLineEdit("B")
+        self.target_column.setPlaceholderText("请指定")
+        self.target_column.setToolTip("没有唯一匹配的表头时，请手动填写列字母。")
         self.target_column.setMaximumWidth(80)
         self.start_row = QSpinBox()
         self.start_row.setRange(1, 1_000_000)
@@ -486,8 +489,7 @@ class FrenchNbspPage(AsyncPage):
             if show_error:
                 _show_error(self, "读取失败", str(exc))
             return
-        if columns.detected_target_column:
-            self.target_column.setText(columns.detected_target_column)
+        self.target_column.setText(columns.detected_target_column or "")
 
     def run_restore(self) -> None:
         if not self.input_picker.path():
@@ -887,11 +889,13 @@ class WorkflowPage(AsyncPage):
         parent: QWidget | None = None,
         *,
         header_alias_store: HeaderAliasStore | None = None,
+        options_store: WorkflowOptionsStore | None = None,
     ) -> None:
         super().__init__(parent)
         self.last_workflow_output_path = ""
         self.tb_store = TbProjectStore()
         self.header_alias_store = header_alias_store or HeaderAliasStore()
+        self.options_store = options_store or WorkflowOptionsStore()
         self._settings_snapshots: dict[str, dict[str, Any]] = {}
 
         outer = QVBoxLayout(self)
@@ -922,6 +926,10 @@ class WorkflowPage(AsyncPage):
             self.revision_button,
             self.run_button,
         )
+        try:
+            self._restore_options(self.options_store.load(self._capture_options()))
+        except (OSError, ValueError) as exc:
+            self.status.setText(f"未能恢复记住的选项，已使用默认设置：{exc}")
 
     def _build_input_section(self) -> None:
         box, layout = section("输入与范围")
@@ -936,6 +944,9 @@ class WorkflowPage(AsyncPage):
         self.source_column.setMaximumWidth(70)
         self.target_column = QLineEdit("B")
         self.target_column.setMaximumWidth(70)
+        for column_input in (self.source_column, self.target_column):
+            column_input.setPlaceholderText("请指定")
+            column_input.setToolTip("没有唯一匹配的表头时，请手动填写列字母。")
         self.start_row = QSpinBox()
         self.start_row.setRange(1, 1_000_000)
         self.start_row.setValue(2)
@@ -985,10 +996,14 @@ class WorkflowPage(AsyncPage):
         header.addStretch(1)
         select_all = QPushButton("全选")
         clear_all = QPushButton("清空")
+        self.remember_options_button = QPushButton("记住选项")
+        self.remember_options_button.setToolTip("记住当前输入范围、检查项目及详细设置，下次打开时恢复。")
+        self.remember_options_button.clicked.connect(self.remember_options)
         select_all.clicked.connect(lambda: self.set_all_tasks(True))
         clear_all.clicked.connect(lambda: self.set_all_tasks(False))
         header.addWidget(select_all)
         header.addWidget(clear_all)
+        header.addWidget(self.remember_options_button)
         layout.addLayout(header)
 
         self.term_check = QCheckBox("术语检查")
@@ -1321,10 +1336,7 @@ class WorkflowPage(AsyncPage):
             combo.setCurrentIndex(-1)
         combo.blockSignals(False)
 
-    def _restore_settings_state(self, name: str) -> None:
-        snapshot = self._settings_snapshots.get(name)
-        if snapshot is None:
-            return
+    def _restore_settings_state(self, name: str, snapshot: dict[str, Any]) -> None:
         if name == "term":
             self.mark_book.setChecked(snapshot["mark_book"])
             self.mark_square.setChecked(snapshot["mark_square"])
@@ -1358,9 +1370,48 @@ class WorkflowPage(AsyncPage):
                 self.rule_checks[rule].setChecked(checked)
 
     def _settings_dialog_finished(self, name: str, result: int) -> None:
-        if result == int(QDialog.DialogCode.Rejected):
-            self._restore_settings_state(name)
-        self._settings_snapshots.pop(name, None)
+        snapshot = self._settings_snapshots.pop(name, None)
+        if result == int(QDialog.DialogCode.Rejected) and snapshot is not None:
+            self._restore_settings_state(name, snapshot)
+
+    def _capture_options(self) -> dict[str, Any]:
+        return {
+            "input": {
+                "path": self.input_picker.path(),
+                "sheets": tuple(self.sheet.itemText(index) for index in range(self.sheet.count())),
+                "sheet": self.sheet.currentText(),
+                "source": self.source_column.text(),
+                "target": self.target_column.text(),
+                "start_row": self.start_row.value(),
+            },
+            "checks": tuple(check.isChecked() for check in self.task_checks),
+            "settings": {
+                name: self._capture_settings_state(name)
+                for name in ("term", "tag", "target")
+            },
+        }
+
+    def _restore_options(self, options: dict[str, Any]) -> None:
+        scope = options["input"]
+        self.input_picker.set_path(scope["path"])
+        self._restore_combo(self.sheet, scope["sheets"], scope["sheet"])
+        self.source_column.setText(scope["source"])
+        self.target_column.setText(scope["target"])
+        self.start_row.setValue(scope["start_row"])
+        for check, checked in zip(self.task_checks, options["checks"], strict=True):
+            check.setChecked(checked)
+        for name, snapshot in options["settings"].items():
+            self._restore_settings_state(name, snapshot)
+        if scope["path"]:
+            self.output_preview.setText(f"输出文件：{build_workflow_output_path(scope['path']).name}")
+
+    def remember_options(self) -> None:
+        try:
+            self.options_store.save(self._capture_options())
+        except OSError as exc:
+            show_error(self, "记住选项失败", str(exc))
+            return
+        self.status.setText("已记住当前选项，下次打开时自动恢复。")
 
     def set_all_tasks(self, checked: bool) -> None:
         for checkbox in self.task_checks:
@@ -1407,10 +1458,8 @@ class WorkflowPage(AsyncPage):
             if show_error:
                 _show_error(self, "读取失败", str(exc))
             return
-        if columns.detected_source_column:
-            self.source_column.setText(columns.detected_source_column)
-        if columns.detected_target_column:
-            self.target_column.setText(columns.detected_target_column)
+        self.source_column.setText(columns.detected_source_column or "")
+        self.target_column.setText(columns.detected_target_column or "")
 
     def choose_history_file(self) -> None:
         if path := _choose_excel(

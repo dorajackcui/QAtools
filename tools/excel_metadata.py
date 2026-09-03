@@ -12,7 +12,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.exceptions import InvalidFileException
 
-from tools.header_aliases import HeaderAliases, HeaderAliasStore
+from tools.header_aliases import SOURCE_HEADER, TARGET_HEADER, HeaderAliases, HeaderAliasStore
 
 
 @dataclass(frozen=True)
@@ -75,6 +75,21 @@ def list_workbook_sheets(input_file: str | Path) -> WorkbookSheetChoices:
     )
 
 
+def _preferred_header_column(
+    headers: tuple[str, ...], custom_aliases: tuple[str, ...], builtin_header: str,
+) -> str | None:
+    for candidates in ({alias.casefold() for alias in custom_aliases}, {builtin_header}):
+        matches = [
+            get_column_letter(index)
+            for index, header in enumerate(headers, start=1)
+            if header in candidates
+        ]
+        if matches:
+            # Ambiguous custom matches must not fall back to a built-in header.
+            return matches[0] if len(matches) == 1 else None
+    return None
+
+
 def detect_source_target_columns(
     input_file: str | Path,
     sheet: str | None = None,
@@ -101,18 +116,10 @@ def detect_source_target_columns(
             (),
         )
 
-        source_columns: list[str] = []
-        target_columns: list[str] = []
-        for column_index, value in enumerate(header_row, start=1):
-            normalized_value = normalize_header(value)
-            if normalized_value in aliases.source_headers:
-                source_columns.append(get_column_letter(column_index))
-            if normalized_value in aliases.target_headers:
-                target_columns.append(get_column_letter(column_index))
-
+        headers = tuple(normalize_header(value) for value in header_row)
         return SourceTargetColumns(
-            detected_source_column=source_columns[0] if len(source_columns) == 1 else None,
-            detected_target_column=target_columns[0] if len(target_columns) == 1 else None,
+            detected_source_column=_preferred_header_column(headers, aliases.source, SOURCE_HEADER),
+            detected_target_column=_preferred_header_column(headers, aliases.target, TARGET_HEADER),
         )
     finally:
         workbook.close()
