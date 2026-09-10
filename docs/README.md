@@ -11,6 +11,13 @@
 | 运行一键检查、理解统一报告 | [workflow README](../tools/workflow/README.md) |
 | 导出或回填 Strings | [PhraseLoom README](../phraseloom/README.md) |
 | 修改代码或文档 | [AGENTS.md](../AGENTS.md) |
+| 使用 Master ↔ 小表同步 | [内容同步](../tools/content_sync/README.md) |
+| 清空、插入或删除 Excel 列 | [列操作](../tools/column_tools/README.md) |
+| 用 Excel 重新保存工作簿 | [兼容性重存](../tools/excel_compatibility/README.md) |
+| 按文件名替换整个工作簿 | [同名文件替换](../tools/deep_replace/README.md) |
+| 汇总待翻译字数/词数和行数 | [未翻译统计](../tools/untranslated_stats/README.md) |
+| 查看六个新工具的实时处理详情 | [运行日志](tool-logs.md) |
+| 追溯 momoTools 合并设计 | [历史合并方案](archive/momotools-integration-plan.md) |
 
 ## 规则文档
 

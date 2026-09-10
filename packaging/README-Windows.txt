@@ -5,6 +5,7 @@ QAtools Windows 安装版
 --------
 - 64 位 Windows 10 或 Windows 11
 - 不需要安装 Python，也不需要联网
+- 列操作、兼容性重存和同步后的可选重存需要已安装的桌面 Microsoft Excel；其他工具无需 Excel
 
 安装与升级
 ----------
@@ -20,7 +21,8 @@ QAtools Windows 安装版
 不会创建第二个窗口。
 
 工具箱包含一键质量检查、PhraseLoom、法语 NBSP 恢复、Batch 拆分与复原、
-活动工作表合并和 Xbench QA 转换。一键质量检查内含术语、双向文本一致性、
+活动工作表合并、Xbench QA 转换、Master 与小表双向同步、列操作、兼容性重存、
+同名文件替换和未翻译统计。后六个入口当前仅提供 GUI。一键质量检查内含术语、双向文本一致性、
 Tag / Placeholder、换行、数字、URL 和 Target 文本质量检查。
 
 命令行

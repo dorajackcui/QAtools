@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
@@ -73,17 +74,24 @@ TOOL_GROUPS = (
         tools=(
             ToolItem(key="workflow", title="一键质量检查"),
             ToolItem(key="phraseloom", title="PhraseLoom"),
+            ToolItem(key="content_sync", title="内容同步"),
         ),
     ),
     ToolGroup(
-        title="文本修复",
-        tools=(ToolItem(key="french_nbsp", title="法语 NBSP 恢复"),),
-    ),
-    ToolGroup(
-        title="其他",
+        title="文件与表格",
         tools=(
+            ToolItem(key="compatibility", title="兼容性重存"),
+            ToolItem(key="column_tools", title="列操作"),
             ToolItem(key="excel_batcher", title="Batch 拆分"),
             ToolItem(key="excel_merger", title="合并表格"),
+            ToolItem(key="deep_replace", title="同名文件替换"),
+        ),
+    ),
+    ToolGroup(
+        title="翻译辅助",
+        tools=(
+            ToolItem(key="french_nbsp", title="法语 NBSP 恢复"),
+            ToolItem(key="untranslated_stats", title="未翻译统计"),
             ToolItem(key="xbench_report", title="Xbench QA 转换"),
         ),
     ),
@@ -185,11 +193,27 @@ class ToolshubApp(QMainWindow):
         layout.addWidget(brand)
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
+        navigation = QWidget()
+        navigation.setObjectName("sidebarNavigation")
+        navigation.setStyleSheet(f"#sidebarNavigation {{ background: {SIDEBAR_BACKGROUND}; }}")
+        nav_layout = QVBoxLayout(navigation)
+        nav_layout.setContentsMargins(0, 0, 0, 0)
+        nav_layout.setSpacing(2)
         for group_index, group in enumerate(self.tool_groups):
+            if group_index:
+                nav_layout.addSpacing(10)
+                divider = QFrame()
+                divider.setObjectName("navSectionDivider")
+                divider.setFixedHeight(1)
+                divider_row = QHBoxLayout()
+                divider_row.setContentsMargins(8, 0, 8, 0)
+                divider_row.addWidget(divider)
+                nav_layout.addLayout(divider_row)
+                nav_layout.addSpacing(6)
             category = QLabel(group.title)
             category.setProperty("role", "navSection")
-            category.setContentsMargins(8, 8 if group_index else 2, 8, 3)
-            layout.addWidget(category)
+            category.setContentsMargins(8, 4, 8, 5)
+            nav_layout.addWidget(category)
             for tool in group.tools:
                 button = QPushButton(tool.title)
                 button.setProperty("navItem", True)
@@ -198,8 +222,15 @@ class ToolshubApp(QMainWindow):
                 button.clicked.connect(lambda _checked=False, key=tool.key: self.select_tool(key))
                 self.nav_group.addButton(button)
                 self.nav_buttons[tool.key] = button
-                layout.addWidget(button)
-        layout.addStretch(1)
+                nav_layout.addWidget(button)
+        nav_layout.addStretch(1)
+        self.nav_scroll = QScrollArea()
+        self.nav_scroll.setWidgetResizable(True)
+        self.nav_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.nav_scroll.setStyleSheet(f"QScrollArea {{ background: {SIDEBAR_BACKGROUND}; }}")
+        self.nav_scroll.setWidget(navigation)
+        layout.addWidget(self.nav_scroll, 1)
         settings_button = QPushButton("⚙  设置")
         settings_button.setObjectName("settingsNavButton")
         settings_button.setProperty("navItem", True)
@@ -229,6 +260,8 @@ class ToolshubApp(QMainWindow):
         self.title_label.setText(tool.title)
         self.nav_buttons[key].setChecked(True)
         self.page_stack.setCurrentWidget(page)
+        if key != SETTINGS_ITEM.key:
+            self.nav_scroll.ensureWidgetVisible(self.nav_buttons[key])
 
     def open_qa_workflow_file(self, file_path: str) -> None:
         normalized = normalize_excel_input_file(file_path, action_name="QA workflow")

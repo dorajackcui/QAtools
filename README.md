@@ -22,6 +22,8 @@ qatools --help
 qatools help qa
 ```
 
+GUI 表单不显示常驻说明段落，保留输入标签、占位提示、输出预览和运行状态；各工具的详细规则见下方工具文档。
+
 ### 自定义表头识别
 
 GUI 默认从工作表首行自动识别 `source` 和 `target` 列。需要兼容其他常用表头时，
@@ -59,9 +61,14 @@ Source、Target 分别优先匹配自定义别名；没有自定义别名命中�
 
 ## 其他工作流
 
-| 工作流 | CLI | 说明 |
+| 工作流 | 入口 | 说明 |
 |---|---|---|
 | PhraseLoom Strings | `qatools phraseloom` | 导出待翻译 Strings，完成后回填原工作簿 |
+| 内容同步（Master ↔ 小表） | GUI【常用流程 → 内容同步】 | 两个 Tab 分别同步单列/多列到小表、汇总译文回填总表；[规则](tools/content_sync/README.md) |
+| 列操作 | GUI【文件与表格】 | 批量清空、插入、删除列；[规则](tools/column_tools/README.md) |
+| 兼容性重存 | GUI【文件与表格】 | 通过 Microsoft Excel 重新保存工作簿；[规则与环境](tools/excel_compatibility/README.md) |
+| 同名文件替换 | GUI【文件与表格】 | 递归替换整个同名文件；[规则](tools/deep_replace/README.md) |
+| 未翻译统计 | GUI【翻译辅助】 | 中文字符/英文词数及行数汇总；[规则](tools/untranslated_stats/README.md) |
 | 法语 NBSP 恢复 | `qatools french-nbsp` | 恢复法语标点所需的不换行空格 |
 | Batch 拆分与复原 | `qatools batch` | 分批处理大型工作表并按原行位复原 |
 | 合并表格 | `qatools merge-sheets` | 合并目录内工作簿的活动工作表 |
@@ -69,6 +76,9 @@ Source、Target 分别优先匹配自定义别名；没有自定义别名命中�
 
 单项检查仍保留兼容 CLI；完整命令目录和示例统一维护在
 [CLI 使用指南](docs/cli-usage.md)。
+
+新增的六个 momoTools 入口当前提供 GUI，CLI 留待后续。列操作、兼容性重存需要桌面 Excel；
+源码环境安装 COM 支持请使用 `python -m pip install -e ".[excel-com]"`。
 
 ## 文档路由
 

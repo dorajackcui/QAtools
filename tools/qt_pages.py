@@ -50,6 +50,8 @@ from tools.excel_merger.merge_active_sheets import (
 )
 from tools.excel_metadata import detect_source_target_columns, list_workbook_sheets
 from tools.header_aliases import HeaderAliases, HeaderAliasStore
+from tools.content_sync.qt_page import ContentSyncPage
+from tools.excel_utilities_pages import ColumnToolsPage, CompatibilityPage, DeepReplacePage, UntranslatedStatsPage
 from tools.french_nbsp_restorer.restore_french_nbsp import (
     build_default_output_path as build_nbsp_output_path,
     process_excel as restore_french_nbsp,
@@ -178,13 +180,6 @@ class SettingsPage(QWidget):
         layout.setSpacing(8)
 
         alias_box, alias_layout = section("Excel 表头自动识别")
-        alias_layout.addWidget(
-            muted_label(
-                "内置表头 source 和 target 始终有效。可在下方每行填写一个额外别名；"
-                "忽略大小写和首尾空格后精确匹配，自定义别名优先于内置表头。",
-                word_wrap=True,
-            )
-        )
         editors = QGridLayout()
         editors.setHorizontalSpacing(14)
         editors.setVerticalSpacing(5)
@@ -443,9 +438,6 @@ class FrenchNbspPage(AsyncPage):
         row.addWidget(self.result_column)
         row.addStretch(1)
         output_layout.addLayout(row)
-        output_layout.addWidget(
-            muted_label("留空时直接修复 Target 列；恢复 ; : ? ! % 前及 « » 内侧的 NBSP。", word_wrap=True)
-        )
         layout.addWidget(output_box)
         self.run_button = primary_button("开始恢复")
         self.run_button.clicked.connect(self.run_restore)
@@ -551,7 +543,6 @@ class XbenchPage(AsyncPage):
         row.addWidget(self.sheet)
         row.addStretch(1)
         input_layout.addLayout(row)
-        input_layout.addWidget(muted_label("将 QA 明细整理为文件名 / key / source / target / QA 问题，并按相同内容聚合。", word_wrap=True))
         layout.addWidget(input_box)
         self.run_button = primary_button("开始转换")
         self.run_button.clicked.connect(self.run_transform)
@@ -814,10 +805,6 @@ class ExcelMergerPage(AsyncPage):
         self.keep_headers = QCheckBox("保留每个文件的表头")
         input_layout.addWidget(self.input_dir)
         input_layout.addWidget(self.keep_headers)
-        input_layout.addWidget(muted_label(
-            "递归读取目录中的 .xlsx/.xlsm，合并每个文件当前活动的工作表，并在首列写入 SourceFile。默认只保留第一份表头。",
-            word_wrap=True,
-        ))
         layout.addWidget(input_box)
         self.run_button = primary_button("开始合并")
         self.run_button.clicked.connect(self.run_merge)
@@ -1201,7 +1188,6 @@ class WorkflowPage(AsyncPage):
             history_scope.addSpacing(8)
         history_scope.addStretch(1)
         layout.addLayout(history_scope)
-        layout.addWidget(muted_label("未选择术语标记时，必须提供历史 TB。"))
         self.refresh_tb_projects()
 
     def _build_tag_settings(self) -> None:
@@ -1794,6 +1780,11 @@ class WorkflowPage(AsyncPage):
 
 
 PAGE_FACTORIES = {
+    "content_sync": ContentSyncPage,
+    "column_tools": ColumnToolsPage,
+    "compatibility": CompatibilityPage,
+    "deep_replace": DeepReplacePage,
+    "untranslated_stats": UntranslatedStatsPage,
     "workflow": WorkflowPage,
     "phraseloom": PhraseLoomPage,
     "french_nbsp": FrenchNbspPage,

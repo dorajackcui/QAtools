@@ -122,11 +122,12 @@ class ToolshubLayoutTests(unittest.TestCase):
             group.title: [tool.title for tool in group.tools]
             for group in TOOL_GROUPS
         }
-        self.assertEqual(grouped_tools["常用流程"], ["一键质量检查", "PhraseLoom"])
-        self.assertEqual(grouped_tools["文本修复"], ["法语 NBSP 恢复"])
+        self.assertEqual(grouped_tools["常用流程"], ["一键质量检查", "PhraseLoom", "内容同步"])
+        self.assertEqual(list(grouped_tools), ["常用流程", "文件与表格", "翻译辅助"])
+        self.assertEqual(grouped_tools["文件与表格"], ["兼容性重存", "列操作", "Batch 拆分", "合并表格", "同名文件替换"])
         self.assertEqual(
-            grouped_tools["其他"],
-            ["Batch 拆分", "合并表格", "Xbench QA 转换"],
+            grouped_tools["翻译辅助"],
+            ["法语 NBSP 恢复", "未翻译统计", "Xbench QA 转换"],
         )
 
     def test_all_qt_pages_are_created_once_and_kept_in_stack(self) -> None:
@@ -141,11 +142,16 @@ class ToolshubLayoutTests(unittest.TestCase):
                     "french_nbsp",
                     "excel_batcher",
                     "excel_merger",
+                    "content_sync",
+                    "column_tools",
+                    "compatibility",
+                    "deep_replace",
+                    "untranslated_stats",
                     "xbench_report",
                     "settings",
                 },
             )
-            self.assertEqual(window.page_stack.count(), 7)
+            self.assertEqual(window.page_stack.count(), 12)
             self.assertIsInstance(window.tool_frames["workflow"], WorkflowPage)
             self.assertIsInstance(window.tool_frames["phraseloom"], PhraseLoomPage)
             self.assertIsInstance(window.tool_frames["settings"], SettingsPage)
@@ -315,6 +321,12 @@ class ToolshubLayoutTests(unittest.TestCase):
                 window.tool_frames["phraseloom"].export_button,
                 window.tool_frames["french_nbsp"].run_button,
                 window.tool_frames["excel_merger"].run_button,
+                window.tool_frames["content_sync"].master_to_target_page.run_button,
+                window.tool_frames["content_sync"].target_to_master_page.run_button,
+                window.tool_frames["column_tools"].run_button,
+                window.tool_frames["compatibility"].run_button,
+                window.tool_frames["deep_replace"].run_button,
+                window.tool_frames["untranslated_stats"].run_button,
                 window.tool_frames["xbench_report"].run_button,
                 window.tool_frames["excel_batcher"].split_button,
                 window.tool_frames["excel_batcher"].restore_button,
@@ -745,6 +757,28 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertIn("一键质量检查", warning.call_args.args[2])
         finally:
             workflow._workers.clear()
+            window.close()
+
+    def test_window_refuses_to_close_with_worker_in_hidden_sync_tab(self) -> None:
+        window = self.make_app()
+        sync = window.tool_frames["content_sync"]
+        try:
+            for running_index in (0, 1):
+                with self.subTest(running_tab=running_index):
+                    page = sync.tabs.widget(running_index)
+                    page._workers.add(Mock())
+                    sync.tabs.setCurrentIndex(1 - running_index)
+                    event = QCloseEvent()
+                    try:
+                        with patch("toolshub_gui.show_warning") as warning:
+                            window.closeEvent(event)
+                        self.assertFalse(event.isAccepted())
+                        warning.assert_called_once()
+                        self.assertIn("内容同步", warning.call_args.args[2])
+                    finally:
+                        page._workers.clear()
+            self.assertFalse(sync.has_running_tasks())
+        finally:
             window.close()
 
     def test_qa_workflow_argument_accepts_finder_excel_path(self) -> None:

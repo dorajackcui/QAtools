@@ -211,10 +211,14 @@ def configure_qt_application(app: QApplication) -> None:
             padding: 0 8px 8px 8px;
         }}
         QLabel[role="navSection"] {{
-            color: #92928c;
+            color: #55554f;
             background: transparent;
-            font-size: 11px;
-            font-weight: 600;
+            font-size: 12px;
+            font-weight: 700;
+        }}
+        QFrame#navSectionDivider {{
+            background: #d6d6d0;
+            border: none;
         }}
         QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {{
             background: {INPUT_BACKGROUND};

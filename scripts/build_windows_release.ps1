@@ -114,6 +114,9 @@ try {
     Invoke-ProjectPython `
         -Description "PyInstaller check" `
         -Arguments @("-m", "PyInstaller", "--version")
+    Invoke-ProjectPython `
+        -Description "Excel COM packaging dependencies (install .[excel-com])" `
+        -Arguments @("-c", "import pythoncom, pywintypes, win32com.client, win32timezone")
     $innoSetupCompiler = Resolve-InnoSetupCompiler
 
     if (-not $SkipTests) {
@@ -152,6 +155,7 @@ try {
         "--clean",
         "--icon", $iconPath,
         "--paths", $projectRoot,
+        "--hidden-import", "win32timezone",
         "--distpath", $exeDir,
         "--workpath", $workDir,
         "--specpath", $specDir,
