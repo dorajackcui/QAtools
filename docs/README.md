@@ -6,20 +6,23 @@
 | 任务 | 读取 |
 |---|---|
 | 首次使用或了解能力 | [项目 README](../README.md) |
-| 按 GUI 运行一键质量检查 | [一键质量检查 GUI 使用指南](qa-workflow-guide/index.html) |
+| 按 GUI 运行一键质量检查 | [workflow README](../tools/workflow/README.md)；[网页](qa-workflow-guide/index.html)待同步，仅供旧版参考 |
 | 调用 CLI、编写脚本 | [CLI 使用指南](cli-usage.md) |
 | 运行一键检查、理解统一报告 | [workflow README](../tools/workflow/README.md) |
 | 导出或回填 Strings | [PhraseLoom README](../phraseloom/README.md) |
-| 修改代码或文档 | [AGENTS.md](../AGENTS.md) |
+| 修改代码或文档 | [AGENTS.md](../AGENTS.md)、[仓库地图](repository-map.md) |
+| 扩展工具、查看大文件评估 | [仓库地图](repository-map.md#扩展一个工具) |
+| 查询未完成工作 | [待办](backlog.md) |
+| GUI 表头别名、布局与状态 | [GUI 约定](gui-conventions.md) |
 | 使用 Master ↔ 小表同步 | [内容同步](../tools/content_sync/README.md) |
 | 清空、插入或删除 Excel 列 | [列操作](../tools/column_tools/README.md) |
 | 用 Excel 重新保存工作簿 | [兼容性重存](../tools/excel_compatibility/README.md) |
 | 按文件名替换整个工作簿 | [同名文件替换](../tools/deep_replace/README.md) |
 | 汇总待翻译字数/词数和行数 | [未翻译统计](../tools/untranslated_stats/README.md) |
 | 查看六个新工具的实时处理详情 | [运行日志](tool-logs.md) |
-| 追溯 momoTools 合并设计 | [历史合并方案](archive/momotools-integration-plan.md) |
+| 追溯导入来源 | [归档索引](archive/README.md) |
 
-## 规则文档
+## 业务规则
 
 - 术语与 Tag：[术语检查](../tools/term_pair_checker/README.md)、
   [Tag / Placeholder](../tools/tag_placeholder_checker/README.md)、
@@ -38,13 +41,10 @@
 平台说明：[Windows 安装版](../packaging/README-Windows.txt)、
 [macOS Finder 工作流](macos-finder-workflow.md)。
 
-## 文档契约
+## 文档维护
 
-- 当前行为以代码和测试为准，其次是当前文档。
-- 一个事实只维护在一个位置：调用参数在 CLI 手册，业务规则在工具 README，
-  开发约束在 `AGENTS.md`。
-- 根 README 只保留快速入口和能力地图，不复制完整参数或规则。
-- `archive/` 只保存历史背景，不能作为当前实现依据。
+根 [AGENTS.md](../AGENTS.md#文档职责)规定各文档的权威范围。当前规则写入工具 README，
+调用写入 CLI 手册，待办写入 backlog；已完成决策只保留来源和约束，不维护第二套业务说明。
 
-更新入口、CLI、业务规则或开发约束时，分别修改根 README、`cli-usage.md`、
-对应工具 README 或 `AGENTS.md`。
+提交前运行 `python scripts/check_docs.py` 检查文档链接和 CLI 命令目录；
+GUI/CLI/业务变更仍需运行对应测试及全量回归。

@@ -1,6 +1,6 @@
 # 法语 NBSP 恢复
 
-统一 CLI：`qatools french-nbsp --help`。下文中的脚本路径作为兼容入口保留。
+统一 CLI：`qatools french-nbsp --help`。
 
 这个工具用于恢复 Excel target 列中的法语 non-breaking space（NBSP），输出新的 Excel 文件，不覆盖原文件。
 
@@ -13,26 +13,7 @@
 
 ## CLI
 
-直接修复 target 列：
-
-```bash
-python3 tools/french_nbsp_restorer/restore_french_nbsp.py input.xlsx \
-  -s Sheet1 \
-  -t B \
-  --start-row 2 \
-  -o output_french_nbsp_restored.xlsx
-```
-
-写入修复后的完整结果列：
-
-```bash
-python3 tools/french_nbsp_restorer/restore_french_nbsp.py input.xlsx \
-  -s Sheet1 \
-  -t B \
-  -r C \
-  --start-row 2 \
-  -o output_french_nbsp_restored.xlsx
-```
+调用示例、参数和兼容脚本集中在 [CLI 手册](../../docs/cli-usage.md)。
 
 如果指定结果列，不需要修复的 target 也会复制到结果列。
 
@@ -50,3 +31,7 @@ qatools gui
 
 统一 GUI 会自动识别工作表首行的 Target 列；匹配优先级、冲突处理及自定义配置见
 [GUI 表头别名设置](../../README.md#自定义表头识别)。
+
+## 实现位置
+
+统一 PySide6 页面在同目录 `qt_page.py`；页面注册、共享控件和对应测试见[仓库地图](../../docs/repository-map.md)。

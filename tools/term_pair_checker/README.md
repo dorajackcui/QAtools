@@ -1,6 +1,6 @@
 # Excel 术语检查工具
 
-统一 CLI：`qatools term-check --help`。下文中的脚本路径作为兼容入口保留。
+统一 CLI：`qatools term-check --help`。
 
 统一处理两种术语检查模式：
 
@@ -24,7 +24,9 @@
 
 - 新术语只会由带所选 mark 的显式术语对触发发现；无 mark 模式不会新增术语
 - 术语特征：被所选 mark 包裹的完整片段，输出到 `术语表` 时会同时保留带 mark 和去 mark 两套结果
-- 当前支持两种术语 mark：`【】`、普通 `[]`
+- 当前支持两种术语 mark：`【】`、普通 `[]`；CLI、独立 GUI 和统一 GUI 默认均选中两种。
+- 候选过滤：单个 ASCII 字母、没有文字或字母的片段会被排除，如 `[b]`、`[123]`；`[火]`、`[HP]` 保留。
+- 匹配默认忽略大小写。
 - `<...>` 和 `{...}` 不作为术语 mark，统一交给 tag / placeholder 检查
 - 可同时选择多种 mark 类型，系统会按文本出现顺序提取并配对
 - 选择 `[]` 时，也会兼容全角方括号 `［］`
@@ -48,62 +50,12 @@
 - 如果同一个 Excel 行命中多个术语问题类型，只输出一行，各问题在 `问题描述` 中用 `；` 合并
 - 如果某一行两侧都没有提取到术语，则忽略
 
-## 运行方式
+## 使用与维护
 
-```bash
-python3 tools/term_pair_checker/extract_terms_from_excel.py input.xlsx -c A -t B
-```
+统一 GUI：一键质量检查 → 术语检查；详细设置包含 mark、历史 TB 和 TB 项目。
+独立 Tk GUI `extract_terms_gui.py` 继续兼容，但不是统一页面实现。
 
-仅使用历史 TB 检查：
+CLI 示例、全部参数和兼容脚本入口集中在 [CLI 手册](../../docs/cli-usage.md#单项质量检查)。
+默认输出 `term_pair_check_<原文件名>`；表头识别的 GUI 约定见[表头别名](../../docs/gui-conventions.md#表头别名)。
 
-```bash
-python3 tools/term_pair_checker/extract_terms_from_excel.py input.xlsx \
-  -c A -t B \
-  --no-term-mark \
-  --history-tb glossary.xlsx \
-  --history-sheet Glossary
-```
-
-兼容旧入口：
-
-```bash
-python3 extract_terms_from_excel.py input.xlsx -c A -t B
-```
-
-图形界面：
-
-```bash
-python3 tools/term_pair_checker/extract_terms_gui.py
-```
-
-GUI 现在支持：
-
-- 选择 Excel 后自动读取工作表列表，用下拉框选择工作表
-- 可选选择历史 TB，并自动识别历史 TB 的工作表和 `source` / `target` 列
-- 历史 TB 的工作表、列和开始行默认折叠，选择历史 TB 后自动展开详情
-- 可以取消所有术语 mark；此时 GUI 会要求已选择历史 TB，并进入仅历史 TB 检查模式
-- 页面支持纵向滚动，开始检查按钮固定在底部
-- 默认生成新的结果 Excel，并在底部预览自动生成的输出文件名
-- 自动识别第 1 行表头中的 `source` / `target` 列并回填
-- 如果未识别到列，可继续手动填写列字母作为回退
-
-兼容旧入口：
-
-```bash
-python3 extract_terms_gui.py
-```
-
-## 常用参数
-
-- `-c, --source-column`：source 列，例如 `A`
-- `-t, --target-column`：target 列，例如 `B`
-- `-s, --sheet`：工作表名称，可选
-- `--start-row`：从第几行开始处理，默认 `2`
-- `--mark-style`：提取术语 mark 类型，可重复传入，例如 `--mark-style [] --mark-style '【】'`
-- `--no-term-mark`：不从文本提取新术语；必须同时使用 `--history-tb`
-- `--exclusion-config`：可选的自定义术语候选排除 JSON 配置文件路径
-- `--history-tb`：历史 TB Excel 文件路径，可选
-- `--history-sheet`：历史 TB 工作表名称，可选；默认优先使用 `术语表`
-- `--history-source-column` / `--history-target-column`：历史 TB source / target 列，可选；不填则自动识别表头
-- `--history-start-row`：历史 TB 开始读取行号，默认 `2`
-- `-o, --output`：输出文件路径，可选，默认生成 `term_pair_check_<原文件名>`
+代码落点和测试见[仓库地图](../../docs/repository-map.md)。

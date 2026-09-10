@@ -1,6 +1,6 @@
 # Xbench QA Report 转换
 
-统一 CLI：`qatools xbench --help`。下文中的脚本路径作为兼容入口保留。
+统一 CLI：`qatools xbench --help`。
 
 ## 用途
 
@@ -23,19 +23,7 @@
 
 ## CLI
 
-```bash
-python3 tools/xbench_report_transformer/transform_xbench_report.py Xbench_QA_Report.xlsx
-```
-
-指定工作表和输出文件：
-
-```bash
-python3 tools/xbench_report_transformer/transform_xbench_report.py Xbench_QA_Report.xlsx \
-  -s "Xbench QA" \
-  -o xbench_flat.xlsx
-```
-
-默认输出文件名为 `xbench_transform_<原文件名>`。
+调用示例、参数和兼容脚本集中在 [CLI 手册](../../docs/cli-usage.md)。
 
 ## GUI
 
@@ -52,3 +40,7 @@ qatools gui
 ```
 
 GUI 会自动读取工作表列表，输出文件沿用默认命名规则。
+
+## 实现位置
+
+统一 PySide6 页面在同目录 `qt_page.py`；页面注册、共享控件和对应测试见[仓库地图](../../docs/repository-map.md)。

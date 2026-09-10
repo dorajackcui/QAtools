@@ -1,31 +1,11 @@
-# PhraseLoom 合并记录（已归档）
+# PhraseLoom 合并记录
 
-PhraseLoom 已作为一级 Strings 工作流并入 QAtools。
+- 来源：`dorajackcui/PhraseLoom`，`main` 分支。
+- 导入提交：`14af9603748575a2aee726608ba502d437462a0d`；日期：2026-07-30。
+- 采用保留历史的一次性 Git subtree 合并，不保留持续同步用的 PhraseLoom remote。
 
-## 来源
+`phraseloom/` 是合并后的唯一开发来源，测试位于 `tests/phraseloom_tests/`。
+不在两个仓库并行维护，也不根据旧 Strings 设计稿变更当前工作簿协议。
 
-- 原仓库：<https://github.com/dorajackcui/PhraseLoom>
-- 导入分支：`main`
-- 导入提交：`14af9603748575a2aee726608ba502d437462a0d`
-- 导入日期：2026-07-30
-
-导入使用保留历史的一次性 Git subtree 合并。QAtools 不保留需要持续同步的
-PhraseLoom remote；合并后的 `phraseloom/` 是后续开发的唯一代码来源。
-
-## 目录映射
-
-- 核心包：`phraseloom/`
-- PhraseLoom 测试：`tests/phraseloom_tests/`
-- Strings 工作流设计：`docs/archive/superpowers/specs/2026-07-30-strings-workflow-redesign.md`
-- Toolshub 入口：`toolshub_gui.py`
-- 统一 CLI：`qatools phraseloom`
-
-PhraseLoom 的独立 GUI 仍可通过 `phraseloom gui` 或
-`python -m phraseloom.gui` 启动；统一 GUI 中则复用同一个
-`PhraseLoomApp` 页面。
-
-## 后续维护
-
-所有 PhraseLoom 修复和功能更新都应直接提交到 QAtools。旧仓库在 QAtools
-版本验收后可设为只读归档，并在其 README 指向本仓库；不要在两个仓库继续
-并行开发。
+当前入口、代码地图与约束见 [PhraseLoom AGENTS](../../phraseloom/AGENTS.md) 和
+[README](../../phraseloom/README.md)。旧 GUI 复用描述和失效设计稿路径已删除，历史内容通过 Git 追溯。

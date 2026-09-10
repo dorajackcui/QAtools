@@ -1,7 +1,9 @@
 # 文档归档
 
-这里保存已完成的设计、实施计划和迁移记录，仅用于追溯背景，不作为当前
-行为或开发要求。当前文档入口见 [`docs/README.md`](../README.md)。
+仅保存可追溯来源与已完成决策，不作为当前行为或开发要求。过时实施步骤通过 Git 追溯，不继续复制。
 
-归档内容不需要随代码变化持续更新；如与代码、测试或当前 README 冲突，
-以代码、测试和当前 README 为准。
+- [momoTools 合并记录](momotools-integration-plan.md)
+- [PhraseLoom 合并记录](phraseloom-migration.md)
+
+未完成工作统一进入[待办](../backlog.md)，当前约束进入工具 README 或 AGENTS。
+当前文档入口见[文档索引](../README.md)。

@@ -6,7 +6,7 @@
 
 ## GUI
 
-打开 `qatools gui`，在【其他】中选择【Batch 拆分】：
+打开 `qatools gui`，在【文件与表格】中选择【Batch 拆分】：
 
 - 【拆分 batch】：选择 Excel、工作表、每批行数和表头行数。
 - 【复原文件】：选择拆分时生成的完整 batch 目录。
@@ -15,22 +15,7 @@
 
 ## CLI
 
-拆分：
-
-```bash
-qatools batch split ./input.xlsx \
-  --sheet Sheet1 \
-  --batch-size 1000 \
-  --header-rows 1 \
-  --output-dir ./input_batches
-```
-
-复原：
-
-```bash
-qatools batch restore ./input_batches \
-  --output ./input_restored.xlsx
-```
+调用示例、参数和兼容脚本集中在 [CLI 手册](../../docs/cli-usage.md)。
 
 `restore` 也可以直接接收 `batch_manifest.json` 的路径。
 
@@ -58,3 +43,7 @@ qatools batch restore ./input_batches \
 - 数组公式和数据表公式需先在 batch 中转换为普通公式或值再复原。
 - 如果 batch 在预期数据范围之后增加了新数据行，复原会报错，因为这些行没有可靠
   的原始位置。新增列不受此限制。
+
+## 实现位置
+
+统一 PySide6 页面在同目录 `qt_page.py`；页面注册、共享控件和对应测试见[仓库地图](../../docs/repository-map.md)。

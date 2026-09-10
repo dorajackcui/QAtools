@@ -205,7 +205,7 @@ class ToolshubLayoutTests(unittest.TestCase):
 
             self.assertTrue(workflow.term_settings_dialog.isVisible())
             self.assertTrue(workflow.term_settings_dialog.isModal())
-            with patch("tools.qt_pages._choose_excel", return_value="") as choose:
+            with patch("tools.workflow.qt_page._choose_excel", return_value="") as choose:
                 workflow.choose_history_file()
             self.assertIs(
                 choose.call_args.args[0],
@@ -303,7 +303,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                         self.assertEqual(workflow.target_column.text(), "")
                         self.assertEqual(restorer.target_column.text(), "")
                         workflow.run_in_background = Mock()
-                        with patch("tools.qt_pages.show_error"):
+                        with patch("tools.workflow.qt_page.show_error"):
                             workflow.run_selected_tasks()
                         workflow.run_in_background.assert_not_called()
 
@@ -587,9 +587,9 @@ class ToolshubLayoutTests(unittest.TestCase):
                     window.close()
 
                 with (
-                    patch("tools.qt_pages.list_workbook_sheets") as list_sheets,
-                    patch("tools.qt_pages.detect_source_target_columns") as detect_main,
-                    patch("tools.qt_pages.detect_history_tb_columns") as detect_history,
+                    patch("tools.workflow.qt_page.list_workbook_sheets") as list_sheets,
+                    patch("tools.workflow.qt_page.detect_source_target_columns") as detect_main,
+                    patch("tools.workflow.qt_page.detect_history_tb_columns") as detect_history,
                 ):
                     restored_window = self.make_app()
                     list_sheets.assert_not_called()
@@ -672,7 +672,7 @@ class ToolshubLayoutTests(unittest.TestCase):
             workflow.set_all_tasks(False)
             with (
                 patch("tools.workflow.gui_options.os.replace", side_effect=OSError("无法写入")),
-                patch("tools.qt_pages.show_error") as error,
+                patch("tools.workflow.qt_page.show_error") as error,
             ):
                 workflow.remember_options_button.click()
             error.assert_called_once_with(workflow, "记住选项失败", "无法写入")
@@ -729,7 +729,7 @@ class ToolshubLayoutTests(unittest.TestCase):
             batcher.batch_size.setValue(999)
             batcher.header_rows.setValue(0)
             batcher.split_output.clear()
-            with patch("tools.qt_pages.split_workbook", return_value=Mock()) as split:
+            with patch("tools.excel_batcher.qt_page.split_workbook", return_value=Mock()) as split:
                 task()
 
             split.assert_called_once_with(

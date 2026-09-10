@@ -17,7 +17,7 @@ python -m pip install -e .
 qatools <命令> [参数]
 ```
 
-不安装也可以使用完全等价的模块入口：
+在仓库根目录、已安装依赖的 Python 环境中，也可以使用等价的模块入口：
 
 ```bash
 python -m qatools <命令> [参数]
@@ -62,11 +62,32 @@ qatools tag-check --help
 ## 自动化调用约定
 
 - 始终显式传入输入文件、工作表、列和输出路径。
-- 列参数使用 Excel 列字母，例如 `A`、`B`、`AA`。
+- QA、单项检查和 NBSP 的列参数使用 Excel 列字母，例如 `A`、`B`、`AA`；PhraseLoom 使用表头名或从 1 开始的列索引。
 - 不要依赖缺参后的终端交互。
 - 除特别说明外，工具生成新 Excel，不覆盖输入文件。
 - GUI 的工作表和列自动识别不属于 CLI 默认行为。
 - 每个子命令的 `--help` 直接来自对应工具参数解析器，是参数名称的权威来源。
+
+本页多行示例使用 Bash 的 `\` 续行。PowerShell 请合并为单行，或使用反引号续行；含空格路径加引号。
+
+```powershell
+python -m qatools qa "D:\work\input file.xlsx" -s Sheet1 -c A -t B --start-row 2 -o "D:\work\qa.xlsx"
+if ($LASTEXITCODE -ne 0) { throw "QAtools 执行失败" }
+```
+
+退出码：未知命令和参数解析错误通常为 `2`；统一分发捕获的文件不存在、键或值错误为 `1`；
+正常完成为 `0`。其他异常可能由原生入口直接退出，不应依赖固定异常文本。
+`0` 不表示 QA 零问题，也不表示批处理没有跳过文件；自动化还需检查输出摘要和报告。
+当前 CLI 没有统一 JSON 输出协议。
+
+## 功能可用范围
+
+内容同步的两个方向、列操作、兼容性重存、同名文件替换和未翻译统计目前**仅有 GUI**，
+没有已注册的统一 CLI 命令。实现计划见 [CLI-01](backlog.md#cli-01-新增工具的-cli)。
+不要把 Python 业务函数名、GUI key 或待定命令名当作正式命令调用。
+
+同 Target 不同 Source、数字、URL、Target 文本规范通过 `qa --check` 使用，未单独登记命令。
+QA 的“应用修订”目前是 GUI 动作，也没有对应的 `qa` 子命令。
 
 ## 一键质量检查
 
@@ -149,6 +170,9 @@ qatools qa ./input.xlsx -c A -t B \
 [workflow README](../tools/workflow/README.md)。
 
 ## PhraseLoom
+
+`qatools phraseloom` 无参数时进入交互终端；自动化必须选择 `export` 或 `restore`。
+`qatools phraseloom gui` 打开独立兼容 GUI；统一桌面入口仍为 `qatools gui`。
 
 导出待翻译 Strings：
 
@@ -302,7 +326,42 @@ qatools merge-sheets ./excel-files --keep-all-headers
 | `qatools merge-sheets` | `python tools/excel_merger/merge_active_sheets.py` |
 | `qatools xbench` | `python tools/xbench_report_transformer/transform_xbench_report.py` |
 
-`qatools qa` 是统一新增的一键检查 CLI；此前该流程只有 GUI。
+独立 Tk GUI 和根目录兼容脚本的定位见[仓库地图](repository-map.md#兼容边界)；它们仍受兼容性约束。
+
+## 参数速查
+
+以下表格补充前文示例；执行环境中的完整参数和可选值始终以 `qatools help <命令>` 为准。
+
+| 入口 | 参数与说明 |
+|---|---|
+| `qa` | 必填 `input_file -c/--source-column -t/--target-column`；`-s/--sheet` 默认活动表，`--start-row` 默认 2，`-o/--output` 指定报告；`--check` 可重复 |
+| `qa` 术语 | `--term-mark-style` 可重复，与 `--no-term-mark` 互斥；后者需要 `--history-tb`；历史 TB 范围用 `--history-sheet`、`--history-source-column`、`--history-target-column`、`--history-start-row` |
+| `qa` Tag / 文本 | `--tag-token-type` 可重复；`--tag-angle-config` 为过滤 JSON；`--text-rule` 可重复。`numeric`、`abnormal-ellipsis` 分别为兼容别名 |
+| `term-check` | 输入/范围/输出参数同检查器习惯；mark 参数名为 `--mark-style`，不是 QA 的 `--term-mark-style`；支持上述 `--history-*` 和 `--no-term-mark`，另有 `--exclusion-config` 候选排除 JSON |
+| `tag-check` | 输入/范围/输出参数同检查器习惯；使用 `--token-type`、`--angle-config`，不带 QA 的 `tag-` 前缀；token 可选 `angle`、`square_color`、`brace`、`newline`、`memoq`（旧别名 `numeric`） |
+| `line-break-check` / `consistency-check` / `chinese-check` | `input_file`、`-s/--sheet`、`-c/--source-column`、`-t/--target-column`、`--start-row`、`-o/--output` |
+| `french-nbsp` | `input_file`、`-s/--sheet`、`-t/--target-column`、`--start-row`、`-o/--output`；`-r/--result-column` 可选，未指定则在输出副本的 Target 列修复 |
+| `xbench` | `input_file`、`-s/--sheet`、`-o/--output`；输入是 Xbench 报告，不能套用 `-c/-t` |
+| `batch split` | `input_file`、`--sheet`、`--batch-size`（默认 1000）、`--header-rows`（默认 1）、`--output-dir` |
+| `batch restore` | 位置参数为 batch 目录或 manifest 路径；`--output` 指定复原文件 |
+| `merge-sheets` | 位置参数目录，或兼容 `--folder-path`；`-o/--output`（兼容 `--output-path`）；`--keep-all-headers` 保留每份表头 |
+| `phraseloom export` | `input`、`-o/--output`、`--source-col`、`--target-col`、`--context-col`、`--tag-config`（TOML）、`--group-similar`、`--split-lines/--no-split-lines` |
+| `phraseloom restore` | `input` 为 Strings 工作簿；`-o/--output` 指定回填文件 |
+
+部分兼容检查器缺少参数时会发起终端输入；脚本应显式传入参数，尤其是输入路径和列。
+历史 TB 可以按表头自动识别，和 GUI 自定义别名是不同机制，见[术语规则](../tools/term_pair_checker/README.md)。
+
+Tag 过滤示例：
+
+```bash
+qatools tag-check input.xlsx -c A -t B --token-type angle --angle-config custom_angle_tags.json
+```
+
+术语候选过滤示例：
+
+```bash
+qatools term-check input.xlsx -c A -t B --exclusion-config term_exclusions.json
+```
 
 ## 扩展新命令
 
@@ -314,4 +373,5 @@ qatools merge-sheets ./excel-files --keep-all-headers
 4. 添加转发测试和工具自身测试。
 5. 运行 `qatools <命令> --help`、完整 unittest 和 wheel 构建。
 
-测试会校验每个正式命令都已出现在本指南中，从而减少注册表与文档漂移。
+`python scripts/check_docs.py` 校验命令目录与注册表一致、相对文档链接有效；
+`test_qatools_cli.py` 验证正式命令的帮助和转发。详细代码落点见[仓库地图](repository-map.md#扩展一个工具)。

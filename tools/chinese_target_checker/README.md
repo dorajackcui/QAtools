@@ -1,6 +1,6 @@
 # Target 中文检查
 
-统一 CLI：`qatools chinese-check --help`。下文中的脚本路径作为兼容入口保留。
+统一 CLI：`qatools chinese-check --help`。
 
 检查 Excel `target` 列是否包含中文字符或中文/全角标点，并输出独立问题表。
 
@@ -13,16 +13,7 @@
 
 ## CLI
 
-推荐调用：
-
-```bash
-python3 tools/chinese_target_checker/check_chinese_target.py input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  -o output_chinese_target_checked.xlsx
-```
+调用示例、参数和兼容脚本集中在 [CLI 手册](../../docs/cli-usage.md)。
 
 ## GUI
 

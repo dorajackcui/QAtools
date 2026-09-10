@@ -1,6 +1,6 @@
 # 换行数量检查
 
-统一 CLI：`qatools line-break-check --help`。下文中的脚本路径作为兼容入口保留。
+统一 CLI：`qatools line-break-check --help`。
 
 逐行比较 Excel `source` / `target` 单元格中的真实换行数量，定位肉眼不易发现的换行缺失或多出问题。
 
@@ -14,14 +14,7 @@
 
 ## CLI
 
-```bash
-python3 tools/line_break_checker/check_line_breaks.py input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  -o line_break_check_output.xlsx
-```
+调用示例、参数和兼容脚本集中在 [CLI 手册](../../docs/cli-usage.md)。
 
 不指定 `-o/--output` 时，默认生成 `line_break_check_<原文件名>`，不会覆盖输入文件。
 

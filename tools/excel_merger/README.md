@@ -23,15 +23,8 @@
 
 GUI：打开 QAtools，在“文件与表格”区域选择“合并表格”。
 
-CLI：
+CLI 示例和兼容参数见 [CLI 手册](../../docs/cli-usage.md#文本修复与转换)。
 
-```bash
-qatools merge-sheets ./excel-files
-qatools merge-sheets ./excel-files --keep-all-headers -o ./merged.xlsx
-```
+## 实现位置
 
-原 `mergesSheets` 仓库的参数名也可继续使用：
-
-```bash
-qatools merge-sheets --folder-path ./excel-files --output-path ./merged.xlsx
-```
+统一页面在 `qt_page.py`，业务和 CLI 保持在 `merge_active_sheets.py`；独立 Tk GUI 继续兼容。

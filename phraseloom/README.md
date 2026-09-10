@@ -2,8 +2,8 @@
 
 统一 CLI：`qatools phraseloom --help`。原有 `phraseloom` 命令继续兼容。
 
-PhraseLoom 把原始 Excel 整理成干净、去重、按相似结构分组的 Strings
-工作簿，并在翻译完成后准确写回原文件。
+PhraseLoom 把原始 Excel 整理成干净、去重、可选按相似结构分组的 Strings
+工作簿，并在翻译完成后生成保留原结构的回填文件。
 
 它不做 TM 预填、术语抽取或自动生成译文。
 
@@ -189,3 +189,8 @@ source_translated.xlsx
 - 恢复原工作表的顺序、可见状态和格式。
 - 检查 Tag、变量、占位符和字面量 marker 是否遗漏或增加。
 - 仅在存在空 Target 或保护内容问题时生成 `*_restore_issues.xlsx`。
+
+## 实现位置
+
+统一 PySide6 页面在 `qt_page.py`，独立 Tk 页面在 `gui.py`；二者调用相同 Strings 业务。
+开发约束见 [AGENTS.md](AGENTS.md)，调用参数统一见 [CLI 手册](../docs/cli-usage.md#phraseloom)。

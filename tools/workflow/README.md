@@ -65,3 +65,8 @@ Source / Target 列、开始行、各检查的勾选，以及术语标记和历�
 匹配，仍以 `修改后target` 为准；新值与当前数据表的 target 相同时计为内容未变化。
 修订稿保留原业务工作表，只移除本次 workflow 生成的 `术语表`、
 `问题处理` 和 `质量检查汇总`。
+
+## 实现位置
+
+统一 PySide6 页面在同目录 `qt_page.py`；页面注册、共享控件和对应测试见[仓库地图](../../docs/repository-map.md)。
+QA 详细设置弹窗及取消恢复逻辑在 `qt_settings.py`；持久化选项在 `gui_options.py`。

@@ -1,6 +1,6 @@
 # Excel Tag / Placeholder 检查工具
 
-统一 CLI：`qatools tag-check --help`。下文中的脚本路径作为兼容入口保留。
+统一 CLI：`qatools tag-check --help`。
 
 用于读取一份双语 Excel，逐行检查 `source` / `target` 中的常规 Tag 或 memoQ Marker 是否一致，并输出新的检查结果 Excel。
 
@@ -32,57 +32,14 @@
   - 成对尖括号 tag 的闭合或父子层级不一致；并列 tag 片段因翻译语序调整而换序不会误报
 - 当前按片段原样精确比较，例如 `<b>` 与 `</b>`、`{name}` 与 `{Name}` 会被视为不同内容
 
-## 运行方式
+## 使用与维护
 
-```bash
-python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  --token-type angle \
-  --token-type square_color \
-  --token-type brace \
-  --token-type newline \
-  --token-type memoq
-```
+统一 GUI：一键质量检查 → Tag / Placeholder；常规与 memoQ 模式互斥。
+尖括号过滤 JSON 默认不启用；启用后的过滤方式仍由处理器配置决定。
+独立 Tk GUI `check_tags_and_placeholders_gui.py` 保持兼容。
 
-如需自定义尖括号 tag 过滤规则，可显式传入配置文件；不传时检查所有符合上述识别规则的 `<...>`：
-
-```bash
-python3 tools/tag_placeholder_checker/check_tags_and_placeholders.py input.xlsx \
-  -s Sheet1 \
-  -c A \
-  -t B \
-  --start-row 2 \
-  --token-type angle \
-  --angle-config ./custom_angle_tags.json
-```
-
-图形界面：
-
-```bash
-python3 tools/tag_placeholder_checker/check_tags_and_placeholders_gui.py
-```
-
-GUI 支持：
-
-- 自动读取工作表列表，用下拉框选择工作表
-- 自动识别第 1 行表头中的 `source` / `target` 列并回填
-- 默认输出为新的 Excel 文件，也可手动指定输出路径
-- 常规模式可单独勾选 `<...>`、`[color=...]` / `[/color]`、`{...}` 或 `\n` 类型
-- 可选择尖括号 tag 过滤 JSON，与 CLI 的 `--angle-config` 规则一致
-- GUI 默认使用“常规 Tag”模式，也可切换为互斥的“memoQ Marker”模式
-
-## 常用参数
-
-- `--sheet`：工作表名称
-- `--source-column`：source 列
-- `--target-column`：target 列
-- `--start-row`：开始处理的行号，默认 `2`
-- `--token-type`：检查类型，可选 `angle`、`square_color`、`brace`、`newline`、`memoq`，可重复传入；`numeric` 作为旧别名兼容
-- `--angle-config`：可选的尖括号 tag 过滤配置文件路径；不传时检查所有符合默认识别规则的 `<...>`
-- `-o, --output`：输出文件路径，可选，默认生成 `tag_check_<原文件名>`
+CLI 参数、组合 token 与过滤配置示例见 [CLI 手册](../../docs/cli-usage.md#参数速查)。
+默认输出 `tag_check_<原文件名>`；不要将独立检查器的两个结果表等同于统一 QA 报告。
 
 ## 输出说明
 
