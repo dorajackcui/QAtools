@@ -72,7 +72,7 @@ qatools gui / toolshub_gui.py
 
 - Windows：[构建脚本](../scripts/build_windows_release.ps1)、[安装定义](../packaging/QAtools.iss)、[使用说明](../packaging/README-Windows.txt)。
 - macOS：[Finder 安装脚本](../scripts/install_macos_qa_workflow.py)、[操作手册](macos-finder-workflow.md)。
-- `docs/qa-workflow-guide/`：静态说明网页；当前同步状态和验收范围见[待办](backlog.md#doc-01-说明网页同步)。
+- `docs/qa-workflow-guide/`：静态说明网页；截图生成、离线资源和验证步骤见[维护入口](qa-workflow-guide/README.md)。
 - `docs/archive/`：仅保存来源与已完成决策；不保留待执行旧方案作为当前需求。
 - `build/`、`dist/`、`outputs/`、`testfiles/` 和生成的 Excel 均为本地产物，不纳入提交。
 

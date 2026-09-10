@@ -18,7 +18,7 @@
 - [CLI 手册](docs/cli-usage.md)：已注册命令与调用；仅 GUI 功能不能假设存在 CLI。
 - [待办](docs/backlog.md)：尚未完成的工作；不等于已实现能力。
 - `tools/qt_pages.py` 仅做注册与兼容导出；统一页面实现放在工具包内的 `qt_page.py`。
-- `docs/qa-workflow-guide/` 网页尚待同步，不能用其旧截图或文案覆盖当前代码和工具 README。
+- `docs/qa-workflow-guide/` 是操作指南；截图生成和页面验证见同目录 README，业务规则仍以工具 README 为准。
 
 ## 修改约定
 

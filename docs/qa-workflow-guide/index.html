@@ -4,444 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>QAtools 一键质量检查 · GUI 使用指南</title>
-  <style>
-    :root {
-      --paper: #fbfbf9;
-      --surface: #ffffff;
-      --surface-soft: #f4f4f0;
-      --ink: #292927;
-      --muted: #6d6d68;
-      --line: #dfdfd9;
-      --accent: #c97858;
-      --accent-soft: #f5e7e0;
-      --green: #39775d;
-      --green-soft: #e7f2ec;
-      --amber: #9a681e;
-      --amber-soft: #f8eedb;
-      --red: #a54a43;
-      --red-soft: #f8e8e6;
-      --shadow: 0 16px 44px rgba(43, 42, 37, 0.08);
-      --radius: 14px;
-    }
-
-    * { box-sizing: border-box; }
-
-    html {
-      scroll-behavior: smooth;
-      scroll-padding-top: 28px;
-    }
-
-    body {
-      margin: 0;
-      color: var(--ink);
-      background: var(--paper);
-      font-family: "Microsoft YaHei UI", "Noto Sans SC", "PingFang SC",
-        "Segoe UI", sans-serif;
-      font-size: 15px;
-      line-height: 1.72;
-    }
-
-    a { color: #92533d; }
-    a:hover { color: var(--accent); }
-    code {
-      padding: 0.12em 0.4em;
-      border: 1px solid var(--line);
-      border-radius: 5px;
-      color: #71452f;
-      background: #f6f3ef;
-      font-family: Consolas, "SFMono-Regular", monospace;
-      font-size: 0.92em;
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: 244px minmax(0, 940px);
-      gap: 42px;
-      width: min(1260px, calc(100% - 48px));
-      margin: 0 auto;
-      padding: 34px 0 72px;
-    }
-
-    .sidebar {
-      position: sticky;
-      top: 28px;
-      align-self: start;
-      max-height: calc(100vh - 56px);
-      overflow: auto;
-      padding: 20px 18px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: rgba(255, 255, 255, 0.86);
-      box-shadow: 0 8px 28px rgba(43, 42, 37, 0.05);
-      backdrop-filter: blur(12px);
-    }
-
-    .brand {
-      margin-bottom: 18px;
-      font-size: 17px;
-      font-weight: 750;
-      letter-spacing: 0.01em;
-    }
-
-    .brand small {
-      display: block;
-      margin-top: 2px;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 500;
-    }
-
-    .sidebar nav a {
-      display: block;
-      margin: 3px 0;
-      padding: 7px 10px;
-      border-radius: 7px;
-      color: #555550;
-      text-decoration: none;
-      font-size: 13px;
-    }
-
-    .sidebar nav a:hover {
-      color: var(--ink);
-      background: var(--surface-soft);
-    }
-
-    .sidebar .nav-group {
-      margin: 17px 10px 6px;
-      color: #999992;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-    }
-
-    main { min-width: 0; }
-
-    .hero {
-      position: relative;
-      overflow: hidden;
-      padding: 44px 44px 40px;
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      background: var(--surface);
-      box-shadow: var(--shadow);
-    }
-
-    .hero::after {
-      position: absolute;
-      right: -70px;
-      top: -95px;
-      width: 260px;
-      height: 260px;
-      border-radius: 50%;
-      background: radial-gradient(circle, #f5d9cd 0%, rgba(245,217,205,0) 68%);
-      content: "";
-      pointer-events: none;
-    }
-
-    h1 {
-      max-width: 720px;
-      margin: 10px 0 14px;
-      font-size: clamp(32px, 5vw, 52px);
-      line-height: 1.15;
-      letter-spacing: -0.035em;
-    }
-
-    .hero p {
-      max-width: 700px;
-      margin: 0;
-      color: var(--muted);
-      font-size: 16px;
-    }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 9px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 650;
-    }
-
-    .status-pill.on { color: var(--green); background: var(--green-soft); }
-    .status-pill.off { color: var(--amber); background: var(--amber-soft); }
-
-    section { margin-top: 56px; }
-    section > h2 {
-      margin: 0 0 22px;
-      font-size: 27px;
-      line-height: 1.25;
-      letter-spacing: -0.02em;
-    }
-
-    h3 {
-      margin: 0 0 8px;
-      font-size: 18px;
-      line-height: 1.35;
-    }
-
-    h4 { margin: 0 0 5px; font-size: 15px; }
-    p { margin: 8px 0; }
-    ul, ol { margin: 8px 0 0; padding-left: 1.35em; }
-    li + li { margin-top: 5px; }
-
-    .steps {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin: 22px 0 24px;
-      padding: 0;
-      list-style: none;
-      counter-reset: guide-step;
-    }
-
-    .steps li {
-      counter-increment: guide-step;
-      min-height: 148px;
-      margin: 0;
-      padding: 18px 16px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--surface);
-    }
-
-    .steps li::before {
-      display: grid;
-      place-items: center;
-      width: 28px;
-      height: 28px;
-      margin-bottom: 15px;
-      border-radius: 50%;
-      color: #fff;
-      background: var(--accent);
-      content: counter(guide-step);
-      font-size: 13px;
-      font-weight: 750;
-    }
-
-    .steps strong { display: block; margin-bottom: 5px; }
-    .steps span { color: var(--muted); font-size: 13px; }
-
-    .shot {
-      margin: 24px 0 0;
-      padding: 10px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: var(--surface);
-      box-shadow: 0 10px 32px rgba(43, 42, 37, 0.06);
-    }
-
-    .shot img {
-      display: block;
-      width: 100%;
-      height: auto;
-      border-radius: 8px;
-    }
-
-    figcaption {
-      padding: 9px 4px 2px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .callout {
-      margin: 20px 0;
-      padding: 15px 17px;
-      border-left: 4px solid var(--accent);
-      border-radius: 4px 10px 10px 4px;
-      background: var(--accent-soft);
-    }
-
-    .callout strong { display: block; margin-bottom: 3px; }
-    .callout p { margin: 0; color: #67493c; }
-    .callout.warn { border-color: #c28a34; background: var(--amber-soft); }
-    .callout.warn p { color: #6d511f; }
-
-    .table-wrap {
-      overflow-x: auto;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--surface);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    th, td {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-    }
-
-    th {
-      color: #555550;
-      background: var(--surface-soft);
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    tr:last-child td { border-bottom: 0; }
-
-    .check-grid, .two-col, .three-col {
-      display: grid;
-      gap: 14px;
-    }
-    .check-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .three-col { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-
-    .card {
-      padding: 20px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--surface);
-    }
-
-    .card p, .card li { color: #555550; font-size: 13px; }
-    .card .card-head {
-      display: flex;
-      align-items: start;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 7px;
-    }
-
-    .group-label {
-      margin: 30px 0 10px;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 750;
-      letter-spacing: 0.08em;
-    }
-
-    .settings-block {
-      margin-top: 24px;
-      padding: 24px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--surface);
-    }
-
-    .settings-block .shot { margin-top: 18px; box-shadow: none; }
-    .settings-block + .settings-block { margin-top: 18px; }
-
-    .mini-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 15px;
-    }
-
-    .mini {
-      padding: 13px 14px;
-      border-radius: 9px;
-      background: var(--surface-soft);
-    }
-    .mini strong { display: block; margin-bottom: 3px; font-size: 13px; }
-    .mini span { color: var(--muted); font-size: 12px; }
-
-    .report-preview {
-      overflow: hidden;
-      margin-top: 20px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--surface);
-    }
-
-    .report-tabs {
-      display: flex;
-      gap: 4px;
-      padding: 9px 10px 0;
-      border-bottom: 1px solid var(--line);
-      background: var(--surface-soft);
-    }
-    .report-tabs span {
-      padding: 6px 11px;
-      border: 1px solid var(--line);
-      border-bottom: 0;
-      border-radius: 6px 6px 0 0;
-      color: var(--muted);
-      background: #ecece7;
-      font-size: 11px;
-    }
-    .report-tabs .active { color: var(--ink); background: var(--surface); }
-    .report-preview table { min-width: 720px; }
-    .report-preview .editable { background: #fff2cc; }
-
-    .flow {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr auto 1fr;
-      align-items: stretch;
-      gap: 10px;
-      margin-top: 20px;
-    }
-
-    .flow .node {
-      padding: 17px;
-      border: 1px solid var(--line);
-      border-radius: 11px;
-      background: var(--surface);
-      text-align: center;
-    }
-    .flow .node strong { display: block; margin-bottom: 4px; }
-    .flow .node span { color: var(--muted); font-size: 12px; }
-    .flow .arrow { align-self: center; color: var(--accent); font-size: 22px; }
-
-    .faq details {
-      margin-top: 9px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--surface);
-    }
-    .faq summary {
-      padding: 14px 16px;
-      cursor: pointer;
-      font-weight: 650;
-    }
-    .faq details div { padding: 0 16px 15px; color: var(--muted); }
-
-    @media (max-width: 940px) {
-      .layout { grid-template-columns: 1fr; width: min(100% - 32px, 900px); }
-      .sidebar { position: static; max-height: none; }
-      .sidebar nav { display: grid; grid-template-columns: repeat(2, 1fr); }
-      .sidebar .nav-group { grid-column: 1 / -1; }
-      .steps { grid-template-columns: repeat(2, 1fr); }
-    }
-
-    @media (max-width: 640px) {
-      .layout { width: min(100% - 22px, 620px); padding-top: 12px; }
-      .hero { padding: 30px 24px; }
-      section { margin-top: 42px; }
-      .steps, .check-grid, .two-col, .three-col, .mini-grid { grid-template-columns: 1fr; }
-      .flow { grid-template-columns: 1fr; }
-      .flow .arrow { transform: rotate(90deg); justify-self: center; }
-      th, td { padding: 10px; }
-    }
-
-    @media print {
-      body { background: #fff; font-size: 11pt; }
-      .layout { display: block; width: 100%; padding: 0; }
-      .sidebar { display: none; }
-      .hero, .card, .settings-block, .shot, .table-wrap, .report-preview {
-        box-shadow: none;
-        break-inside: avoid;
-      }
-      section { margin-top: 30px; }
-      a { color: inherit; text-decoration: none; }
-    }
-  </style>
+  <title>QAtools · GUI 使用指南</title>
+  <link rel="stylesheet" href="guide.css">
 </head>
 <body>
   <div class="layout">
     <aside class="sidebar" aria-label="章节导航">
-      <div class="brand">QAtools<small>一键质量检查 · GUI 指南</small></div>
+      <div class="brand">QAtools<small>工具箱 · GUI 指南</small></div>
       <nav>
-        <a href="#quick-start">快速上手</a>
+        <a href="#navigation">工具导航</a>
+        <a href="#quick-start">一键质量检查</a>
         <a href="#input">输入与范围</a>
         <a href="#checks">检查项目</a>
         <div class="nav-group">专项配置</div>
@@ -451,26 +23,46 @@
         <div class="nav-group">结果处理</div>
         <a href="#report">检查报告</a>
         <a href="#revision">应用修订</a>
+        <div class="nav-group">同步与文件处理</div>
+        <a href="#content-sync">内容同步</a>
+        <a href="#file-utilities">文件与表格工具</a>
+        <a href="#untranslated-stats">未翻译统计</a>
+        <a href="#operation-logs">运行日志与输出</a>
         <a href="#troubleshooting">常见问题</a>
+        <a href="../cli-usage.md">CLI 调用手册 ↗</a>
       </nav>
     </aside>
 
     <main>
       <header class="hero">
-        <h1>一键质量检查</h1>
+        <h1>QAtools 使用指南</h1>
         <p>
-          在同一个 Excel 工作流中完成术语、一致性、Tag、换行、数字、URL、
-          中文残留与 Target 文本规范检查，并把所有问题汇总到可编辑的报告中。
+          从质量检查到内容同步，在同一个本地工具箱中完成 Excel 翻译处理。
+          本页使用当前界面截图，按操作步骤说明输入、选项与结果；详细规则链接各工具文档。
         </p>
       </header>
 
+      <section id="navigation">
+        <h2>按任务选择工具</h2>
+        <p>GUI 左侧按以下三组排列；切换页面会保留表单状态。底部“设置”用于表头别名。</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>分组</th><th>工具</th></tr></thead>
+          <tbody>
+            <tr><td>常用流程</td><td><a href="#quick-start">一键质量检查</a>、<a href="../../phraseloom/README.md">PhraseLoom</a>、<a href="#content-sync">内容同步</a></td></tr>
+            <tr><td>文件与表格</td><td><a href="#compatibility">兼容性重存</a>、<a href="#columns">列操作</a>、<a href="../../tools/excel_batcher/README.md">Batch 拆分</a>、<a href="../../tools/excel_merger/README.md">合并表格</a>、<a href="#deep-replace">同名文件替换</a></td></tr>
+            <tr><td>翻译辅助</td><td><a href="../../tools/french_nbsp_restorer/README.md">法语 NBSP 恢复</a>、<a href="#untranslated-stats">未翻译统计</a>、<a href="../../tools/xbench_report_transformer/README.md">Xbench QA 转换</a></td></tr>
+          </tbody>
+        </table></div>
+        <p class="updated">界面核对：2026-09-10 · 可离线阅读；请保留本目录的 guide.css 和 assets。完整规则链接需保留仓库目录结构。</p>
+      </section>
+
       <section id="quick-start">
-        <h2>快速上手</h2>
+        <h2>一键质量检查 · 快速上手</h2>
         <ol class="steps">
           <li><strong>打开页面</strong><span>启动 QAtools，在左侧“常用流程”选择“一键质量检查”。</span></li>
           <li><strong>选择 Excel</strong><span>选择输入文件；GUI 会读取工作表并尝试识别 Source / Target 列。</span></li>
           <li><strong>确认范围</strong><span>确认工作表、两列字母和开始行；再按需要调整检查项目。</span></li>
-          <li><strong>开始检查</strong><span>点击右下角“开始检查”，完成后打开自动生成的报告。</span></li>
+          <li><strong>开始检查</strong><span>点击右下角“开始检查”，完成后按提示路径打开生成的报告。</span></li>
         </ol>
 
         <figure class="shot">
@@ -478,9 +70,14 @@
                alt="QAtools 一键质量检查主页面，显示输入范围、九个检查项目和底部操作按钮">
           <figcaption>
             主页面：默认开启八项常用检查；“同 Target 不同 Source”默认关闭。
-            带下拉箭头的检查项可打开专项设置；“全选 / 清空”仅控制检查项目。
+            带下拉箭头的检查项可打开专项设置；“全选 / 清空”仅控制检查项目。截图为初始配置，已记住的配置可能不同。
           </figcaption>
         </figure>
+
+        <div class="callout">
+          <strong>记住当前选项</strong>
+          <p>点击“记住选项”保存当前输入路径、工作表、列、开始行及全部检查与详细设置。下次打开恢复这些选择，但不会读取 Excel 或自动执行；以后调整需再次点击才会保存。<a href="../../tools/workflow/README.md#使用">保存范围</a></p>
+        </div>
 
         <div class="callout">
           <strong>默认输出无需另选路径</strong>
@@ -524,10 +121,14 @@
           <strong>非标准表头如何自动识别？</strong>
           <p>
             点击左侧底部“设置”，在“Excel 表头自动识别”中分别填写 Source / Target
-            表头别名，每行一个并保存。内置 <code>source</code> / <code>target</code> 始终有效；
-            匹配忽略大小写和首尾空格。
+            表头别名，每行一个并保存。自定义别名优先；未命中自定义别名时才回退内置 <code>source</code> / <code>target</code>。
+            匹配忽略大小写和首尾空格；同级匹配多列或没有匹配时清空对应列，显示“请指定”，请手动确认。
           </p>
+          <p>仅一键质量检查与法语 NBSP 使用这套表头别名；内容同步和统计需手动配置列。<a href="../gui-conventions.md#表头别名">完整规则</a></p>
         </div>
+        <details class="screenshot-detail"><summary>查看表头别名设置截图</summary>
+          <figure class="shot"><img src="assets/header-aliases.png" alt="设置页：分别编辑 Source 和 Target 的自定义表头别名" loading="lazy"><figcaption>保存别名后重新识别已加载的 QA / NBSP 工作簿。</figcaption></figure>
+        </details>
       </section>
 
       <section id="checks">
@@ -602,7 +203,7 @@
                  alt="术语检查设置窗口，包括术语标记、TB 项目、历史 TB 文件及工作表列配置">
             <figcaption>
               点击“术语检查”右侧下拉箭头打开；“确定”应用调整，“取消”恢复打开前的设置。
-              截图中的 TB 路径仅为示例。
+              截图使用初始配置，没有载入个人 TB 项目。
             </figcaption>
           </figure>
         </div>
@@ -683,7 +284,7 @@
           <article class="card"><h3>原工作表</h3><p>输入工作簿中的业务工作表会完整保留，检查结果以新增工作表呈现。</p></article>
           <article class="card"><h3>问题处理</h3><p>同一原始行命中多个检查时只保留一行，检查项和问题描述合并展示。</p></article>
           <article class="card"><h3>质量检查汇总</h3><p>按本次启用的检查列出问题行数，便于快速判断重点。</p></article>
-          <article class="card"><h3>术语表（可选）</h3><p>显示术语映射、来源及本批次问题状态；<a href="../../tools/term_pair_checker/README.md#术语问题状态">查看规则</a>。</p></article>
+          <article class="card"><h3>术语表（可选）</h3><p>“本批次是否有问题”可筛选，有问题的状态格浅红突出。只统计该术语实际触发的术语问题；修订后需重新检查以更新状态。<a href="../../tools/term_pair_checker/README.md#术语问题状态">查看规则</a>。</p></article>
         </div>
 
         <div class="report-preview" aria-label="问题处理工作表示意">
@@ -708,6 +309,7 @@
           <li>“修改后target”列为黄色，可直接填写最终译文；留空表示忽略该行。</li>
           <li>点击“行号”可跳转到原数据工作表对应的 Target 单元格。</li>
           <li>专项字段（如同组行号、命中字符、换行数量）会并入“问题描述”。</li>
+          <li>同 Source 不同 Target 优先展示，同 Target 不同 Source 其次，其余按原始行号排列。相同 Source 及译文版本会相邻；同一行只显示一次。<a href="../../tools/workflow/README.md#统一报告">完整分组顺序</a></li>
         </ul>
       </section>
 
@@ -733,9 +335,87 @@
           </article>
           <article class="card">
             <h3>行号与 Source 校验</h3>
-            <p>按行号定位原数据，再核对 Source；原 Target 列仅供参考，误改或清空不会影响回填。完整规则见 <a href="../../tools/workflow/README.md#修订回填">修订回填说明</a>。</p>
+            <p>按行号定位原数据并精确核对 Source；不匹配会跳过并提示。报告里的原 Target 仅供参考，误改或清空不会影响回填；即使原数据 Target 已变化，Source 匹配时仍以“修改后target”为准。完整规则见 <a href="../../tools/workflow/README.md#修订回填">修订回填说明</a>。</p>
           </article>
         </div>
+      </section>
+
+      <section id="content-sync">
+        <h2>内容同步 · Master ↔ 小表</h2>
+        <p>在“常用流程 → 内容同步”中切换两个 Tab。二者分别保留配置、结果和日志，切换不会停止后台任务。</p>
+        <div class="two-col">
+          <article class="card"><h3>Master → 小表</h3><p>把总表内容写入匹配的小表行，可同步一列或连续多列。Master 来源不修改。</p></article>
+          <article class="card"><h3>小表 → Master</h3><p>汇总小表译文后回填总表，仅回填一列。小表来源不修改。</p></article>
+        </div>
+        <ol class="steps">
+          <li><strong>选择两端</strong><span>选择 Master 文件和小表目录；目录会递归处理。支持 .xlsx / .xlsm。</span></li>
+          <li><strong>确认保存位置</strong><span>新输出目录留空时，正向直接更新小表，反向直接更新 Master。如需副本，填写尚不存在的新目录。</span></li>
+          <li><strong>配置匹配列</strong><span>分别填写 Key、原文、内容列，以及工作表和表头行数。默认 Master B/C/D，小表 A/B/C；核对实际文件，不按表头自动推断。</span></li>
+          <li><strong>确认写入策略</strong><span>按需选择“仅填空”“允许空白写入”；正向还可设置连续更新列数和可选 Excel 重存。</span></li>
+          <li><strong>执行与核对</strong><span>点击“同步到小表”或“回填 Master”，查看更新格数与日志中的失败、未匹配或重复身份信息。</span></li>
+        </ol>
+        <figure class="shot"><img src="assets/sync-master-to-target.png" alt="内容同步 Master 到小表 Tab：路径、两端列映射、连续更新列数与写入策略" loading="lazy"><figcaption>正向：连续列从两端各自的内容开始列依次对应。</figcaption></figure>
+        <details class="screenshot-detail"><summary>查看小表 → Master 页面</summary>
+          <figure class="shot"><img src="assets/sync-target-to-master.png" alt="内容同步小表到 Master Tab：单列译文回填配置" loading="lazy"><figcaption>反向仅回填一列，不自动执行 Excel 重存。</figcaption></figure>
+        </details>
+        <div class="callout">
+          <strong>空白与正文保持原意</strong>
+          <p>真实空值不会写成文字 None 或 nan；用户输入的文字 None、nan、NA、NULL 以及首尾空格、换行原样保留。两项写入选项彼此独立，默认均关闭。</p>
+          <p>按 Key + 原文匹配，不新增行；来源公式缺少缓存不能当空白处理。重复身份、缓存及失败保护以<a href="../../tools/content_sync/README.md">内容同步规则</a>为准。</p>
+        </div>
+      </section>
+
+      <section id="file-utilities">
+        <h2>文件与表格工具</h2>
+        <p>以下三个页面均在“文件与表格”中；Batch 拆分与合并表格的流程见上方工具导航。</p>
+        <article id="compatibility" class="settings-block">
+          <h3>兼容性重存</h3>
+          <p>选择工作簿目录，按需填写新输出目录，点击“兼容性重存”。需要桌面 Microsoft Excel；文件保持原扩展名，留空输出目录会直接重存原文件。</p>
+          <p>失败文件保留原内容，继续其他文件；环境与宏处理规则见<a href="../../tools/excel_compatibility/README.md">兼容性重存说明</a>。</p>
+          <details class="screenshot-detail"><summary>查看兼容性重存页面</summary><figure class="shot"><img src="assets/compatibility.png" alt="兼容性重存页面：文件目录和可选新输出目录" loading="lazy"><figcaption>使用独立 Excel 会话处理所选目录。</figcaption></figure></details>
+        </article>
+        <article id="columns" class="settings-block">
+          <h3>列操作</h3>
+          <ol>
+            <li>选择工作簿目录，确认是否填写新输出目录。</li>
+            <li>选择清空、插入或删除，填写列字母（默认 C）及工作表。</li>
+            <li>清空时设置保留表头行数；插入时填写新列第 1 行标题；点击“执行列操作”。</li>
+          </ol>
+          <p>清空保留格式；插入、删除操作整列，由 Excel 处理引用变化。需要桌面 Excel，详见<a href="../../tools/column_tools/README.md">列操作规则</a>。</p>
+          <figure class="shot"><img src="assets/columns.png" alt="列操作页面：清空、插入、删除选择及列配置" loading="lazy"><figcaption>不同动作只启用相关选项；输出目录可留空。</figcaption></figure>
+        </article>
+        <article id="deep-replace" class="settings-block">
+          <h3>同名文件替换</h3>
+          <p>选择替换来源目录和目标目录，确认输出位置后点击“替换同名文件”。它按文件名替换整个 Excel 文件，不合并单元格；来源和目标不可相同或互相包含。</p>
+          <p>原位替换会先备份目标文件；重名冲突会保留目标并列出候选。备份路径与恢复方法见<a href="../../tools/deep_replace/README.md#原位替换及恢复">替换与恢复规则</a>。</p>
+          <details class="screenshot-detail"><summary>查看同名文件替换页面</summary><figure class="shot"><img src="assets/deep-replace.png" alt="同名文件替换页面：来源、目标与可选输出目录" loading="lazy"><figcaption>原位模式替换前备份，来源文件保持不变。</figcaption></figure></details>
+        </article>
+      </section>
+
+      <section id="untranslated-stats">
+        <h2>未翻译统计</h2>
+        <p>在“翻译辅助 → 未翻译统计”选择文件目录，确认原文、译文列及计数口径，点击“生成统计表”。默认 B/C 列、活动工作表、1 行表头、中文字符数。</p>
+        <figure class="shot"><img src="assets/untranslated-stats.png" alt="未翻译统计页面：原文与译文列、中文字符或英文词数、工作表与表头行数" loading="lazy"><figcaption>新输出目录留空时，统计表写入所选目录，输入工作簿保持不变。</figcaption></figure>
+        <p>结果为“未翻译统计.xlsx”，含各文件数据和总计；失败或跳过的文件按需列在“未统计文件”页。旧统计表不会被重复纳入统计。</p>
+        <p>统计中的文字 nan 计为未翻译，这与内容同步保留原文的口径不同。完整计数范围和公式缓存处理见<a href="../../tools/untranslated_stats/README.md">统计规则</a>。</p>
+      </section>
+
+      <section id="operation-logs">
+        <h2>运行日志与输出位置</h2>
+        <p>新增六项功能的底部“查看日志”打开独立小弹窗。正常文件使用一行摘要，失败或冲突补充必要原因；关闭弹窗不会停止任务，再打开可以继续查看。</p>
+        <figure class="shot compact-shot"><img src="assets/operation-logs.png" alt="实际临时样本同步的简约运行日志：有效身份、文件结果和最终摘要" loading="lazy"><figcaption>临时示例的实际运行日志；截图省略含临时目录的两条开头记录。</figcaption></figure>
+        <p>处理和日志入队在后台完成，界面定时分批刷新；大量日志会截断较早记录，完整计数仍以结果摘要为准。可复制当前显示日志，详见<a href="../tool-logs.md">日志容量与行为</a>。</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>工具</th><th>新输出目录留空</th></tr></thead>
+          <tbody>
+            <tr><td>Master → 小表</td><td>更新原小表，Master 不变</td></tr>
+            <tr><td>小表 → Master</td><td>更新原 Master，小表不变</td></tr>
+            <tr><td>列操作 / 兼容性重存</td><td>更新所选目录中的原工作簿</td></tr>
+            <tr><td>同名文件替换</td><td>先备份，再原位替换目标文件</td></tr>
+            <tr><td>未翻译统计</td><td>在所选目录写统计表，原工作簿不变</td></tr>
+          </tbody>
+        </table></div>
+        <p>填写新输出目录时必须指定尚不存在的目录。以上约定不改变一键质量检查生成报告副本的方式；新增工具也不会额外生成 report 或 JSON 日志文件。</p>
       </section>
 
       <section id="troubleshooting" class="faq">

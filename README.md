@@ -38,7 +38,7 @@ GUI 表单不显示常驻说明段落，保留输入标签、占位提示、输�
 
 报告中的 `问题处理` 会把同一原始行的多个问题合并。填写 `修改后target` 后，
 可以在 GUI 中应用修订并生成新的工作簿。界面操作见
-[GUI 使用指南](docs/qa-workflow-guide/index.html)（旧版操作参考，[同步待办](docs/backlog.md#doc-01-说明网页同步)），完整选择参数见
+[GUI 使用指南](docs/qa-workflow-guide/index.html)，完整选择参数见
 [CLI 使用指南](docs/cli-usage.md#一键质量检查)，报告与回填规则见
 [workflow README](tools/workflow/README.md)。
 
