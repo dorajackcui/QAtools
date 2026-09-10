@@ -110,3 +110,7 @@
 
 本工具针对独立总表/小表。PhraseLoom 的 Strings 隐藏映射与 Batch 的 manifest 复原流程
 仍分别使用各自入口。
+
+## 性能评估
+
+可复现基准与阶段耗时见[性能记录](../../docs/archive/content-sync-performance.md)。当前保留 openpyxl 与串行保存；不能以提速为由跳过公式缓存校验或改变冲突顺序。

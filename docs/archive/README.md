@@ -7,3 +7,5 @@
 
 未完成工作统一进入[待办](../backlog.md)，当前约束进入工具 README 或 AGENTS。
 当前文档入口见[文档索引](../README.md)。
+
+- [内容同步性能评估](content-sync-performance.md)：双向基准、公式缓存与 Excel 重存成本，以及保留现有实现的依据。
