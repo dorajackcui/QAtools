@@ -48,6 +48,11 @@ qatools tag-check --help
 | `qatools batch` | 按行拆分 Excel batch，并在处理后复原 |
 | `qatools merge-sheets` | 合并目录内所有 Excel 文件的活动工作表 |
 | `qatools xbench` | Xbench QA Report 转换 |
+| `qatools content-sync` | Master 与小表双向内容同步 |
+| `qatools columns` | 清空、插入或删除工作簿列 |
+| `qatools compatibility` | 用桌面 Excel 原格式重存工作簿 |
+| `qatools deep-replace` | 按文件名替换整个 Excel 文件 |
+| `qatools untranslated-stats` | 统计工作簿未翻译量 |
 
 可用别名：
 
@@ -82,9 +87,8 @@ if ($LASTEXITCODE -ne 0) { throw "QAtools 执行失败" }
 
 ## 功能可用范围
 
-内容同步的两个方向、列操作、兼容性重存、同名文件替换和未翻译统计目前**仅有 GUI**，
-没有已注册的统一 CLI 命令。实现计划见 [CLI-01](backlog.md#cli-01-新增工具的-cli)。
-不要把 Python 业务函数名、GUI key 或待定命令名当作正式命令调用。
+内容同步双向、列操作、兼容性重存、同名文件替换和未翻译统计同时提供 GUI 与 CLI，
+共用业务处理器。命令及退出码见下方[目录批处理](#目录批处理)。
 
 同 Target 不同 Source、数字、URL、Target 文本规范通过 `qa --check` 使用，未单独登记命令。
 QA 的“应用修订”目前是 GUI 动作，也没有对应的 `qa` 子命令。
@@ -307,6 +311,82 @@ qatools merge-sheets ./excel-files --keep-all-headers
 ```
 
 完整规则见[合并表格工具](../tools/excel_merger/README.md)。
+
+## 目录批处理
+
+以下五个命令覆盖新增的六项工具。均为非交互入口，缺少必填参数会报错，不等待输入。
+列操作、兼容性重存及正向同步的可选重存需要 Windows、桌面 Excel 和 pywin32；
+帮助命令不加载 Excel、Qt 或工作簿处理依赖。环境安装见[兼容性重存](../tools/excel_compatibility/README.md#环境)。
+
+共同参数：`-o/--output-dir` 为**可选的新目录**，必须尚不存在；不传或传空字符串时
+按工具默认规则在输入位置操作。统计工具仅写统计表；其他工具修改目标工作簿。
+逐文件简约日志写入 stderr，最终摘要写入 stdout；`--quiet` 关闭运行日志，保留摘要、任务异常和会话警告。
+不附加 JSON/report 文件；统计表和原位文件替换的备份仍按各工具规则生成。
+
+这五个命令的退出码是明确的调用契约，不改变旧命令的退出码：
+
+| 退出码 | 含义 |
+|---|---|
+| `0` | 正常完成，无失败、跳过或会话警告；无内容变化也算正常完成 |
+| `1` | 任务异常、所有文件失败，或反向同步未成功保存 Master（即使已读入小表） |
+| `2` | 缺少参数、未知选项或参数格式/范围错误 |
+| `3` | 部分失败、有跳过项或会话警告；成功结果保留，需查看摘要和日志 |
+
+已跳过的冲突、未支持格式也会返回 `3`；按“仅填空”等策略保留内容不算文件失败。
+`--quiet` 不改变退出码。涉及文件路径、列重叠等业务校验失败返回 `1`。
+
+### 内容同步
+
+```powershell
+qatools content-sync master-to-target master.xlsx small_tables --column-count 2 -o synced_tables
+qatools content-sync target-to-master master.xlsx small_tables
+qatools content-sync master-to-target --help
+qatools content-sync target-to-master --help
+```
+
+两个子命令均需位置参数 `master_file target_dir`。
+
+| 参数 | 默认 / 用途 |
+|---|---|
+| `--master-key-column` / `--master-source-column` / `--master-content-column` | `B` / `C` / `D` |
+| `--target-key-column` / `--target-source-column` / `--target-content-column` | `A` / `B` / `C`；target 指小表 |
+| `--master-sheet` / `--target-sheet` | 各自活动工作表 |
+| `--master-header-rows` / `--target-header-rows` | 各为 `1`，支持 `0` |
+| `--fill-blank-only` | 默认关，仅填空白目标 |
+| `--allow-blank-write` | 默认关，允许空白来源写入；与仅填空独立 |
+| `--column-count` | 仅正向，默认 `1`；连续多列 |
+| `--compatibility-resave` | 仅正向，默认关；用 Excel 重存实际更新的小表 |
+
+反向仅回填一列；不传输出目录时正向更新小表、反向更新 Master。
+空白保留、重复身份、公式缓存与原文件保护见[内容同步规则](../tools/content_sync/README.md)。
+
+### 列操作与兼容性重存
+
+```powershell
+qatools columns clear excel_files --column C --header-rows 1
+qatools columns insert excel_files --column D --inserted-header Translation -o inserted_files
+qatools columns delete excel_files --column E
+qatools compatibility excel_files -o resaved_files
+```
+
+`columns clear|insert|delete` 均需目录位置参数，`--column` 默认 `C`，`--sheet` 默认活动表。
+`clear` 独有 `--header-rows`（默认 `1`）；`insert` 独有 `--inserted-header`（默认 `Translation`），
+保留标题原文，包括首尾空白及公式形状的文字。`delete` 删除整列。
+`compatibility` 只接收目录及共同输出/日志选项，重存所有支持的工作簿。
+规则见[列操作](../tools/column_tools/README.md)、[重存](../tools/excel_compatibility/README.md)。
+
+### 同名文件替换与未翻译统计
+
+```powershell
+qatools deep-replace incoming_files target_files
+qatools untranslated-stats excel_files -c B -t C --mode chinese_chars
+qatools untranslated-stats excel_files --sheet Data --header-rows 2 --mode english_words -o statistics
+```
+
+`deep-replace` 接收来源、目标两个目录；默认先备份再原位替换。参数和规则见[同名文件替换](../tools/deep_replace/README.md)。
+`untranslated-stats` 接收一个目录，`-c/--source-column` 默认 `B`，`-t/--target-column` 默认 `C`；
+`--sheet` 默认活动表，`--header-rows` 默认 `1`；`--mode` 为 `chinese_chars`（默认）或 `english_words`。
+输出为 `未翻译统计.xlsx`；统计中的文字 nan 口径与同步不同，见[统计规则](../tools/untranslated_stats/README.md)。
 
 ## 兼容入口
 

@@ -24,6 +24,7 @@ qatools gui / toolshub_gui.py
 | 职责 | 入口 | 主要验证 |
 |---|---|---|
 | CLI 分发、别名、帮助 | [qatools/cli.py](../qatools/cli.py) | `test_qatools_cli.py` |
+| 目录工具 CLI 公共参数、摘要与退出码 | [batch_cli.py](../tools/batch_cli.py)；工具包内 `cli.py` | `test_new_tools_cli.py` |
 | 主窗口、导航、退出保护 | [toolshub_gui.py](../toolshub_gui.py) | `test_toolshub_gui.py` |
 | 页面注册 | [tools/qt_pages.py](../tools/qt_pages.py) | 同上 |
 | Qt 主题、输入控件、线程池 | [qt_gui_common.py](../tools/qt_gui_common.py) | GUI 回归 |

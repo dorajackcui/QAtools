@@ -1,7 +1,7 @@
 # 未翻译统计（Untranslated Stats）
 
 GUI【翻译辅助 → 未翻译统计】统计目录内各工作簿的未翻译量和总量。
-使用 openpyxl，不需要 pandas 或 Microsoft Excel；CLI 尚未接入。
+使用 openpyxl，不需要 pandas 或 Microsoft Excel；CLI 为 `qatools untranslated-stats`，参数见[CLI 手册](../../docs/cli-usage.md#同名文件替换与未翻译统计)。
 
 选择文件目录，按需填写新输出目录，指定原文列、译文列、计数口径、工作表和表头行数，
 点击【生成统计表】。默认原文 B、译文 C、活动工作表、1 行表头、中文字符数；

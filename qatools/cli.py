@@ -113,6 +113,11 @@ COMMANDS: tuple[CommandSpec, ...] = (
         aliases=("xbench-transform",),
         legacy_entry="python tools/xbench_report_transformer/transform_xbench_report.py",
     ),
+    CommandSpec("content-sync", "Master 与小表双向内容同步", "tools.content_sync.cli", "argv"),
+    CommandSpec("columns", "清空、插入或删除工作簿列", "tools.column_tools.cli", "argv"),
+    CommandSpec("compatibility", "用 Microsoft Excel 原格式重存工作簿", "tools.excel_compatibility.cli", "argv"),
+    CommandSpec("deep-replace", "按文件名替换整个 Excel 文件", "tools.deep_replace.cli", "argv"),
+    CommandSpec("untranslated-stats", "统计目录内工作簿的未翻译量", "tools.untranslated_stats.cli", "argv"),
 )
 
 

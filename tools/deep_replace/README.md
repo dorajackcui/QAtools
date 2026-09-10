@@ -1,7 +1,7 @@
 # 同名文件替换（Deep Replace）
 
 GUI【文件与表格 → 同名文件替换】按文件名匹配并搬运**整个 Excel 文件**，不合并工作表或单元格。
-不需要 Excel、pandas；CLI 尚未接入。
+不需要 Excel、pandas；CLI 为 `qatools deep-replace`，参数见[CLI 手册](../../docs/cli-usage.md#同名文件替换与未翻译统计)。
 
 1. 选择替换来源目录，以及需要被替换的目标文件目录。
 2. 新输出目录默认留空，直接替换目标目录中的文件；填写尚不存在的新目录时生成目标 Excel 文件树副本。

@@ -22,7 +22,7 @@ QAtools Windows 安装版
 
 工具箱包含一键质量检查、PhraseLoom、法语 NBSP 恢复、Batch 拆分与复原、
 活动工作表合并、Xbench QA 转换、Master 与小表双向同步、列操作、兼容性重存、
-同名文件替换和未翻译统计。后六个入口当前仅提供 GUI。一键质量检查内含术语、双向文本一致性、
+同名文件替换和未翻译统计。这些工具同时提供 GUI 和 CLI。一键质量检查内含术语、双向文本一致性、
 Tag / Placeholder、换行、数字、URL 和 Target 文本质量检查。
 
 命令行

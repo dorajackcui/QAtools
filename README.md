@@ -50,20 +50,20 @@ GUI 表单不显示常驻说明段落，保留输入标签、占位提示、输�
 |---|---|---|---|
 | 常用流程 | [一键质量检查](tools/workflow/README.md) | `qatools qa` | 多项检查生成统一报告，GUI 可应用修订 |
 | 常用流程 | [PhraseLoom](phraseloom/README.md) | `qatools phraseloom` | 导出 Strings，完成翻译后回填并另存工作簿 |
-| 常用流程 | [内容同步](tools/content_sync/README.md) | 待办 | 两个 Tab：Master → 小表、小表 → Master |
-| 文件与表格 | [兼容性重存](tools/excel_compatibility/README.md) | 待办 | 通过 Microsoft Excel 重新保存工作簿 |
-| 文件与表格 | [列操作](tools/column_tools/README.md) | 待办 | 批量清空、插入、删除列 |
+| 常用流程 | [内容同步](tools/content_sync/README.md) | `qatools content-sync` | 两个 Tab：Master → 小表、小表 → Master |
+| 文件与表格 | [兼容性重存](tools/excel_compatibility/README.md) | `qatools compatibility` | 通过 Microsoft Excel 重新保存工作簿 |
+| 文件与表格 | [列操作](tools/column_tools/README.md) | `qatools columns` | 批量清空、插入、删除列 |
 | 文件与表格 | [Batch 拆分](tools/excel_batcher/README.md) | `qatools batch` | 分批处理大型工作表并按原行位复原 |
 | 文件与表格 | [合并表格](tools/excel_merger/README.md) | `qatools merge-sheets` | 合并目录内工作簿的活动工作表 |
-| 文件与表格 | [同名文件替换](tools/deep_replace/README.md) | 待办 | 递归替换整个同名文件 |
+| 文件与表格 | [同名文件替换](tools/deep_replace/README.md) | `qatools deep-replace` | 递归替换整个同名文件 |
 | 翻译辅助 | [法语 NBSP 恢复](tools/french_nbsp_restorer/README.md) | `qatools french-nbsp` | 恢复法语标点所需的不换行空格 |
-| 翻译辅助 | [未翻译统计](tools/untranslated_stats/README.md) | 待办 | 中文字符/英文词数及行数汇总 |
+| 翻译辅助 | [未翻译统计](tools/untranslated_stats/README.md) | `qatools untranslated-stats` | 中文字符/英文词数及行数汇总 |
 | 翻译辅助 | [Xbench QA 转换](tools/xbench_report_transformer/README.md) | `qatools xbench` | 把 Xbench 报告转换为行级问题表 |
 
 单项检查仍保留兼容 CLI；完整命令目录和示例统一维护在
 [CLI 使用指南](docs/cli-usage.md)。
 
-内容同步双向、列操作、兼容性重存、同名文件替换、未翻译统计当前仅提供 GUI；CLI 见[待办](docs/backlog.md#cli-01-新增工具的-cli)。列操作、兼容性重存需要桌面 Excel；
+内容同步双向及四项目录工具共用 GUI/CLI 业务层；调用与退出码见[目录批处理手册](docs/cli-usage.md#目录批处理)。列操作、兼容性重存需要桌面 Excel；
 源码环境安装 COM 支持请使用 `python -m pip install -e ".[excel-com]"`。
 
 ## 文档路由

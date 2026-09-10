@@ -1,7 +1,7 @@
 # 列操作（Column Clear）
 
 GUI【文件与表格 → 列操作】提供 momoTools 原 Column Clear 页中的三个动作。
-业务层通过 Microsoft Excel 操作工作簿；CLI 尚未接入。
+业务层通过 Microsoft Excel 操作工作簿；CLI 为 `qatools columns`，参数见[CLI 手册](../../docs/cli-usage.md#列操作与兼容性重存)。
 
 1. 选择文件目录。新输出目录为可选项：留空直接更新原文件，填写尚不存在的新目录时另存副本。
 2. 选择清空、插入或删除，填写列字母（A–XFD）。默认 C 列。

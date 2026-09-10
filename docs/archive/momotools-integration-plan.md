@@ -13,7 +13,7 @@
 
 - 双向同步使用 openpyxl，不引入 pandas 的缺失值转换；空白和正文语义以[内容同步 README](../../tools/content_sync/README.md)为准。
 - 列操作和兼容性重存依赖独立的 Excel COM 会话；原位、失败保护和宏行为以[重存 README](../../tools/excel_compatibility/README.md)为准。
-- GUI 复用 QAtools 风格；CLI 尚未接入，后续范围见[待办](../backlog.md#cli-01-新增工具的-cli)。
+- GUI 复用 QAtools 风格；第一期先迁入 GUI，后续 CLI 的当前入口见[调用手册](../cli-usage.md#目录批处理)。
 - 不迁入 momoTools 的 Term Extractor、Master Update、Batch 配置执行器，不改变 PhraseLoom 和现有 Batch 的协议。
 
 代码落点见[仓库地图](../repository-map.md)，当前业务规则均从[文档索引](../README.md)进入。

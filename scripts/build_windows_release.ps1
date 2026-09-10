@@ -184,7 +184,12 @@ try {
         "tools.french_nbsp_restorer.restore_french_nbsp",
         "tools.excel_batcher.excel_batcher",
         "tools.excel_merger.merge_active_sheets",
-        "tools.xbench_report_transformer.transform_xbench_report"
+        "tools.xbench_report_transformer.transform_xbench_report",
+        "tools.content_sync.cli",
+        "tools.column_tools.cli",
+        "tools.excel_compatibility.cli",
+        "tools.deep_replace.cli",
+        "tools.untranslated_stats.cli"
     )
     $cliArguments = $commonArguments + @(
         "--onefile",
@@ -215,6 +220,12 @@ try {
     & (Join-Path $appDir "QAtools-CLI.exe") --version
     if ($LASTEXITCODE -ne 0) {
         throw "Frozen CLI smoke test failed with exit code $LASTEXITCODE"
+    }
+    foreach ($command in @("content-sync", "columns", "compatibility", "deep-replace", "untranslated-stats")) {
+        & (Join-Path $appDir "QAtools-CLI.exe") $command --help
+        if ($LASTEXITCODE -ne 0) {
+            throw "Frozen CLI help failed for $command with exit code $LASTEXITCODE"
+        }
     }
     $guiSmokeProcess = Start-Process `
         -FilePath (Join-Path $appDir "QAtools.exe") `

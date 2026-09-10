@@ -4,7 +4,7 @@
 反向入口把小表译文回填到 Master。业务层使用 openpyxl，无需 pandas；
 仅正向的可选兼容性重存需要本机 Microsoft Excel。
 
-两个方向位于统一 GUI 的同一页面，以两个 Tab 切换；CLI 后续接入。
+两个方向位于统一 GUI 的同一页面，以两个 Tab 切换；CLI 为 `qatools content-sync`，参数见[CLI 手册](../../docs/cli-usage.md#内容同步)。
 切换 Tab 时分别保留各自的配置、结果和日志，后台任务继续运行。
 
 ## 操作
