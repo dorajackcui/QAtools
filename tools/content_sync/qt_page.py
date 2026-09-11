@@ -201,7 +201,7 @@ class MasterToTargetPage(AsyncPage):
     def _targets_checked(self, check) -> None:
         self._set_busy(False)
         display = show_warning if check.readonly or check.errors or not check.total else show_info
-        display(self, "小表目录检查", check.describe(reverse=self.reverse, inplace=not self.output_picker.path()))
+        display(self, "小表目录检查", check.describe())
 
     def _selection_failed(self, message: str) -> None:
         self._set_busy(False, "选择检查未完成")

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from tools.content_sync.preflight import inspect_master, inspect_targets, is_readonly, master_warnings
+from tools.content_sync.preflight import DirectoryCheck, inspect_master, inspect_targets, is_readonly, master_warnings
 from tools.excel_file_ops import create_output_directory
 
 
@@ -40,23 +40,22 @@ class SelectionCheckTests(unittest.TestCase):
             if path == files[1]:
                 raise PermissionError("unavailable")
             return path == files[0]
-        with patch("tools.content_sync.preflight.random.sample", return_value=files[:20]) as sample, \
+        with patch("tools.content_sync.preflight.random.sample", return_value=files[:5]) as sample, \
              patch("tools.content_sync.preflight.is_readonly", side_effect=check) as readonly:
             result = inspect_targets(str(self.root))
-        self.assertEqual(sample.call_args.args[1], 20)
-        self.assertEqual(readonly.call_count, 20)
+        self.assertEqual(sample.call_args.args[1], 5)
+        self.assertEqual(readonly.call_count, 5)
         self.assertEqual(result.total, 25)
         self.assertEqual(result.readonly, ("00.xlsx",))
         self.assertIn("01.xlsx", result.errors[0])
-        self.assertIn("20 / 25", result.describe(reverse=False, inplace=True))
-        self.assertIn("原位更新", result.describe(reverse=False, inplace=True))
-        self.assertIn("仅作为来源", result.describe(reverse=True, inplace=True))
-        self.assertIn("另存目录", result.describe(reverse=False, inplace=False))
+        self.assertEqual(result.describe(), "文件只读，请取消read-only或选择【新输出目录】")
+        unknown = DirectoryCheck(25, 0, result.sampled, (), result.errors)
+        self.assertEqual(unknown.describe(), "无法检查文件状态，请确认文件访问权限。")
 
     def test_empty_or_missing_directory(self):
         result = inspect_targets(str(self.root))
         self.assertEqual((result.total, result.sampled), (0, ()))
-        self.assertIn("没有可处理", result.describe(reverse=False, inplace=True))
+        self.assertEqual(result.describe(), "可处理小表：0个")
         with self.assertRaises(ValueError):
             inspect_targets(str(self.root / "missing"))
 

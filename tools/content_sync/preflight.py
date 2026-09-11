@@ -80,24 +80,12 @@ class DirectoryCheck:
     readonly: tuple[str, ...]
     errors: tuple[str, ...]
 
-    def describe(self, *, reverse: bool, inplace: bool) -> str:
-        lines = [f"可处理小表：{self.total} 个（.xlsx / .xlsm）",
-                 f"不支持格式：{self.unsupported} 个",
-                 f"随机抽检：{len(self.sampled)} / {self.total} 个；只读：{len(self.readonly)} 个"]
+    def describe(self) -> str:
         if self.readonly:
-            lines.append("只读文件：\n" + "\n".join(self.readonly))
-            if reverse:
-                lines.append("小表仅作为来源读取，只读属性不影响回填 Master。")
-            elif inplace:
-                lines.append("原位更新这些文件可能失败，可解除只读或另存。")
-            else:
-                lines.append("已选择另存目录，原小表不会被覆盖；输出仍以实际保存结果为准。")
+            return "文件只读，请取消read-only或选择【新输出目录】"
         if self.errors:
-            lines.append("无法检查：\n" + "\n".join(self.errors))
-        if self.total == 0:
-            lines.append("没有可处理的小表，请重新选择目录。")
-        lines.append("仅检查文件只读属性；抽检结果不代表全部文件可写，也不检测 Excel 写保护或文件占用。")
-        return "\n\n".join(lines)
+            return "无法检查文件状态，请确认文件访问权限。"
+        return f"可处理小表：{self.total}个"
 
 
 def inspect_targets(folder: str, *, master: str = "", output: str = "", reverse: bool = False) -> DirectoryCheck:
@@ -114,7 +102,7 @@ def inspect_targets(folder: str, *, master: str = "", output: str = "", reverse:
                                          exclude=tuple(p for p in (master_path, output_path) if p is not None))
     else:
         files, unsupported = _input_files(root, output_path, master_path)
-    sample = sorted(random.sample(files, min(20, len(files))), key=lambda p: (str(p).casefold(), str(p)))
+    sample = sorted(random.sample(files, min(5, len(files))), key=lambda p: (str(p).casefold(), str(p)))
     readonly, errors = [], []
     for path in sample:
         relative = str(path.relative_to(root))

@@ -106,9 +106,11 @@ class ContentSyncGuiTests(unittest.TestCase):
         self.assertEqual(call["kwargs"], {"master": "master.xlsx", "output": "", "reverse": False})
         self.assertFalse(self.page.run_button.isEnabled())
         with patch("tools.content_sync.qt_page.show_info") as info:
-            call["on_success"](DirectoryCheck(32, 1, tuple(str(i) for i in range(20)), (), ()))
-        self.assertIn("32", info.call_args.args[2])
-        self.assertIn("20 / 32", info.call_args.args[2])
+            call["on_success"](DirectoryCheck(32, 1, tuple(str(i) for i in range(5)), (), ()))
+        self.assertEqual(info.call_args.args[2], "可处理小表：32个")
+        with patch("tools.content_sync.qt_page.show_warning") as warning:
+            call["on_success"](DirectoryCheck(32, 1, ("private.xlsx",), ("private.xlsx",), ()))
+        self.assertEqual(warning.call_args.args[2], "文件只读，请取消read-only或选择【新输出目录】")
         self.assertTrue(self.page.run_button.isEnabled())
 
     def test_master_warning_preserves_sheet_selection_and_selection_errors_preserve_run_logs(self):
