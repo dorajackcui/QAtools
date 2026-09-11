@@ -9,3 +9,4 @@
 当前文档入口见[文档索引](../README.md)。
 
 - [内容同步性能评估](content-sync-performance.md)：双向基准、公式缓存与 Excel 重存成本，以及保留现有实现的依据。
+- [内容同步并行实测](content-sync-parallel-performance.md)：有限线程并行的收益、等价验证及默认策略选择。

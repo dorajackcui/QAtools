@@ -16,6 +16,7 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 from tools.excel_output import iter_value_cells, load_workbook_for_editing
 from tools.excel_file_ops import create_output_directory, optional_output_directory, BACKUP_DIRECTORY
 from tools.operation_logs import emit_log, log_result, log_summary
+from .parallel import ordered_results, validate_workers
 
 
 SUPPORTED_EXTENSIONS = {".xlsx", ".xlsm"}
@@ -161,7 +162,10 @@ def _read_master(path: Path, mapping: ColumnMapping, count: int, sheet: str | No
     duplicates: list[dict[str, object]] = []
     # Read formulas as well as values so missing caches cannot silently clear targets.
     with ExitStack() as stack:
-        workbook = load_workbook(path, read_only=True, data_only=False)
+        # Own the stream as well: an interrupted read-only iterator may retain a
+        # ZIP member after Workbook.close(), otherwise locking the file on Windows.
+        stream = stack.enter_context(path.open("rb"))
+        workbook = load_workbook(stream, read_only=True, data_only=False)
         stack.callback(workbook.close)
         worksheet = _sheet(workbook, sheet)
         sheet_name = worksheet.title
@@ -180,7 +184,8 @@ def _read_master(path: Path, mapping: ColumnMapping, count: int, sheet: str | No
             formula_cols = [col for col in selected if cells[col - start_col].data_type == "f"]
             if formula_cols:
                 if cached_rows is None:
-                    cached_book = load_workbook(path, read_only=True, data_only=True)
+                    cached_stream = stack.enter_context(path.open("rb"))
+                    cached_book = load_workbook(cached_stream, read_only=True, data_only=True)
                     stack.callback(cached_book.close)
                     cached_rows = iter(cached_book[sheet_name].iter_rows(
                         min_row=row_number, min_col=start_col, max_col=end_col, values_only=True,
@@ -291,10 +296,12 @@ def sync_master_to_targets(
     master_header_rows: int = 1, target_header_rows: int = 1,
     fill_blank_only: bool = False, allow_blank_write: bool = False,
     compatibility_resave: bool = False,
+    workers: int = 2,
     progress_callback: Callable[[int, int], None] | None = None,
     log_callback=None,
 ) -> SyncSummary:
     """Update targets in place by default; an explicit output writes a new tree."""
+    validate_workers(workers)
     emit_log(log_callback, f"开始同步：{master_file} → {target_dir}")
     if not isinstance(column_count, int) or isinstance(column_count, bool) or not 1 <= column_count <= 16384:
         raise ValueError("更新列数必须是 1–16384 的整数。")
@@ -325,6 +332,23 @@ def sync_master_to_targets(
     for result in skipped:
         log_result(log_callback, result)
     summary = SyncSummary(output, len(records), duplicates, skipped)
+    # Linked inputs may observe another target's writes. COM remains on its owner
+    # thread, including the preceding sync, to retain the original save sequence.
+    if compatibility_resave or any(path.is_symlink() for path in files):
+        workers = 1
+    workers = min(workers, len(files))
+
+    def process(source):
+        relative = source.relative_to(folder)
+        result = FileResult(str(relative))
+        try:
+            _sync_file(source, output / relative, records, target_columns, column_count,
+                       target_sheet, target_header_rows, fill_blank_only, allow_blank_write, result)
+        except Exception as exc:
+            result.error = str(exc)
+            result.updated_cells = 0
+        return result
+
     session = None
     if compatibility_resave:
         emit_log(log_callback, "正在启动 Excel 兼容性重存会话…")
@@ -334,16 +358,10 @@ def sync_master_to_targets(
     try:
         if not inplace:
             create_output_directory(output)
-        for index, source in enumerate(files, 1):
-            relative = source.relative_to(folder)
-            result = FileResult(str(relative))
+        for index, (result, error) in enumerate(ordered_results(process, files, workers), 1):
+            if error is not None:
+                result = FileResult(str(files[index - 1].relative_to(folder)), error=str(error))
             summary.files.append(result)
-            try:
-                _sync_file(source, output / relative, records, target_columns, column_count,
-                           target_sheet, target_header_rows, fill_blank_only, allow_blank_write, result)
-            except Exception as exc:  # A failed workbook must not hide other files' results.
-                result.error = str(exc)
-                result.updated_cells = 0
             if compatibility_resave and result.status == "updated":
                 try:
                     destination = Path(result.output)

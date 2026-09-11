@@ -356,9 +356,12 @@ qatools content-sync target-to-master --help
 | `--allow-blank-write` | 默认关，允许空白来源写入；与仅填空独立 |
 | `--column-count` | 仅正向，默认 `1`；连续多列 |
 | `--compatibility-resave` | 仅正向，默认关；用 Excel 重存实际更新的小表 |
+| `--workers` | `1–4`；默认正向 `2`、反向 `1`；`1` 为串行 |
 
 反向仅回填一列；不传输出目录时正向更新小表、反向更新 Master。
 空白保留、重复身份、公式缓存与原文件保护见[内容同步规则](../tools/content_sync/README.md)。
+正向启用 Excel 重存或输入含符号链接文件时会自动串行；反向可用 `--workers 2` 对照实测。
+并行时日志、计数和冲突优先级仍按原文件顺序汇总。
 
 ### 列操作与兼容性重存
 

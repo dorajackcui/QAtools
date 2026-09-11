@@ -21,6 +21,9 @@ def build_parser():
             action.add_argument(f"--{side}-header-rows", type=header_rows, default=1, help="表头行数（默认 1）")
         action.add_argument("--fill-blank-only", action="store_true", help="仅填充空白目标")
         action.add_argument("--allow-blank-write", action="store_true", help="允许空白来源写入；独立于仅填空选项")
+        action.add_argument("--workers", type=int, choices=range(1, 5),
+                            default=2 if direction == "master-to-target" else 1,
+                            help="小表任务数 1–4；默认正向 2、反向 1；Excel 重存时串行")
         if direction == "master-to-target":
             action.add_argument("--column-count", type=column_count, default=1, help="连续更新列数（默认 1）")
             action.add_argument("--compatibility-resave", action="store_true", help="同步后用桌面 Excel 重存已更新的小表")

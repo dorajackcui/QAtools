@@ -1,8 +1,9 @@
 """Reproducible synthetic sync benchmark; only touches its temporary directory.
 
 Run without arguments for all cases. Each run uses a fresh child process so peak
-RSS is comparable. Timings are exclusive wall time, including wrapper overhead;
-they are diagnostics, not a CI performance threshold.
+RSS is comparable. Phase timings are exclusive wall time, including wrapper
+overhead. Use --wall-only with --workers to compare parallel execution without
+phase instrumentation. These diagnostics are not a CI performance threshold.
 """
 from __future__ import annotations
 
@@ -112,7 +113,9 @@ def fixture(path, start, stop, columns, *, master, source, formulas):
         path.write_bytes(replacement.getvalue())
 
 
-def run(case, direction):
+def run(case, direction, *, workers=1, profile=True):
+    if profile and workers != 1:
+        raise ValueError("Phase profiling requires --workers 1; use --wall-only for parallel runs")
     import openpyxl
     from tools.content_sync import master_to_target as forward, target_to_master as reverse
     from tools import excel_com
@@ -162,30 +165,31 @@ def run(case, direction):
                         cleanup.close()
 
         with ExitStack() as stack:
-            stack.enter_context(patch.object(excel_com, "excel_session", timed_session))
-            stack.enter_context(patch.object(forward, "load_workbook", timed_load))
-            for module, names in ((forward, {"_input_files": "scan", "_read_master": "source_index",
-                    "load_workbook_for_editing": "target_read", "_sync_file": "match_write",
-                    "_save_output": "save"}),
-                    (reverse, {"excel_files": "scan", "_read_master": "source_index", "_sync_file": "match_write"}),
-                    (excel_com, {"edit_copy": "excel_resave"})):
-                for name, label in names.items():
-                    stack.enter_context(patch.object(module, name, timings.wrap(getattr(module, name), label)))
-            for module in (forward, reverse):
-                for name in ("emit_log", "log_result", "log_summary"):
-                    stack.enter_context(patch.object(module, name, timings.wrap(getattr(module, name), "logs")))
+            if profile:
+                stack.enter_context(patch.object(excel_com, "excel_session", timed_session))
+                stack.enter_context(patch.object(forward, "load_workbook", timed_load))
+                for module, names in ((forward, {"_input_files": "scan", "_read_master": "source_index",
+                        "load_workbook_for_editing": "target_read", "_sync_file": "match_write",
+                        "_save_output": "save"}),
+                        (reverse, {"excel_files": "scan", "_read_master": "source_index", "_sync_file": "match_write"}),
+                        (excel_com, {"edit_copy": "excel_resave"})):
+                    for name, label in names.items():
+                        stack.enter_context(patch.object(module, name, timings.wrap(getattr(module, name), label)))
+                for module in (forward, reverse):
+                    for name in ("emit_log", "log_result", "log_summary"):
+                        stack.enter_context(patch.object(module, name, timings.wrap(getattr(module, name), "logs")))
             with timings.measure("orchestration"):
                 if direction == "forward":
                     result = forward.sync_master_to_targets(master, targets, column_count=columns,
-                        compatibility_resave=case == "resave", log_callback=logs.append)
+                        compatibility_resave=case == "resave", log_callback=logs.append, workers=workers)
                     updates = result.updated_cells
                 else:
-                    result = reverse.sync_targets_to_master(master, targets, log_callback=logs.append)
+                    result = reverse.sync_targets_to_master(master, targets, log_callback=logs.append, workers=workers)
                     updates = result.details["updated_cells"]
         assert result.failed_files == 0, result
         assert updates == rows * (columns if direction == "forward" else 1), updates
         return {"case": case, "direction": direction, "rows": rows, "files": files,
-                "columns": columns, "seconds": dict(timings.seconds),
+                "columns": columns, "workers": workers, "profile": profile, "seconds": dict(timings.seconds),
                 "total_seconds": sum(timings.seconds.values()), "peak_process_rss_mib": peak_rss_mib(),
                 "python": platform.python_version(), "openpyxl": openpyxl.__version__,
                 "platform": platform.platform(), "updated_cells": updates}
@@ -197,9 +201,13 @@ def main():
     parser.add_argument("--direction", choices=("forward", "reverse"), default="forward")
     parser.add_argument("--repeat", type=int, default=3)
     parser.add_argument("--include-resave", action="store_true", help="Requires installed desktop Excel")
+    parser.add_argument("--workers", type=int, choices=range(1, 5), default=1)
+    parser.add_argument("--wall-only", action="store_true", help="Measure elapsed time without phase instrumentation")
     args = parser.parse_args()
+    if args.workers != 1 and not args.wall_only:
+        parser.error("Use --wall-only when --workers is greater than 1")
     if args.case:
-        print(json.dumps(run(args.case, args.direction), ensure_ascii=False))
+        print(json.dumps(run(args.case, args.direction, workers=args.workers, profile=not args.wall_only), ensure_ascii=False))
         return
     for case in CASES:
         if case == "resave" and not args.include_resave:
@@ -207,7 +215,8 @@ def main():
         for direction in (("forward",) if case in {"multi", "resave"} else ("forward", "reverse")):
             for _ in range(args.repeat):
                 subprocess.run([sys.executable, str(Path(__file__).resolve()), "--case", case,
-                                "--direction", direction], check=True)
+                                "--direction", direction, "--workers", str(args.workers),
+                                *(["--wall-only"] if args.wall_only else [])], check=True)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from tools.excel_file_ops import (
 )
 from tools.operation_logs import emit_log, log_result, log_summary
 from .master_to_target import ColumnMapping, FileResult, _read_master, _sync_file
+from .parallel import ordered_results, validate_workers
 
 
 def sync_targets_to_master(
@@ -19,8 +20,10 @@ def sync_targets_to_master(
     master_sheet: str | None = None, target_sheet: str | None = None,
     master_header_rows: int = 1, target_header_rows: int = 1,
     fill_blank_only: bool = False, allow_blank_write: bool = False,
+    workers: int = 1,
     progress_callback=None, log_callback=None,
 ) -> BatchSummary:
+    validate_workers(workers)
     emit_log(log_callback, f"开始回填：{target_dir} → {master_file}")
     master_columns.indexes(1)
     target_columns.indexes(1)
@@ -39,14 +42,18 @@ def sync_targets_to_master(
         raise ValueError("目录中没有支持的小表。")
     summary = BatchSummary("target-to-master", output)
     merged, origins, conflicts = {}, {}, []
-    for index, path in enumerate(files, 1):
+
+    def read(path):
+        return _read_master(path, target_columns, 1, target_sheet, target_header_rows,
+                            skip_blank_content=not allow_blank_write)
+
+    for index, (data, error) in enumerate(ordered_results(read, files, min(workers, len(files))), 1):
+        path = files[index - 1]
         relative = str(path.relative_to(folder))
         try:
-            records, duplicates, sheet_name = _read_master(
-                path, target_columns, 1, target_sheet, target_header_rows,
-                skip_blank_content=not allow_blank_write,
-                log_callback=log_callback,
-            )
+            if error is not None:
+                raise ValueError(error)
+            records, duplicates, sheet_name = data
             for duplicate in duplicates:
                 conflicts.append({"file": relative, "sheet": sheet_name, **duplicate})
                 emit_log(log_callback, "小表重复身份（后行优先）", conflicts[-1])

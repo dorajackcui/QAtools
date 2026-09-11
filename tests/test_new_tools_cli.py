@@ -106,6 +106,23 @@ class NewToolsCliTests(unittest.TestCase):
         self.assertEqual(backups[0].read_bytes(), before)
         self.assertIn("backup_dir:", output)
 
+    def test_sync_worker_defaults_override_and_invalid_values(self):
+        from tools.content_sync.cli import build_parser
+        for direction, default in (("master-to-target", 2), ("target-to-master", 1)):
+            parser = build_parser()
+            args = [direction, "master.xlsx", "targets"]
+            self.assertEqual(parser.parse_args(args).workers, default)
+            self.assertEqual(parser.parse_args(args + ["--workers", "4"]).workers, 4)
+            for value in ("0", "5", "1.5"):
+                with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+                    parser.parse_args(args + ["--workers", value])
+                self.assertEqual(error.exception.code, 2)
+        result = BatchSummary("sync", self.root)
+        with patch("tools.content_sync.target_to_master.sync_targets_to_master", return_value=result) as operation:
+            code, _, _ = self.invoke("content-sync", "target-to-master", "m.xlsx", "small", "--workers", 2)
+        self.assertEqual(code, 0)
+        self.assertEqual(operation.call_args.kwargs["workers"], 2)
+
     def test_statistics_mode_and_reserved_output(self):
         target = self.book(self.root / "small" / "a.xlsx", [["id", "s", "t"],
                           [1, "don't re-use", "nan"], [2, "hello", "None"]])

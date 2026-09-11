@@ -3,13 +3,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QCoreApplication, QEvent
+from PySide6.QtCore import QCoreApplication, QEvent, QTimer
 from PySide6.QtWidgets import QApplication
 from openpyxl import Workbook, load_workbook
 
@@ -139,6 +140,69 @@ class ContentSyncGuiTests(unittest.TestCase):
                 self.assertEqual(wb.active["C2"].value, "  nan  ")
             finally:
                 wb.close()
+
+    def test_parallel_files_leave_gui_timer_and_live_logs_responsive(self):
+        from tools.content_sync import master_to_target as sync
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            targets = root / "targets"
+            targets.mkdir()
+            master = root / "master.xlsx"
+            for path, row in ((master, [1, "k", "s", "new"]),
+                              (targets / "a.xlsx", ["k", "s", "old"]),
+                              (targets / "b.xlsx", ["k", "s", "old"])):
+                book = Workbook()
+                try:
+                    book.active.append(["header"])
+                    book.active.append(row)
+                    book.save(path)
+                finally:
+                    book.close()
+            release = threading.Event()
+            started = [threading.Event(), threading.Event()]
+            original = sync._sync_file
+            ticks = []
+
+            def process(source, *args, **kwargs):
+                started[0 if source.stem == "a" else 1].set()
+                if not release.wait(5):
+                    raise RuntimeError("GUI timer did not respond")
+                return original(source, *args, **kwargs)
+
+            def heartbeat():
+                if all(event.is_set() for event in started):
+                    ticks.append(self.page.has_running_tasks())
+                    self.page.logs.open_logs()
+                    self.page.logs.flush()
+                    release.set()
+
+            self.page.master_picker.set_path(str(master))
+            self.page.target_picker.set_path(str(targets))
+            timer = QTimer(self.page)
+            timer.setInterval(10)
+            timer.timeout.connect(heartbeat)
+            with patch.object(sync, "_sync_file", process), \
+                 patch("tools.content_sync.qt_page.show_error") as error, \
+                 patch("tools.content_sync.qt_page.show_warning") as warning:
+                try:
+                    timer.start()
+                    self.page.run_sync()
+                    deadline = time.monotonic() + 10
+                    while self.page.has_running_tasks() and time.monotonic() < deadline:
+                        self.app.processEvents()
+                        time.sleep(0.005)
+                finally:
+                    release.set()
+                    timer.stop()
+                    self.page._thread_pool.waitForDone(10000)
+                    self.app.processEvents()
+                error.assert_not_called()
+                warning.assert_not_called()
+            self.assertIn(True, ticks)
+            self.assertFalse(self.page.has_running_tasks())
+            self.page.logs.flush()
+            self.assertIn("更新 1 格", self.page.logs.text.toPlainText())
+            self.assertIn("实际更新单元格: 2", self.page.result.toPlainText())
 
 
 if __name__ == "__main__":
