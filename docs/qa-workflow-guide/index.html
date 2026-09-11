@@ -1,453 +1,791 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light">
-  <title>QAtools · GUI 使用指南</title>
-  <link rel="stylesheet" href="guide.css">
-</head>
-<body>
-  <div class="layout">
-    <aside class="sidebar" aria-label="章节导航">
-      <div class="brand">QAtools<small>工具箱 · GUI 指南</small></div>
-      <nav>
-        <a href="#navigation">工具导航</a>
-        <a href="#quick-start">一键质量检查</a>
-        <a href="#input">输入与范围</a>
-        <a href="#checks">检查项目</a>
-        <div class="nav-group">专项配置</div>
-        <a href="#term-settings">术语检查</a>
-        <a href="#tag-settings">Tag / Placeholder</a>
-        <a href="#target-settings">Target 文本规范</a>
-        <div class="nav-group">结果处理</div>
-        <a href="#report">检查报告</a>
-        <a href="#revision">应用修订</a>
-        <div class="nav-group">同步与文件处理</div>
-        <a href="#content-sync">内容同步</a>
-        <a href="#file-utilities">文件与表格工具</a>
-        <a href="#untranslated-stats">未翻译统计</a>
-        <a href="#operation-logs">运行日志与输出</a>
-        <a href="#troubleshooting">常见问题</a>
-        <a href="../cli-usage.md">CLI 调用手册 ↗</a>
-      </nav>
-    </aside>
-
-    <main>
-      <header class="hero">
-        <h1>QAtools 使用指南</h1>
-        <p>
-          从质量检查到内容同步，在同一个本地工具箱中完成 Excel 翻译处理。
-          本页使用当前界面截图，按操作步骤说明输入、选项与结果；详细规则链接各工具文档。
-        </p>
-      </header>
-
-      <section id="navigation">
-        <h2>按任务选择工具</h2>
-        <p>GUI 左侧按以下三组排列；切换页面会保留表单状态。底部“设置”用于表头别名。</p>
-        <div class="table-wrap"><table>
-          <thead><tr><th>分组</th><th>工具</th></tr></thead>
-          <tbody>
-            <tr><td>常用流程</td><td><a href="#quick-start">一键质量检查</a>、<a href="../../phraseloom/README.md">PhraseLoom</a>、<a href="#content-sync">内容同步</a></td></tr>
-            <tr><td>文件与表格</td><td><a href="#compatibility">兼容性重存</a>、<a href="#columns">列操作</a>、<a href="../../tools/excel_batcher/README.md">Batch 拆分</a>、<a href="../../tools/excel_merger/README.md">合并表格</a>、<a href="#deep-replace">同名文件替换</a></td></tr>
-            <tr><td>翻译辅助</td><td><a href="../../tools/french_nbsp_restorer/README.md">法语 NBSP 恢复</a>、<a href="#untranslated-stats">未翻译统计</a>、<a href="../../tools/xbench_report_transformer/README.md">Xbench QA 转换</a></td></tr>
-          </tbody>
-        </table></div>
-        <p class="updated">界面核对：2026-09-10 · 可离线阅读；请保留本目录的 guide.css 和 assets。完整规则链接需保留仓库目录结构。</p>
-      </section>
-
-      <section id="quick-start">
-        <h2>一键质量检查 · 快速上手</h2>
-        <ol class="steps">
-          <li><strong>打开页面</strong><span>启动 QAtools，在左侧“常用流程”选择“一键质量检查”。</span></li>
-          <li><strong>选择 Excel</strong><span>选择输入文件；GUI 会读取工作表并尝试识别 Source / Target 列。</span></li>
-          <li><strong>确认范围</strong><span>确认工作表、两列字母和开始行；再按需要调整检查项目。</span></li>
-          <li><strong>开始检查</strong><span>点击右下角“开始检查”，完成后按提示路径打开生成的报告。</span></li>
-        </ol>
-
-        <figure class="shot">
-          <img src="assets/workflow-main.png"
-               alt="QAtools 一键质量检查主页面，显示输入范围、九个检查项目和底部操作按钮">
-          <figcaption>
-            主页面：默认开启八项常用检查；“同 Target 不同 Source”默认关闭。
-            带下拉箭头的检查项可打开专项设置；“全选 / 清空”仅控制检查项目。截图为初始配置，已记住的配置可能不同。
-          </figcaption>
-        </figure>
-
-        <div class="callout">
-          <strong>记住当前选项</strong>
-          <p>点击“记住选项”保存当前输入路径、工作表、列、开始行及全部检查与详细设置。下次打开恢复这些选择，但不会读取 Excel 或自动执行；以后调整需再次点击才会保存。<a href="../../tools/workflow/README.md#使用">保存范围</a></p>
-        </div>
-
-        <div class="callout">
-          <strong>默认输出无需另选路径</strong>
-          <p>选择输入文件后，页面会预览 <code>workflow_check_原文件名.xlsx</code>；报告生成在输入文件同目录。</p>
-        </div>
-      </section>
-
-      <section id="input">
-        <h2>输入与范围</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>界面项</th><th>作用</th><th>建议</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>输入 Excel</td>
-                <td>选择待检查的 <code>.xlsx</code> 或 <code>.xlsm</code> 文件。</td>
-                <td>检查期间保持文件可读写；如提示文件锁定，请先关闭 Excel 中打开的同名文件。</td>
-              </tr>
-              <tr>
-                <td>检查工作表</td>
-                <td>决定本次检查的数据表。选择文件后会自动载入工作表列表。</td>
-                <td>切换工作表后，GUI 会重新尝试识别 Source / Target 列。</td>
-              </tr>
-              <tr>
-                <td>Source 列 / Target 列</td>
-                <td>填写 Excel 列字母，例如 <code>A</code>、<code>B</code>、<code>AA</code>。</td>
-                <td>两列不能相同。自动识别失败时可直接手动修改。</td>
-              </tr>
-              <tr>
-                <td>开始行</td>
-                <td>从该 Excel 行开始处理，默认 <code>2</code>。</td>
-                <td>通常第 1 行是表头；多行表头时改为第一条实际数据所在行。</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="callout warn">
-          <strong>非标准表头如何自动识别？</strong>
-          <p>
-            点击左侧底部“设置”，在“Excel 表头自动识别”中分别填写 Source / Target
-            表头别名，每行一个并保存。自定义别名优先；未命中自定义别名时才回退内置 <code>source</code> / <code>target</code>。
-            匹配忽略大小写和首尾空格；同级匹配多列或没有匹配时清空对应列，显示“请指定”，请手动确认。
-          </p>
-          <p>仅一键质量检查与法语 NBSP 使用这套表头别名；内容同步和统计需手动配置列。<a href="../gui-conventions.md#表头别名">完整规则</a></p>
-        </div>
-        <details class="screenshot-detail"><summary>查看表头别名设置截图</summary>
-          <figure class="shot"><img src="assets/header-aliases.png" alt="设置页：分别编辑 Source 和 Target 的自定义表头别名" loading="lazy"><figcaption>保存别名后重新识别已加载的 QA / NBSP 工作簿。</figcaption></figure>
-        </details>
-      </section>
-
-      <section id="checks">
-        <h2>九项检查一览</h2>
-
-        <div class="group-label">术语与翻译一致性</div>
-        <div class="check-grid">
-          <article class="card">
-            <div class="card-head"><h3>术语检查</h3><span class="status-pill on">默认开启</span></div>
-            <p>从选定 mark 中建立新术语对，也可结合历史 TB 回扫全文，定位缺失、错译或映射冲突。</p>
-            <p><a href="#term-settings">查看术语专项配置 ↓</a></p>
-          </article>
-          <article class="card">
-            <div class="card-head"><h3>同 Source 不同 Target</h3><span class="status-pill on">默认开启</span></div>
-            <p>按 Source 单元格精确分组；完全相同的 Source 对应多个不同 Target 时报告组内每一行。</p>
-          </article>
-          <article class="card">
-            <div class="card-head"><h3>同 Target 不同 Source</h3><span class="status-pill off">默认关闭</span></div>
-            <p>查找完全相同的非空 Target 是否对应多个 Source。适合发现误复用，但合理复用也很常见。</p>
-          </article>
-        </div>
-
-        <div class="group-label">内容保真检查</div>
-        <div class="check-grid">
-          <article class="card">
-            <div class="card-head"><h3>Tag / Placeholder</h3><span class="status-pill on">默认开启</span></div>
-            <p>比较 Tag、Placeholder 或 memoQ Marker 的内容、次数及尖括号层级结构。</p>
-            <p><a href="#tag-settings">查看 Tag 专项配置 ↓</a></p>
-          </article>
-          <article class="card">
-            <div class="card-head"><h3>换行数量</h3><span class="status-pill on">默认开启</span></div>
-            <p>比较 Source / Target 的真实换行数。LF、CRLF、CR 都支持；文本 <code>\n</code> 不算真实换行。</p>
-          </article>
-          <article class="card">
-            <div class="card-head"><h3>数字一致性</h3><span class="status-pill on">默认开启</span></div>
-            <p>比较数字表达式及重复次数，不要求顺序一致；自动排除 URL、Tag、Placeholder 等内部数字。</p>
-          </article>
-          <article class="card">
-            <div class="card-head"><h3>URL 一致性</h3><span class="status-pill on">默认开启</span></div>
-            <p>比较 URL 完整文本和重复次数，识别 HTTP(S)、FTP、file、mailto 与 www 开头的地址。</p>
-          </article>
-        </div>
-
-        <div class="group-label">Target 文本质量</div>
-        <div class="check-grid">
-          <article class="card">
-            <div class="card-head"><h3>Target 中文</h3><span class="status-pill on">默认开启</span></div>
-            <p>定位 Target 中残留的汉字、CJK 标点、全角标点和常见中文排版符号。</p>
-          </article>
-          <article class="card">
-            <div class="card-head"><h3>Target 文本规范</h3><span class="status-pill on">默认开启</span></div>
-            <p>检查异常标点、连续空格、首尾空格和全半角混用；四条规则可独立开关。</p>
-            <p><a href="#target-settings">查看文本规范配置 ↓</a></p>
-          </article>
-        </div>
-      </section>
-
-      <section id="term-settings">
-        <h2>术语检查设置</h2>
-
-        <div class="settings-block">
-          <h3>两种术语来源可以组合</h3>
-          <div class="mini-grid">
-            <div class="mini"><strong>术语标记</strong><span>默认同时选择中文方括号 <code>【】</code> 与半角方括号 <code>[]</code>，从正文显式 mark 中发现新术语对。</span></div>
-            <div class="mini"><strong>历史 TB</strong><span>可选 Excel 术语库。命中历史 Source 时优先采用历史 Target，并与本批新增术语一起回扫全文。</span></div>
-            <div class="mini"><strong>仅历史 TB 模式</strong><span>可以取消两个 mark，但此时必须提供历史 TB；工具只检查已有术语，不新增术语。</span></div>
-            <div class="mini"><strong>历史 TB 范围</strong><span>可确认工作表、Source 列、Target 列和开始行；默认优先选择“术语表”并自动识别列。</span></div>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="description" content="QAtools 图形界面使用指南：质量检查、PhraseLoom、内容同步、文件与表格及翻译辅助。">
+    <title>QAtools · GUI 使用指南</title>
+    <link rel="stylesheet" href="guide.css">
+    <script src="guide.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到正文</a>
+    <div class="layout">
+      <aside class="sidebar" aria-label="工具导航">
+        <a class="brand" href="#main-content">QAtools<small>图形界面使用指南</small></a>
+        <nav id="tool-navigation" aria-label="与软件一致的工具导航">
+          <div class="nav-section">
+            <div class="nav-group">常用流程</div>
+            <a data-tool="workflow" href="#workflow">一键质量检查</a>
+            <a data-tool="phraseloom" href="#phraseloom">PhraseLoom</a>
+            <a data-tool="content_sync" href="#content-sync">内容同步</a>
           </div>
-
-          <figure class="shot">
-            <img src="assets/term-settings.png"
-                 alt="术语检查设置窗口，包括术语标记、TB 项目、历史 TB 文件及工作表列配置">
-            <figcaption>
-              点击“术语检查”右侧下拉箭头打开；“确定”应用调整，“取消”恢复打开前的设置。
-              截图使用初始配置，没有载入个人 TB 项目。
-            </figcaption>
-          </figure>
-        </div>
-
-        <div class="two-col" style="margin-top:14px">
-          <article class="card">
-            <h3>TB 项目</h3>
-            <p>“保存当前”可把历史 TB 文件、工作表、列和开始行保存为常用项目；之后从下拉框快速复用。</p>
-            <p>删除项目只删除 QAtools 中的配置，不会删除原始 TB 文件。</p>
-          </article>
-          <article class="card">
-            <h3>术语报告重点</h3>
-            <p>启用术语检查时，报告会包含“术语表”。它只写本次实际涉及的历史术语和本批新增术语，不复制整份历史 TB。</p>
-          </article>
-        </div>
-      </section>
-
-      <section id="tag-settings">
-        <h2>Tag / Placeholder 设置</h2>
-
-        <div class="settings-block">
-          <div class="two-col">
-            <div>
-              <h3>常规 Tag（默认）</h3>
-              <ul>
-                <li><code>&lt;...&gt;</code> tag</li>
-                <li><code>[color=...]</code> / <code>[/color]</code> tag</li>
-                <li><code>{...}</code> / <code>{{...}}</code> placeholder</li>
-                <li>文本中的 <code>\n</code> mark</li>
-              </ul>
+          <div class="nav-section">
+            <div class="nav-group">文件与表格</div>
+            <a data-tool="compatibility" href="#compatibility">兼容性重存</a>
+            <a data-tool="column_tools" href="#columns">列操作</a>
+            <a data-tool="excel_batcher" href="#excel-batcher">Batch 拆分</a>
+            <a data-tool="excel_merger" href="#excel-merger">合并表格</a>
+            <a data-tool="deep_replace" href="#deep-replace">同名文件替换</a>
+          </div>
+          <div class="nav-section">
+            <div class="nav-group">翻译辅助</div>
+            <a data-tool="french_nbsp" href="#french-nbsp">法语 NBSP 恢复</a>
+            <a data-tool="untranslated_stats" href="#untranslated-stats">未翻译统计</a>
+            <a data-tool="xbench_report" href="#xbench-report">Xbench QA 转换</a>
+          </div>
+          <div class="nav-settings"><a data-tool="settings" href="#settings">设置</a></div>
+        </nav>
+      </aside>
+      <main id="main-content" tabindex="-1">
+        <header class="hero" id="navigation">
+          <p class="eyebrow">桌面操作 · 全工具指南</p>
+          <h1>从左侧选工具，<br>按步骤完成处理。</h1>
+          <p>导航名称、分组与软件保持一致。每项工具说明选什么、怎么运行，以及到哪里查看结果。</p>
+          <div class="hero-links"><a href="#workflow">从一键质量检查开始 →</a><a href="#operation-logs">日志与输出位置</a><a href="#troubleshooting">常见问题</a></div>
+          <p class="updated">界面更新：2026-09-11 · 可离线阅读</p>
+        </header>
+        <section class="guide-tool" data-tool="workflow" id="workflow" aria-labelledby="workflow-title">
+          <header class="tool-heading">
+            <p class="eyebrow">常用流程</p>
+            <h2 id="workflow-title">一键质量检查</h2>
+            <p class="tool-intro">选择检查项目，一次生成报告；在报告中填写修订，再回到软件应用。</p>
+          </header>
+          <nav class="local-toc" aria-label="一键质量检查正文目录"><strong>本节内容</strong><a href="#quick-start">快速上手</a><a href="#input">输入与范围</a><a href="#checks">检查项目</a><a href="#term-settings">术语设置</a><a href="#tag-settings">Tag 设置</a><a href="#target-settings">文本规范</a><a href="#report">查看报告</a><a href="#revision">应用修订</a></nav>
+          <section id="quick-start">
+            <h3>快速上手</h3>
+            <ol class="steps">
+              <li><strong>打开页面</strong><span>启动 QAtools，在左侧“常用流程”选择“一键质量检查”。</span></li>
+              <li><strong>选择 Excel</strong><span>选择输入文件；GUI 会读取工作表并尝试识别 Source / Target 列。</span></li>
+              <li><strong>确认范围</strong><span>确认工作表、两列字母和开始行；再按需要调整检查项目。</span></li>
+              <li><strong>开始检查</strong><span>点击右下角“开始检查”，完成后按提示路径打开生成的报告。</span></li>
+            </ol>
+            <figure class="shot">
+              <img src="assets/workflow-main.png" alt="QAtools 一键质量检查主页面，显示输入范围、九个检查项目和底部操作按钮" width="1260" height="820">
+              <figcaption> 主页面：默认开启八项常用检查；“同 Target 不同 Source”默认关闭。 带下拉箭头的检查项可打开专项设置；“全选 / 清空”仅控制检查项目。截图为初始配置，已记住的配置可能不同。 </figcaption>
+            </figure>
+            <div class="callout">
+              <strong>记住当前选项</strong>
+              <p>点击“记住选项”保存当前输入路径、工作表、列、开始行及全部检查与详细设置。下次打开恢复这些选择，但不会读取 Excel 或自动执行；以后调整需再次点击才会保存。</p>
             </div>
-            <div>
-              <h3>memoQ Marker</h3>
-              <p>只检查数字 marker：<code>{n}</code>、<code>{n&gt;</code>、<code>&lt;n}</code>。适合 memoQ 导出的成对数字标记。</p>
-              <p>常规类型和尖括号过滤配置在此模式下会自动停用。</p>
+            <div class="callout">
+              <strong>默认输出无需另选路径</strong>
+              <p>选择输入文件后，页面会预览 <code>workflow_check_原文件名.xlsx</code>；报告生成在输入文件同目录。</p>
             </div>
-          </div>
-
-          <figure class="shot">
-            <img src="assets/tag-settings.png"
-                 alt="Tag Placeholder 设置窗口，显示常规 Tag 与 memoQ Marker 模式、四类常规检查和尖括号过滤配置">
-            <figcaption>默认模式为“常规 Tag”，四个常规类型全部开启。</figcaption>
-          </figure>
-        </div>
-
-        <div class="callout warn">
-          <strong>尖括号过滤配置</strong>
-          <p>
-            可选 JSON 文件，仅在“常规 Tag”且启用 <code>&lt;...&gt;</code> 时生效。
-            未选择配置时，工具按内置规则检查全部可识别尖括号 Tag。
-          </p>
-        </div>
-      </section>
-
-      <section id="target-settings">
-        <h2>Target 文本规范设置</h2>
-
-        <div class="settings-block">
-          <div class="two-col">
-            <article class="mini"><strong>异常标点符号</strong><span>报告 <code>..</code>、<code>,,</code>、<code>。。</code> 等；允许 <code>...</code>、<code>…</code>，连续感叹号和问号不在本规则中。</span></article>
-            <article class="mini"><strong>连续空格</strong><span>报告任意位置连续 2 个及以上普通 ASCII 空格；NBSP 不计入。</span></article>
-            <article class="mini"><strong>首尾空格</strong><span>报告 Target 开头或结尾的普通 ASCII 空格；NBSP 不计入。</span></article>
-            <article class="mini"><strong>全半角混用</strong><span>仅比较同类字符或标点的半角/全角形式，不把英文与中文标点的正常共存视为问题。</span></article>
-          </div>
-
-          <figure class="shot">
-            <img src="assets/target-text-settings.png"
-                 alt="Target 文本规范设置窗口，四条检查规则均已勾选">
-            <figcaption>Target 文本规范：至少保留一项规则，否则 GUI 会阻止开始检查。</figcaption>
-          </figure>
-        </div>
-      </section>
-
-      <section id="report">
-        <h2>检查报告怎么看</h2>
-
-        <div class="check-grid">
-          <article class="card"><h3>原工作表</h3><p>输入工作簿中的业务工作表会完整保留，检查结果以新增工作表呈现。</p></article>
-          <article class="card"><h3>问题处理</h3><p>同一原始行命中多个检查时只保留一行，检查项和问题描述合并展示。</p></article>
-          <article class="card"><h3>质量检查汇总</h3><p>按本次启用的检查列出问题行数，便于快速判断重点。</p></article>
-          <article class="card"><h3>术语表（可选）</h3><p>“本批次是否有问题”可筛选，有问题的状态格浅红突出。只统计该术语实际触发的术语问题；修订后需重新检查以更新状态。<a href="../../tools/term_pair_checker/README.md#术语问题状态">查看规则</a>。</p></article>
-        </div>
-
-        <div class="report-preview" aria-label="问题处理工作表示意">
-          <div class="report-tabs">
-            <span>Localization</span><span>术语表</span><span class="active">问题处理</span><span>质量检查汇总</span>
-          </div>
-          <div class="table-wrap" style="border:0;border-radius:0">
+          </section>
+          <section id="input">
+            <h3>输入与范围</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>界面项</th>
+                    <th>作用</th>
+                    <th>建议</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>输入 Excel</td>
+                    <td>选择待检查的 <code>.xlsx</code> 或 <code>.xlsm</code> 文件。</td>
+                    <td>检查期间保持文件可读写；如提示文件锁定，请先关闭 Excel 中打开的同名文件。</td>
+                  </tr>
+                  <tr>
+                    <td>检查工作表</td>
+                    <td>决定本次检查的数据表。选择文件后会自动载入工作表列表。</td>
+                    <td>切换工作表后，GUI 会重新尝试识别 Source / Target 列。</td>
+                  </tr>
+                  <tr>
+                    <td>Source 列 / Target 列</td>
+                    <td>填写 Excel 列字母，例如 <code>A</code>、<code>B</code>、<code>AA</code>。</td>
+                    <td>两列不能相同。自动识别失败时可直接手动修改。</td>
+                  </tr>
+                  <tr>
+                    <td>开始行</td>
+                    <td>从该 Excel 行开始处理，默认 <code>2</code>。</td>
+                    <td>通常第 1 行是表头；多行表头时改为第一条实际数据所在行。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>自动识别不到列时，可以手动填写列字母，或到<a href="#settings">设置</a>保存项目使用的表头别名。</p>
+          </section>
+          <section id="checks">
+            <h3>九项检查一览</h3>
+            <div class="group-label">术语与翻译一致性</div>
+            <div class="check-grid">
+              <article class="card">
+                <div class="card-head">
+                  <h4>术语检查</h4>
+                  <span class="status-pill on">默认开启</span>
+                </div>
+                <p>从选定 mark 中建立新术语对，也可结合历史 TB 回扫全文，定位缺失、错译或映射冲突。</p>
+                <p><a href="#term-settings">查看术语专项配置 ↓</a></p>
+              </article>
+              <article class="card">
+                <div class="card-head">
+                  <h4>同 Source 不同 Target</h4>
+                  <span class="status-pill on">默认开启</span>
+                </div>
+                <p>按 Source 单元格精确分组；完全相同的 Source 对应多个不同 Target 时报告组内每一行。</p>
+              </article>
+              <article class="card">
+                <div class="card-head">
+                  <h4>同 Target 不同 Source</h4>
+                  <span class="status-pill off">默认关闭</span>
+                </div>
+                <p>查找完全相同的非空 Target 是否对应多个 Source。适合发现误复用，但合理复用也很常见。</p>
+              </article>
+            </div>
+            <div class="group-label">内容保真检查</div>
+            <div class="check-grid">
+              <article class="card">
+                <div class="card-head">
+                  <h4>Tag / Placeholder</h4>
+                  <span class="status-pill on">默认开启</span>
+                </div>
+                <p>比较 Tag、Placeholder 或 memoQ Marker 的内容、次数及尖括号层级结构。</p>
+                <p><a href="#tag-settings">查看 Tag 专项配置 ↓</a></p>
+              </article>
+              <article class="card">
+                <div class="card-head">
+                  <h4>换行数量</h4>
+                  <span class="status-pill on">默认开启</span>
+                </div>
+                <p>比较 Source / Target 的真实换行数。LF、CRLF、CR 都支持；文本 <code>\n</code> 不算真实换行。</p>
+              </article>
+              <article class="card">
+                <div class="card-head">
+                  <h4>数字一致性</h4>
+                  <span class="status-pill on">默认开启</span>
+                </div>
+                <p>比较数字表达式及重复次数，不要求顺序一致；自动排除 URL、Tag、Placeholder 等内部数字。</p>
+              </article>
+              <article class="card">
+                <div class="card-head">
+                  <h4>URL 一致性</h4>
+                  <span class="status-pill on">默认开启</span>
+                </div>
+                <p>比较 URL 完整文本和重复次数，识别 HTTP(S)、FTP、file、mailto 与 www 开头的地址。</p>
+              </article>
+            </div>
+            <div class="group-label">Target 文本质量</div>
+            <div class="check-grid">
+              <article class="card">
+                <div class="card-head">
+                  <h4>Target 中文</h4>
+                  <span class="status-pill on">默认开启</span>
+                </div>
+                <p>定位 Target 中残留的汉字、CJK 标点、全角标点和常见中文排版符号。</p>
+              </article>
+              <article class="card">
+                <div class="card-head">
+                  <h4>Target 文本规范</h4>
+                  <span class="status-pill on">默认开启</span>
+                </div>
+                <p>检查异常标点、连续空格、首尾空格和全半角混用；四条规则可独立开关。</p>
+                <p><a href="#target-settings">查看文本规范配置 ↓</a></p>
+              </article>
+            </div>
+          </section>
+          <section id="term-settings">
+            <h3>术语检查设置</h3>
+            <div class="settings-block">
+              <h4>两种术语来源可以组合</h4>
+              <div class="mini-grid">
+                <div class="mini"><strong>术语标记</strong><span>默认同时选择中文方括号 <code>【】</code> 与半角方括号 <code>[]</code>，从正文显式 mark 中发现新术语对。</span></div>
+                <div class="mini"><strong>历史 TB</strong><span>可选 Excel 术语库。命中历史 Source 时优先采用历史 Target，并与本批新增术语一起回扫全文。</span></div>
+                <div class="mini"><strong>仅历史 TB 模式</strong><span>可以取消两个 mark，但此时必须提供历史 TB；工具只检查已有术语，不新增术语。</span></div>
+                <div class="mini"><strong>历史 TB 范围</strong><span>可确认工作表、Source 列、Target 列和开始行；默认优先选择“术语表”并自动识别列。</span></div>
+              </div>
+              <figure class="shot">
+                <img src="assets/term-settings.png" alt="术语检查设置窗口，包括术语标记、TB 项目、历史 TB 文件及工作表列配置" width="780" height="215">
+                <figcaption> 点击“术语检查”右侧下拉箭头打开；“确定”应用调整，“取消”恢复打开前的设置。 截图使用初始配置，没有载入个人 TB 项目。 </figcaption>
+              </figure>
+            </div>
+            <div class="two-col" style="margin-top:14px">
+              <article class="card">
+                <h4>TB 项目</h4>
+                <p>“保存当前”可把历史 TB 文件、工作表、列和开始行保存为常用项目；之后从下拉框快速复用。</p>
+                <p>删除项目只删除 QAtools 中的配置，不会删除原始 TB 文件。</p>
+              </article>
+              <article class="card">
+                <h4>术语报告重点</h4>
+                <p>启用术语检查时，报告会包含“术语表”。它只写本次实际涉及的历史术语和本批新增术语，不复制整份历史 TB。</p>
+              </article>
+            </div>
+          </section>
+          <section id="tag-settings">
+            <h3>Tag / Placeholder 设置</h3>
+            <div class="settings-block">
+              <div class="two-col">
+                <div>
+                  <h4>常规 Tag（默认）</h4>
+                  <ul>
+                    <li><code>&lt;...&gt;</code> tag</li>
+                    <li><code>[color=...]</code> / <code>[/color]</code> tag</li>
+                    <li><code>{...}</code> / <code>{{...}}</code> placeholder</li>
+                    <li>文本中的 <code>\n</code> mark</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4>memoQ Marker</h4>
+                  <p>只检查数字 marker：<code>{n}</code>、<code>{n&gt;</code>、<code>&lt;n}</code>。适合 memoQ 导出的成对数字标记。</p>
+                  <p>常规类型和尖括号过滤配置在此模式下会自动停用。</p>
+                </div>
+              </div>
+              <figure class="shot">
+                <img src="assets/tag-settings.png" alt="Tag Placeholder 设置窗口，显示常规 Tag 与 memoQ Marker 模式、四类常规检查和尖括号过滤配置" width="620" height="227">
+                <figcaption>默认模式为“常规 Tag”，四个常规类型全部开启。</figcaption>
+              </figure>
+            </div>
+            <div class="callout warn">
+              <strong>尖括号过滤配置</strong>
+              <p> 可选 JSON 文件，仅在“常规 Tag”且启用 <code>&lt;...&gt;</code> 时生效。 未选择配置时，工具按内置规则检查全部可识别尖括号 Tag。 </p>
+            </div>
+          </section>
+          <section id="target-settings">
+            <h3>Target 文本规范设置</h3>
+            <div class="settings-block">
+              <div class="two-col">
+                <article class="mini"><strong>异常标点符号</strong><span>报告 <code>..</code>、<code>,,</code>、<code>。。</code> 等；允许 <code>...</code>、<code>…</code>，连续感叹号和问号不在本规则中。</span></article>
+                <article class="mini"><strong>连续空格</strong><span>报告任意位置连续 2 个及以上普通 ASCII 空格；NBSP 不计入。</span></article>
+                <article class="mini"><strong>首尾空格</strong><span>报告 Target 开头或结尾的普通 ASCII 空格；NBSP 不计入。</span></article>
+                <article class="mini"><strong>全半角混用</strong><span>仅比较同类字符或标点的半角/全角形式，不把英文与中文标点的正常共存视为问题。</span></article>
+              </div>
+              <figure class="shot">
+                <img src="assets/target-text-settings.png" alt="Target 文本规范设置窗口，四条检查规则均已勾选" width="620" height="151">
+                <figcaption>Target 文本规范：至少保留一项规则，否则 GUI 会阻止开始检查。</figcaption>
+              </figure>
+            </div>
+          </section>
+          <section id="report">
+            <h3>检查报告怎么看</h3>
+            <div class="check-grid">
+              <article class="card">
+                <h4>原工作表</h4>
+                <p>输入工作簿中的业务工作表会完整保留，检查结果以新增工作表呈现。</p>
+              </article>
+              <article class="card">
+                <h4>问题处理</h4>
+                <p>同一原始行命中多个检查时只保留一行，检查项和问题描述合并展示。</p>
+              </article>
+              <article class="card">
+                <h4>质量检查汇总</h4>
+                <p>按本次启用的检查列出问题行数，便于快速判断重点。</p>
+              </article>
+              <article class="card">
+                <h4>术语表（可选）</h4>
+                <p>“本批次是否有问题”可筛选，有问题的状态格浅红突出。只统计该术语实际触发的术语问题；修订后需重新检查以更新状态。</p>
+              </article>
+            </div>
+            <div class="report-preview" aria-label="问题处理工作表示意">
+              <div class="report-tabs"> <span>Localization</span><span>术语表</span><span class="active">问题处理</span><span>质量检查汇总</span> </div>
+              <div class="table-wrap" style="border:0;border-radius:0">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>行号</th>
+                      <th>source</th>
+                      <th>target</th>
+                      <th>修改后target</th>
+                      <th>问题描述</th>
+                      <th>检查项</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>42 ↗</td>
+                      <td>Open {name}</td>
+                      <td>打开 name</td>
+                      <td class="editable">在此填写最终译文</td>
+                      <td>【Tag 检查】Target 缺少 {name}；【数字一致性】…</td>
+                      <td>Tag 检查；数字一致性</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <ul>
+              <li>“问题处理”固定列为：行号、source、target、修改后target、问题描述、检查项。</li>
+              <li>“修改后target”列为黄色，可直接填写最终译文；留空表示忽略该行。</li>
+              <li>点击“行号”可跳转到原数据工作表对应的 Target 单元格。</li>
+              <li>专项字段（如同组行号、命中字符、换行数量）会并入“问题描述”。</li>
+              <li>同 Source 不同 Target 优先展示，同 Target 不同 Source 其次，其余按原始行号排列。相同 Source 及译文版本会相邻；同一行只显示一次。</li>
+            </ul>
+          </section>
+          <section id="revision">
+            <h3>应用修订</h3>
+            <div class="flow">
+              <div class="node"><strong>1. 填写报告</strong><span>在“问题处理”的黄色列填写最终 Target 并保存。</span></div>
+              <div class="arrow">→</div>
+              <div class="node"><strong>2. 应用修订</strong><span>回到 GUI，点击底部“应用修订”，选择已填写的报告。</span></div>
+              <div class="arrow">→</div>
+              <div class="node"><strong>3. 保存修订稿</strong><span>另存为 revised_原文件名，检查报告保持不变。</span></div>
+            </div>
+            <div class="two-col" style="margin-top:16px">
+              <article class="card">
+                <h4>哪些行会回填？</h4>
+                <ul>
+                  <li>“修改后target”为空：忽略。</li>
+                  <li>修改值与现有 Target 相同：计为内容未变化。</li>
+                  <li>填写了新值且行号对应的 Source 匹配：写入修订稿。</li>
+                </ul>
+              </article>
+              <article class="card">
+                <h4>行号与 Source 校验</h4>
+                <p>按行号定位原数据并精确核对 Source；不匹配会跳过并提示。报告里的原 Target 仅供参考，误改或清空不会影响回填；即使原数据 Target 已变化，Source 匹配时仍以“修改后target”为准。</p>
+              </article>
+            </div>
+          </section>
+        </section>
+        <section class="guide-tool" data-tool="phraseloom" id="phraseloom" aria-labelledby="phraseloom-title">
+          <header class="tool-heading">
+            <p class="eyebrow">常用流程</p>
+            <h2 id="phraseloom-title">PhraseLoom</h2>
+            <p class="tool-intro">把待翻译内容整理成 Strings 清单，翻译完成后还原到原工作簿结构。</p>
+          </header>
+          <ol class="steps">
+            <li><strong>选择原始 Excel</strong><span>默认读取第一个工作表。填写 Source、Target 表头名称；默认为 source、target。Context 可留空，也可指定实际表头。列字段也支持从 1 开始的列序号。</span></li>
+            <li><strong>导出 Strings</strong><span>确认导出选项，点击【导出 Strings】。在原文件旁生成“原文件名_strings.xlsx”。</span></li>
+            <li><strong>填写译文</strong><span>打开 strings 工作表，只填写 target 列。对照 sample_sources 与 context 理解语境，保留 source 中的变量和保护标记。</span></li>
+            <li><strong>回填译文</strong><span>保存并关闭 Strings 文件，点击软件右下角【回填译文…】，选中它后直接开始回填；无需重新选择原始 Excel。</span></li>
+          </ol>
+          <details class="screenshot-detail">
+            <summary>查看界面截图</summary>
+            <figure class="shot">
+              <img src="assets/phraseloom.png" alt="PhraseLoom：导出选项与同一页面底部的“回填译文…”入口。" loading="lazy" width="1260" height="820">
+              <figcaption>PhraseLoom：导出选项与同一页面底部的“回填译文…”入口。</figcaption>
+            </figure>
+          </details>
+          <h3>导出选项怎么选</h3>
+          <div class="table-wrap">
             <table>
-              <thead><tr><th>行号</th><th>source</th><th>target</th><th>修改后target</th><th>问题描述</th><th>检查项</th></tr></thead>
+              <thead>
+                <tr>
+                  <th scope="col">界面项</th>
+                  <th scope="col">使用方式</th>
+                </tr>
+              </thead>
               <tbody>
                 <tr>
-                  <td>42 ↗</td><td>Open {name}</td><td>打开 name</td><td class="editable">在此填写最终译文</td>
-                  <td>【Tag 检查】Target 缺少 {name}；【数字一致性】…</td><td>Tag 检查；数字一致性</td>
+                  <td>按换行拆分多行 Source</td>
+                  <td>默认开启。每个非空行单独翻译，回填时合并回原单元格；需要整段翻译时取消勾选。</td>
+                </tr>
+                <tr>
+                  <td>启用相似句分组</td>
+                  <td>默认关闭。开启后相似句排在一起，普通相似句仍需分别翻译，不会自动生成译文。</td>
+                </tr>
+                <tr>
+                  <td>Tag 配置（可选）</td>
+                  <td>通常留空即可；有项目提供的 TOML 规则文件时再选择。</td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </div>
-
-        <ul>
-          <li>“问题处理”固定列为：行号、source、target、修改后target、问题描述、检查项。</li>
-          <li>“修改后target”列为黄色，可直接填写最终译文；留空表示忽略该行。</li>
-          <li>点击“行号”可跳转到原数据工作表对应的 Target 单元格。</li>
-          <li>专项字段（如同组行号、命中字符、换行数量）会并入“问题描述”。</li>
-          <li>同 Source 不同 Target 优先展示，同 Target 不同 Source 其次，其余按原始行号排列。相同 Source 及译文版本会相邻；同一行只显示一次。<a href="../../tools/workflow/README.md#统一报告">完整分组顺序</a></li>
-        </ul>
-      </section>
-
-      <section id="revision">
-        <h2>应用修订</h2>
-
-        <div class="flow">
-          <div class="node"><strong>1. 填写报告</strong><span>在“问题处理”的黄色列填写最终 Target 并保存。</span></div>
-          <div class="arrow">→</div>
-          <div class="node"><strong>2. 应用修订</strong><span>回到 GUI，点击底部“应用修订”，选择已填写的报告。</span></div>
-          <div class="arrow">→</div>
-          <div class="node"><strong>3. 保存修订稿</strong><span>另存为 revised_原文件名，检查报告保持不变。</span></div>
-        </div>
-
-        <div class="two-col" style="margin-top:16px">
-          <article class="card">
-            <h3>哪些行会回填？</h3>
-            <ul>
-              <li>“修改后target”为空：忽略。</li>
-              <li>修改值与现有 Target 相同：计为内容未变化。</li>
-              <li>填写了新值且行号对应的 Source 匹配：写入修订稿。</li>
-            </ul>
-          </article>
-          <article class="card">
-            <h3>行号与 Source 校验</h3>
-            <p>按行号定位原数据并精确核对 Source；不匹配会跳过并提示。报告里的原 Target 仅供参考，误改或清空不会影响回填；即使原数据 Target 已变化，Source 匹配时仍以“修改后target”为准。完整规则见 <a href="../../tools/workflow/README.md#修订回填">修订回填说明</a>。</p>
-          </article>
-        </div>
-      </section>
-
-      <section id="content-sync">
-        <h2>内容同步 · Master ↔ 小表</h2>
-        <p>在“常用流程 → 内容同步”中切换两个 Tab。二者分别保留配置、结果和日志，切换不会停止后台任务。</p>
-        <div class="two-col">
-          <article class="card"><h3>Master → 小表</h3><p>把总表内容写入匹配的小表行，可同步一列或连续多列。Master 来源不修改。</p></article>
-          <article class="card"><h3>小表 → Master</h3><p>汇总小表译文后回填总表，仅回填一列。小表来源不修改。</p></article>
-        </div>
-        <ol class="steps">
-          <li><strong>选择两端</strong><span>选择 Master 文件和小表目录；目录会递归处理。支持 .xlsx / .xlsm。</span></li>
-          <li><strong>确认保存位置</strong><span>新输出目录留空时，正向直接更新小表，反向直接更新 Master。如需副本，填写尚不存在的新目录。</span></li>
-          <li><strong>配置匹配列</strong><span>分别填写 Key、原文、内容列，以及工作表和表头行数。默认 Master B/C/D，小表 A/B/C；核对实际文件，不按表头自动推断。</span></li>
-          <li><strong>确认写入策略</strong><span>按需选择“仅填空”“允许空白写入”；正向还可设置连续更新列数和可选 Excel 重存。</span></li>
-          <li><strong>执行与核对</strong><span>点击“同步到小表”或“回填 Master”，查看更新格数与日志中的失败、未匹配或重复身份信息。</span></li>
-        </ol>
-        <figure class="shot"><img src="assets/sync-master-to-target.png" alt="内容同步 Master 到小表 Tab：路径、两端列映射、连续更新列数与写入策略" loading="lazy"><figcaption>正向：连续列从两端各自的内容开始列依次对应。</figcaption></figure>
-        <details class="screenshot-detail"><summary>查看小表 → Master 页面</summary>
-          <figure class="shot"><img src="assets/sync-target-to-master.png" alt="内容同步小表到 Master Tab：单列译文回填配置" loading="lazy"><figcaption>反向仅回填一列，不自动执行 Excel 重存。</figcaption></figure>
-        </details>
-        <div class="callout">
-          <strong>空白与正文保持原意</strong>
-          <p>真实空值不会写成文字 None 或 nan；用户输入的文字 None、nan、NA、NULL 以及首尾空格、换行原样保留。两项写入选项彼此独立，默认均关闭。</p>
-          <p>按 Key + 原文匹配，不新增行；来源公式缺少缓存不能当空白处理。重复身份、缓存及失败保护以<a href="../../tools/content_sync/README.md">内容同步规则</a>为准。</p>
-        </div>
-      </section>
-
-      <section id="file-utilities">
-        <h2>文件与表格工具</h2>
-        <p>以下三个页面均在“文件与表格”中；Batch 拆分与合并表格的流程见上方工具导航。</p>
-        <article id="compatibility" class="settings-block">
-          <h3>兼容性重存</h3>
-          <p>选择工作簿目录，按需填写新输出目录，点击“兼容性重存”。需要桌面 Microsoft Excel；文件保持原扩展名，留空输出目录会直接重存原文件。</p>
-          <p>失败文件保留原内容，继续其他文件；环境与宏处理规则见<a href="../../tools/excel_compatibility/README.md">兼容性重存说明</a>。</p>
-          <details class="screenshot-detail"><summary>查看兼容性重存页面</summary><figure class="shot"><img src="assets/compatibility.png" alt="兼容性重存页面：文件目录和可选新输出目录" loading="lazy"><figcaption>使用独立 Excel 会话处理所选目录。</figcaption></figure></details>
-        </article>
-        <article id="columns" class="settings-block">
-          <h3>列操作</h3>
-          <ol>
-            <li>选择工作簿目录，确认是否填写新输出目录。</li>
-            <li>选择清空、插入或删除，填写列字母（默认 C）及工作表。</li>
-            <li>清空时设置保留表头行数；插入时填写新列第 1 行标题；点击“执行列操作”。</li>
+          <h3>翻译与回填结果</h3>
+          <p>已有译文不会进入待翻译清单；纯数字、纯符号与仅含 Tag 的内容可自动完成，在 completed 工作表中复核。相同待翻译原文只需翻译一次，模板中的 <code>{num1}</code> 等变量在回填时恢复。</p>
+          <div class="callout">
+            <strong>保留整个 Strings 工作簿</strong>
+            <p>不要删除隐藏工作表、隐藏映射或保护标记，也不要把 strings 单独复制成新文件。回填需要工作簿内保留的原文件信息。</p>
+          </div>
+          <p>回填生成“原文件名_translated.xlsx”，保留导出前已有译文、工作表与格式。完成提示会列出问题数；若生成 <code>*_restore_issues.xlsx</code>，按复核表检查空译文、变量或 Tag 问题，修正 Strings 后重新回填。</p>
+        </section>
+        <section class="guide-tool" data-tool="content_sync" id="content-sync" aria-labelledby="content-sync-title">
+          <header class="tool-heading">
+            <p class="eyebrow">常用流程</p>
+            <h2 id="content-sync-title">内容同步</h2>
+            <p class="tool-intro">按 Key + 原文精确匹配，双向搬运译文；两个方向在同一页面切换 Tab。</p>
+          </header>
+          <p>在“常用流程 → 内容同步”中切换两个 Tab。二者分别保留配置、结果和日志，切换不会停止后台任务。</p>
+          <div class="two-col">
+            <article class="card">
+              <h3>Master → 小表</h3>
+              <p>把总表内容写入匹配的小表行，可同步一列或连续多列。Master 来源不修改。</p>
+            </article>
+            <article class="card">
+              <h3>小表 → Master</h3>
+              <p>汇总小表译文后回填总表，仅回填一列。小表来源不修改。</p>
+            </article>
+          </div>
+          <ol class="steps">
+            <li><strong>选择两端</strong><span>选择 Master 文件和小表目录；目录会递归处理，支持 .xlsx / .xlsm。选择阶段会检查 Master 访问状态，并统计小表。</span></li>
+            <li><strong>确认保存位置</strong><span>新输出目录留空时，正向直接更新小表，反向直接更新 Master。如需副本，填写尚不存在的新目录。</span></li>
+            <li><strong>配置匹配列</strong><span>分别填写 Key、原文、内容列，以及工作表和表头行数。默认 Master B/C/D，小表 A/B/C；核对实际文件，不按表头自动推断。</span></li>
+            <li><strong>确认写入策略</strong><span>按需选择“仅填空”“允许空白写入”；正向还可设置连续更新列数和可选 Excel 重存。</span></li>
+            <li><strong>执行与核对</strong><span>点击“同步到小表”或“回填 Master”，查看更新格数与日志中的失败、未匹配或重复身份信息。</span></li>
           </ol>
-          <p>清空保留格式；插入、删除操作整列，由 Excel 处理引用变化。需要桌面 Excel，详见<a href="../../tools/column_tools/README.md">列操作规则</a>。</p>
-          <figure class="shot"><img src="assets/columns.png" alt="列操作页面：清空、插入、删除选择及列配置" loading="lazy"><figcaption>不同动作只启用相关选项；输出目录可留空。</figcaption></figure>
-        </article>
-        <article id="deep-replace" class="settings-block">
-          <h3>同名文件替换</h3>
-          <p>选择替换来源目录和目标目录，确认输出位置后点击“替换同名文件”。它按文件名替换整个 Excel 文件，不合并单元格；来源和目标不可相同或互相包含。</p>
-          <p>原位替换会先备份目标文件；重名冲突会保留目标并列出候选。备份路径与恢复方法见<a href="../../tools/deep_replace/README.md#原位替换及恢复">替换与恢复规则</a>。</p>
-          <details class="screenshot-detail"><summary>查看同名文件替换页面</summary><figure class="shot"><img src="assets/deep-replace.png" alt="同名文件替换页面：来源、目标与可选输出目录" loading="lazy"><figcaption>原位模式替换前备份，来源文件保持不变。</figcaption></figure></details>
-        </article>
-      </section>
-
-      <section id="untranslated-stats">
-        <h2>未翻译统计</h2>
-        <p>在“翻译辅助 → 未翻译统计”选择文件目录，确认原文、译文列及计数口径，点击“生成统计表”。默认 B/C 列、活动工作表、1 行表头、中文字符数。</p>
-        <figure class="shot"><img src="assets/untranslated-stats.png" alt="未翻译统计页面：原文与译文列、中文字符或英文词数、工作表与表头行数" loading="lazy"><figcaption>新输出目录留空时，统计表写入所选目录，输入工作簿保持不变。</figcaption></figure>
-        <p>结果为“未翻译统计.xlsx”，含各文件数据和总计；失败或跳过的文件按需列在“未统计文件”页。旧统计表不会被重复纳入统计。</p>
-        <p>统计中的文字 nan 计为未翻译，这与内容同步保留原文的口径不同。完整计数范围和公式缓存处理见<a href="../../tools/untranslated_stats/README.md">统计规则</a>。</p>
-      </section>
-
-      <section id="operation-logs">
-        <h2>运行日志与输出位置</h2>
-        <p>新增六项功能的底部“查看日志”打开独立小弹窗。正常文件使用一行摘要，失败或冲突补充必要原因；关闭弹窗不会停止任务，再打开可以继续查看。</p>
-        <figure class="shot compact-shot"><img src="assets/operation-logs.png" alt="实际临时样本同步的简约运行日志：有效身份、文件结果和最终摘要" loading="lazy"><figcaption>临时示例的实际运行日志；截图省略含临时目录的两条开头记录。</figcaption></figure>
-        <p>处理和日志入队在后台完成，界面定时分批刷新；大量日志会截断较早记录，完整计数仍以结果摘要为准。可复制当前显示日志，详见<a href="../tool-logs.md">日志容量与行为</a>。</p>
-        <div class="table-wrap"><table>
-          <thead><tr><th>工具</th><th>新输出目录留空</th></tr></thead>
-          <tbody>
-            <tr><td>Master → 小表</td><td>更新原小表，Master 不变</td></tr>
-            <tr><td>小表 → Master</td><td>更新原 Master，小表不变</td></tr>
-            <tr><td>列操作 / 兼容性重存</td><td>更新所选目录中的原工作簿</td></tr>
-            <tr><td>同名文件替换</td><td>先备份，再原位替换目标文件</td></tr>
-            <tr><td>未翻译统计</td><td>在所选目录写统计表，原工作簿不变</td></tr>
-          </tbody>
-        </table></div>
-        <p>填写新输出目录时必须指定尚不存在的目录。以上约定不改变一键质量检查生成报告副本的方式；新增工具也不会额外生成 report 或 JSON 日志文件。</p>
-      </section>
-
-      <section id="troubleshooting" class="faq">
-        <h2>常见问题</h2>
-
-        <details open>
-          <summary>自动识别到了错误的 Source / Target 列</summary>
-          <div>先在当前页面手动填写正确列字母。若项目长期使用特殊表头，在左侧“设置”中保存对应表头别名。</div>
-        </details>
-        <details>
-          <summary>提示“术语检查至少需要一种术语 mark，或一个历史 TB”</summary>
-          <div>重新打开术语设置，至少勾选一种术语标记；或者选择历史 TB 并确认工作表、Source / Target 列。</div>
-        </details>
-        <details>
-          <summary>Tag 或 Target 文本规范无法开始</summary>
-          <div>启用 Tag 检查时必须选定一种模式/类型；启用 Target 文本规范时至少保留一条规则。</div>
-        </details>
-        <details>
-          <summary>“同 Target 不同 Source”为什么默认关闭？</summary>
-          <div>多个不同 Source 合理共用同一译文的情况很常见。只在需要排查误复用时开启，并把结果视为人工复核线索。</div>
-        </details>
-        <details>
-          <summary>运行过程中可以关闭 QAtools 吗？</summary>
-          <div>不可以。后台任务执行时窗口会阻止关闭，以避免输出文件不完整。等待完成提示后再退出。</div>
-        </details>
-        <details>
-          <summary>如何保留多次检查结果？</summary>
-          <div>GUI 使用固定的 <code>workflow_check_原文件名.xlsx</code>。下一次运行前请把旧报告重命名或移动到其他目录。</div>
-        </details>
-      </section>
-
-    </main>
-  </div>
-</body>
+          <figure class="shot">
+            <img src="assets/sync-master-to-target.png" alt="内容同步 Master 到小表 Tab：路径、两端列映射、连续更新列数与写入策略" loading="lazy" width="1260" height="820">
+            <figcaption>正向：连续列从两端各自的内容开始列依次对应。</figcaption>
+          </figure>
+          <details class="screenshot-detail">
+            <summary>查看小表 → Master 页面</summary>
+            <figure class="shot">
+              <img src="assets/sync-target-to-master.png" alt="内容同步小表到 Master Tab：单列译文回填配置" loading="lazy" width="1260" height="820">
+              <figcaption>反向仅回填一列，不自动执行 Excel 重存。</figcaption>
+            </figure>
+          </details>
+          <div class="callout">
+            <strong>空白与正文保持原意</strong>
+            <p>真实空值不会写成文字 None 或 nan；用户输入的文字 None、nan、NA、NULL 以及首尾空格、换行原样保留。两项写入选项彼此独立，默认均关闭。</p>
+            <p>按 Key + 原文匹配，不新增行；来源公式缺少缓存不能当空白处理。正向 Master 后行优先；反向按文件路径排序后，后文件、同文件后行优先，默认先忽略空白译文。</p>
+          </div>
+          <h3>选择时就能看到的提醒</h3>
+          <div class="two-col">
+            <article class="card">
+              <h4>Master 文件</h4>
+              <p>发现占用、只读或访问异常时弹窗提醒。先保存并关闭正在编辑的 Master；临时锁文件也可能是残留，需确认实际状态。</p>
+            </article>
+            <article class="card">
+              <h4>小表目录</h4>
+              <p>随机抽检最多 5 个文件。正常时只显示“可处理小表：xxx个”；发现只读时显示“文件只读，请取消read-only或选择【新输出目录】”。</p>
+            </article>
+          </div>
+          <details class="screenshot-detail">
+            <summary>查看目录检查弹窗</summary>
+            <div class="two-col">
+              <figure class="shot">
+                <img src="assets/sync-directory-ok.png" alt="未发现问题时只显示可处理小表数量。" loading="lazy" width="188" height="104">
+                <figcaption>未发现问题时只显示可处理小表数量。</figcaption>
+              </figure>
+              <figure class="shot">
+                <img src="assets/sync-directory-readonly.png" alt="发现只读时显示简短处理建议。" loading="lazy" width="382" height="104">
+                <figcaption>发现只读时显示简短处理建议。</figcaption>
+              </figure>
+            </div>
+          </details>
+          <p>抽检是选择当时的提醒，不代表整个目录一定可写。检查在后台执行；不会自动解除只读或关闭 Excel，实际保存时仍会报告失败。反向的小表只作来源读取，只读本身不阻止运行。</p>
+          <h3>确认结果</h3>
+          <p>【仅填空】保留已有目标内容；【允许空白写入】允许来源空白清空目标。两项同时勾选时，仍只处理空白目标。完成后核对实际更新格数，失败与冲突可在<a href="#operation-logs">查看日志</a>中检查。</p>
+          <p>正向同步会在后台同时处理独立小表；选择 Excel 兼容性重存时需已安装桌面 Excel。部分文件失败不影响其余文件，失败文件的未保存修改不计入实际更新。</p>
+        </section>
+        <section class="guide-tool" data-tool="compatibility" id="compatibility" aria-labelledby="compatibility-title">
+          <header class="tool-heading">
+            <p class="eyebrow">文件与表格</p>
+            <h2 id="compatibility-title">兼容性重存</h2>
+            <p class="tool-intro">用桌面 Microsoft Excel 打开并重新保存工作簿，供需要 Excel 原生保存的后续流程使用。</p>
+          </header>
+          <ol class="steps">
+            <li><strong>选择目录</strong><span>选择工作簿所在目录，包含子目录。支持 .xlsx、.xlsm、.xls；.xlsb 跳过。</span></li>
+            <li><strong>选择保存方式</strong><span>【新输出目录】留空会更新原文件；如需保留原件，指定尚不存在的新目录。</span></li>
+            <li><strong>开始重存</strong><span>点击【兼容性重存】，等待完成。通过【查看日志】核对失败或跳过的文件。</span></li>
+          </ol>
+          <details class="screenshot-detail">
+            <summary>查看界面截图</summary>
+            <figure class="shot">
+              <img src="assets/compatibility.png" alt="兼容性重存：文件目录与可选的新输出目录。" loading="lazy" width="1260" height="820">
+              <figcaption>兼容性重存：文件目录与可选的新输出目录。</figcaption>
+            </figure>
+          </details>
+          <div class="callout">
+            <strong>需要本机已安装桌面 Excel</strong>
+            <p>安装包不附带 Excel。此工具保持原扩展名，不负责格式转换，也不能保证修复损坏文件。Excel 保存时可能重新计算公式。</p>
+          </div>
+          <p>保存成功后才替换原文件；密码、保护或权限导致失败时会保留原件，并继续其他文件。</p>
+        </section>
+        <section class="guide-tool" data-tool="column_tools" id="columns" aria-labelledby="columns-title">
+          <header class="tool-heading">
+            <p class="eyebrow">文件与表格</p>
+            <h2 id="columns-title">列操作</h2>
+            <p class="tool-intro">批量清空列内容、插入一列或删除整列。此工具需要桌面 Microsoft Excel。</p>
+          </header>
+          <ol class="steps">
+            <li><strong>选择工作簿目录</strong><span>确认【新输出目录】是否留空；留空直接修改原工作簿，填写新目录则另存。</span></li>
+            <li><strong>选择动作与列</strong><span>填写列字母，默认 C。工作表留空使用各文件活动表，也可填写指定工作表名。</span></li>
+            <li><strong>执行与核对</strong><span>设置当前动作对应的表头选项，点击【执行列操作】，检查完成摘要与日志。</span></li>
+          </ol>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">动作</th>
+                  <th scope="col">发生的变化</th>
+                  <th scope="col">相关选项</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>清空列内容</td>
+                  <td>清空表头之后的内容，包括公式，保留单元格格式。</td>
+                  <td>表头行数默认 1，可设为 0。</td>
+                </tr>
+                <tr>
+                  <td>插入一列</td>
+                  <td>在指定列位置插入，后面的列右移。</td>
+                  <td>新列第 1 行标题默认 Translation。</td>
+                </tr>
+                <tr>
+                  <td>删除整列</td>
+                  <td>包含表头在内整列删除，后面的列左移。</td>
+                  <td>表头行数不影响删除。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <details class="screenshot-detail">
+            <summary>查看界面截图</summary>
+            <figure class="shot">
+              <img src="assets/columns.png" alt="列操作：动作选择、列字母、工作表和相关表头选项。" loading="lazy" width="1260" height="820">
+              <figcaption>列操作：动作选择、列字母、工作表和相关表头选项。</figcaption>
+            </figure>
+          </details>
+          <p>支持 .xlsx、.xlsm、.xls，保留目录结构。指定工作表不存在、保护阻止编辑或保存失败时，该文件会显示失败，其他文件继续。</p>
+        </section>
+        <section class="guide-tool" data-tool="excel_batcher" id="excel-batcher" aria-labelledby="excel-batcher-title">
+          <header class="tool-heading">
+            <p class="eyebrow">文件与表格</p>
+            <h2 id="excel-batcher-title">Batch 拆分</h2>
+            <p class="tool-intro">先按数据行数分成小批次，处理完成后再按原始行位复原。</p>
+          </header>
+          <div class="two-col">
+            <article class="card">
+              <h3>Tab：拆分 batch</h3>
+              <ol>
+                <li>选择【输入 Excel】和工作表。</li>
+                <li>设置【每批行数】，默认 1000；【表头行数】默认 1。</li>
+                <li>【batch 目录】留空时，在原文件旁新建“原文件名_batches”；也可选择空目录。</li>
+                <li>点击【开始拆分】，按完成提示打开目录。</li>
+              </ol>
+            </article>
+            <article class="card">
+              <h3>Tab：复原文件</h3>
+              <ol>
+                <li>将处理后的 batch 文件放回原 batch 目录。</li>
+                <li>选择完整【batch 目录】，按需指定【复原 Excel】。</li>
+                <li>点击【开始复原】，查看完成提示。</li>
+                <li>默认在 batch 目录上一级生成“原文件名_restored”，不覆盖原始文件。</li>
+              </ol>
+            </article>
+          </div>
+          <details class="screenshot-detail">
+            <summary>查看拆分 batch 界面</summary>
+            <figure class="shot">
+              <img src="assets/batch-split.png" alt="Batch 拆分的“拆分 batch”Tab：工作表、每批行数、表头及输出目录。" loading="lazy" width="1260" height="820">
+              <figcaption>Batch 拆分的“拆分 batch”Tab：工作表、每批行数、表头及输出目录。</figcaption>
+            </figure>
+          </details>
+          <details class="screenshot-detail">
+            <summary>查看复原文件界面</summary>
+            <figure class="shot">
+              <img src="assets/batch-restore.png" alt="“复原文件”Tab：选择完整 batch 目录后复原。" loading="lazy" width="1260" height="820">
+              <figcaption>“复原文件”Tab：选择完整 batch 目录后复原。</figcaption>
+            </figure>
+          </details>
+          <div class="callout">
+            <strong>分发 batch，保留复原所需文件</strong>
+            <p>目录中的 <code>batch_manifest.json</code> 与 <code>_qatools_restore_source_*</code> 模板不可删除或修改。它们用于确定原始位置并保留完整工作簿结构。</p>
+          </div>
+          <p>每批包含重复表头，中间空行也计入数据行数。可在 batch 中新增结果列；不要增加、删除或打乱需要回填的数据行。超出预期范围的新数据会阻止复原；复原采用第一批的表头，格式以原模板为准。</p>
+        </section>
+        <section class="guide-tool" data-tool="excel_merger" id="excel-merger" aria-labelledby="excel-merger-title">
+          <header class="tool-heading">
+            <p class="eyebrow">文件与表格</p>
+            <h2 id="excel-merger-title">合并表格</h2>
+            <p class="tool-intro">将目录内各工作簿当前活动的工作表，汇总到一张新的 MergedData 表。</p>
+          </header>
+          <ol class="steps">
+            <li><strong>准备工作簿</strong><span>在 Excel 中确认每个文件需要合并的工作表为活动表，并保存。工具不提供逐文件选表。</span></li>
+            <li><strong>选择目录与表头</strong><span>选择【Excel 所在目录】。默认只保留第一份表头；需要每份表头时勾选【保留每个文件的表头】。</span></li>
+            <li><strong>开始合并</strong><span>点击【开始合并】。按输出预览和完成提示打开结果，核对文件数、数据行数与失败数量。</span></li>
+          </ol>
+          <details class="screenshot-detail">
+            <summary>查看界面截图</summary>
+            <figure class="shot">
+              <img src="assets/merge-sheets.png" alt="合并表格：选择目录，按需保留每个文件的表头。" loading="lazy" width="1260" height="820">
+              <figcaption>合并表格：选择目录，按需保留每个文件的表头。</figcaption>
+            </figure>
+          </details>
+          <p>结果首列 <code>SourceFile</code> 记录来源文件名，默认保存在输入目录的上一级，文件名带 <code>_merged_active_sheet_</code> 和时间戳。支持 .xlsx / .xlsm，递归扫描，.xls / .xlsb 跳过。</p>
+          <p>合并的是文本值，不复制原表样式、公式、批注或图片；源文件保持不变。某个文件读取失败时继续其余文件，完成提示会给出错误日志路径。</p>
+        </section>
+        <section class="guide-tool" data-tool="deep_replace" id="deep-replace" aria-labelledby="deep-replace-title">
+          <header class="tool-heading">
+            <p class="eyebrow">文件与表格</p>
+            <h2 id="deep-replace-title">同名文件替换</h2>
+            <p class="tool-intro">按完整文件名匹配，将来源文件替换到目标位置；替换的是整个文件。</p>
+          </header>
+          <ol class="steps">
+            <li><strong>选择两个目录</strong><span>分别选择【替换来源目录】与【目标文件目录】。两个目录不能相同，也不能互相包含。</span></li>
+            <li><strong>确认输出位置</strong><span>留空【新输出目录】会先备份再原位替换目标；填写新目录则生成目标 Excel 文件树的副本。</span></li>
+            <li><strong>执行替换</strong><span>点击【替换同名文件】。核对替换数、冲突、失败及日志中的备份位置。</span></li>
+          </ol>
+          <details class="screenshot-detail">
+            <summary>查看界面截图</summary>
+            <figure class="shot">
+              <img src="assets/deep-replace.png" alt="同名文件替换：来源、目标与可选输出目录。" loading="lazy" width="1260" height="820">
+              <figcaption>同名文件替换：来源、目标与可选输出目录。</figcaption>
+            </figure>
+          </details>
+          <h3>哪些文件会替换</h3>
+          <p>按含扩展名的文件名匹配，忽略大小写，不要求目录层级相同。只有唯一来源对应唯一目标时才替换；同名候选不唯一则跳过，不会随机挑选。来源中没有对应目标的文件不会被新增到目标目录。</p>
+          <h3>需要撤回时</h3>
+          <p>在日志中找到本次备份目录，将备份文件按相同相对路径复制回目标目录。每次原位替换有独立备份，放在目标目录的 <code>.qatools-backups</code> 内；软件暂不提供恢复按钮。</p>
+          <p>来源文件不修改。另存模式会保留目标树中的未匹配与冲突 Excel 文件，不复制非 Excel 文件。</p>
+        </section>
+        <section class="guide-tool" data-tool="french_nbsp" id="french-nbsp" aria-labelledby="french-nbsp-title">
+          <header class="tool-heading">
+            <p class="eyebrow">翻译辅助</p>
+            <h2 id="french-nbsp-title">法语 NBSP 恢复</h2>
+            <p class="tool-intro">修复法语标点周围的不换行空格，生成新的 Excel，原文件保持不变。</p>
+          </header>
+          <ol class="steps">
+            <li><strong>选择文件与范围</strong><span>选择【输入 Excel】和【处理工作表】。确认自动识别的 Target 列；识别不到时手动填写列字母。开始行默认 2。</span></li>
+            <li><strong>选择写入列</strong><span>【结果列】留空，在结果文件的 Target 列写入修复内容；填写另一列字母，则写到该列。</span></li>
+            <li><strong>开始恢复</strong><span>点击【开始恢复】，核对处理行数与修复行数。结果保存在原文件旁，名称以 french_nbsp_restore_ 开头。</span></li>
+          </ol>
+          <details class="screenshot-detail">
+            <summary>查看界面截图</summary>
+            <figure class="shot">
+              <img src="assets/french-nbsp.png" alt="法语 NBSP 恢复：目标列、开始行和可选结果列。" loading="lazy" width="1260" height="820">
+              <figcaption>法语 NBSP 恢复：目标列、开始行和可选结果列。</figcaption>
+            </figure>
+          </details>
+          <p>恢复 <code>; : ? ! %</code> 前、<code>«</code> 后与 <code>»</code> 前的 NBSP；已有普通空格和窄不换行空格会统一。URL 内标点和 <code>12:30</code> 这类时间冒号保留。</p>
+          <div class="callout">
+            <strong>结果列用于并排核对</strong>
+            <p>指定结果列后，无需修复的 Target 也会复制过去。请确认该列可以写入，避免覆盖结果文件中需要保留的其他内容。表头识别规则可在<a href="#settings">设置</a>调整。</p>
+          </div>
+        </section>
+        <section class="guide-tool" data-tool="untranslated_stats" id="untranslated-stats" aria-labelledby="untranslated-stats-title">
+          <header class="tool-heading">
+            <p class="eyebrow">翻译辅助</p>
+            <h2 id="untranslated-stats-title">未翻译统计</h2>
+            <p class="tool-intro">按文件统计未翻译量与总量，汇总为一张 Excel 统计表。</p>
+          </header>
+          <ol class="steps">
+            <li><strong>选择目录</strong><span>选择需要统计的工作簿目录。输出目录留空时，统计表放在这个目录；也可指定新目录。</span></li>
+            <li><strong>确认列与口径</strong><span>默认原文 B 列、译文 C 列、1 行表头、活动工作表。按项目选择中文字符数或英文词数。</span></li>
+            <li><strong>生成统计表</strong><span>点击【生成统计表】，打开“未翻译统计.xlsx”，查看各文件与最后一行总计。</span></li>
+          </ol>
+          <details class="screenshot-detail">
+            <summary>查看界面截图</summary>
+            <figure class="shot">
+              <img src="assets/untranslated-stats.png" alt="未翻译统计：列配置、计数口径、工作表与表头行数。" loading="lazy" width="1260" height="820">
+              <figcaption>未翻译统计：列配置、计数口径、工作表与表头行数。</figcaption>
+            </figure>
+          </details>
+          <h3>如何理解结果</h3>
+          <p>原文为空的行不计入；译文为空、纯空白，或去掉首尾空白后为 nan（不区分大小写）时计为未翻译。文字 None、NA、NULL 视为已有译文。这与内容同步原样搬运 nan 的规则不同。</p>
+          <p>中文模式统计汉字数量；英文模式统计英文词数。有效原文即使字数为零，仍可能计入行数。含公式时请先在 Excel 中计算并保存，以便统计使用已保存的值。</p>
+          <p>源文件不修改；再次运行会更新同名统计表，但不会把旧统计表纳入输入。失败或不支持的文件列在“未统计文件”页，并在日志中说明，不会当成零工作量文件。</p>
+        </section>
+        <section class="guide-tool" data-tool="xbench_report" id="xbench-report" aria-labelledby="xbench-report-title">
+          <header class="tool-heading">
+            <p class="eyebrow">翻译辅助</p>
+            <h2 id="xbench-report-title">Xbench QA 转换</h2>
+            <p class="tool-intro">把 Xbench 导出的 QA Report 整理成便于筛选、修订的五列表格。</p>
+          </header>
+          <ol class="steps">
+            <li><strong>选择 Xbench 报告</strong><span>在【Xbench QA Report】选择 Excel 格式报告，等待工作表列表载入。</span></li>
+            <li><strong>确认报告工作表</strong><span>选择包含 QA 明细的【报告工作表】，核对页面中的输出文件预览。</span></li>
+            <li><strong>开始转换</strong><span>点击【开始转换】。完成提示会列出读取明细数、输出行数和文件位置。</span></li>
+          </ol>
+          <details class="screenshot-detail">
+            <summary>查看界面截图</summary>
+            <figure class="shot">
+              <img src="assets/xbench.png" alt="Xbench QA 转换：报告文件与报告工作表选择。" loading="lazy" width="1260" height="820">
+              <figcaption>Xbench QA 转换：报告文件与报告工作表选择。</figcaption>
+            </figure>
+          </details>
+          <p>结果列为 <code>文件名 / key / source / target / QA问题</code>。同组的多个问题合并到一个 QA问题 单元格，以中文分号分隔，因此输出行数可能少于明细数。</p>
+          <p>文件名与 key 优先来自报告的 Metadata；缺少 key 时按可用的文件名和原文分组。此工具转换报告，不重新执行 Xbench 检查，也不自动回写译文。结果位于原报告旁，名称以 <code>xbench_transform_</code> 开头。</p>
+        </section>
+        <section class="guide-tool" data-tool="settings" id="settings" aria-labelledby="settings-title">
+          <header class="tool-heading">
+            <p class="eyebrow">侧栏底部</p>
+            <h2 id="settings-title">设置</h2>
+            <p class="tool-intro">为项目使用的 Source / Target 表头建立别名，减少每次选择文件后的手动配置。</p>
+          </header>
+          <ol class="steps">
+            <li><strong>填写表头别名</strong><span>在 Source、Target 两个文本框中分别输入表头，每行一个。例如 Source 中填“原文”“English”，Target 中填“译文”“French”。</span></li>
+            <li><strong>保存设置</strong><span>点击【保存设置】。已加载的一键质量检查与法语 NBSP 工作簿会重新识别；核对识别后的列。</span></li>
+            <li><strong>恢复默认</strong><span>点击【恢复默认】清空自定义别名，然后点击【保存设置】才生效。</span></li>
+          </ol>
+          <details class="screenshot-detail">
+            <summary>查看界面截图</summary>
+            <figure class="shot">
+              <img src="assets/header-aliases.png" alt="设置页：Source、Target 表头别名，以及恢复默认和保存按钮。" loading="lazy" width="1260" height="820">
+              <figcaption>设置页：Source、Target 表头别名，以及恢复默认和保存按钮。</figcaption>
+            </figure>
+          </details>
+          <p>匹配忽略大小写和首尾空白，但要求完整表头相同。自定义别名优先，未命中时回退到内置 source / target；同级命中多列或无匹配时显示“请指定”，需要手动确认。</p>
+          <p>仅一键质量检查与法语 NBSP 使用这套别名。内容同步、统计仍填写列字母；PhraseLoom 使用自己的表头名称或列序号。QA 页的【记住选项】另行保存检查配置。</p>
+        </section>
+        <div class="guide-support">
+          <section id="operation-logs">
+            <h2>运行日志与输出位置</h2>
+            <p>内容同步、兼容性重存、列操作、同名文件替换和未翻译统计的底部“查看日志”打开独立小弹窗。正常文件使用一行摘要，失败或冲突补充必要原因；关闭弹窗不会停止任务，再打开可以继续查看。</p>
+            <figure class="shot compact-shot">
+              <img src="assets/operation-logs.png" alt="实际临时样本同步的简约运行日志：有效身份、文件结果和最终摘要" loading="lazy" width="740" height="420">
+              <figcaption>临时示例的实际运行日志；截图省略含临时目录的两条开头记录。</figcaption>
+            </figure>
+            <p>处理在后台进行，日志逐步刷新。关闭弹窗不停止任务；点击【复制日志】复制当前显示内容。日志很多时会省略较早记录，以完成摘要的计数为准。</p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>工具</th>
+                    <th>新输出目录留空</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Master → 小表</td>
+                    <td>更新原小表，Master 不变</td>
+                  </tr>
+                  <tr>
+                    <td>小表 → Master</td>
+                    <td>更新原 Master，小表不变</td>
+                  </tr>
+                  <tr>
+                    <td>列操作 / 兼容性重存</td>
+                    <td>更新所选目录中的原工作簿</td>
+                  </tr>
+                  <tr>
+                    <td>同名文件替换</td>
+                    <td>先备份，再原位替换目标文件</td>
+                  </tr>
+                  <tr>
+                    <td>未翻译统计</td>
+                    <td>在所选目录写统计表，原工作簿不变</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>填写新输出目录时必须指定尚不存在的目录。以上约定不改变一键质量检查生成报告副本的方式；这些目录工具不会额外生成 report 或 JSON 日志文件。合并表格的失败日志、Batch 的复原文件仍各自保留。</p>
+          </section>
+          <section id="troubleshooting" class="faq">
+            <h2>常见问题</h2>
+            <details open>
+              <summary>自动识别到了错误的 Source / Target 列</summary>
+              <div>先在当前页面手动填写正确列字母。若项目长期使用特殊表头，在左侧“设置”中保存对应表头别名。</div>
+            </details>
+            <details>
+              <summary>提示“术语检查至少需要一种术语 mark，或一个历史 TB”</summary>
+              <div>重新打开术语设置，至少勾选一种术语标记；或者选择历史 TB 并确认工作表、Source / Target 列。</div>
+            </details>
+            <details>
+              <summary>Tag 或 Target 文本规范无法开始</summary>
+              <div>启用 Tag 检查时必须选定一种模式/类型；启用 Target 文本规范时至少保留一条规则。</div>
+            </details>
+            <details>
+              <summary>“同 Target 不同 Source”为什么默认关闭？</summary>
+              <div>多个不同 Source 合理共用同一译文的情况很常见。只在需要排查误复用时开启，并把结果视为人工复核线索。</div>
+            </details>
+            <details>
+              <summary>运行过程中可以关闭 QAtools 吗？</summary>
+              <div>不可以。后台任务执行时窗口会阻止关闭，以避免输出文件不完整。等待完成提示后再退出。</div>
+            </details>
+            <details>
+              <summary>如何保留多次检查结果？</summary>
+              <div>GUI 使用固定的 <code>workflow_check_原文件名.xlsx</code>。下一次运行前请把旧报告重命名或移动到其他目录。</div>
+            </details>
+          </section>
+        </div>
+        <footer class="page-footer">QAtools · 本指南仅介绍图形界面操作。保留本目录的网页、样式、脚本与 assets 即可离线阅读。</footer>
+      </main>
+    </div>
+  </body>
 </html>

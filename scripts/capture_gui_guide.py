@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import stat
 import sys
 import tempfile
 from unittest.mock import patch
@@ -13,6 +14,7 @@ sys.path.insert(0, str(ROOT))
 
 
 def main():
+    from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
     from PySide6.QtGui import QFont, QFontDatabase
     from openpyxl import Workbook
@@ -20,6 +22,7 @@ def main():
     from tools.header_aliases import HeaderAliasStore
     from tools.qt_gui_common import configure_qt_application
     from tools.content_sync.master_to_target import sync_master_to_targets
+    from tools.content_sync.preflight import inspect_targets
 
     assets = ROOT / "docs/qa-workflow-guide/assets"
     assets.mkdir(parents=True, exist_ok=True)
@@ -58,11 +61,16 @@ def main():
             capture(dialog, name + ".png")
             dialog.reject()
 
-        for key, name in (("content_sync", "sync-master-to-target"), ("compatibility", "compatibility"),
+        for key, name in (("phraseloom", "phraseloom"), ("content_sync", "sync-master-to-target"), ("compatibility", "compatibility"),
                           ("column_tools", "columns"), ("deep_replace", "deep-replace"),
+                          ("excel_batcher", "batch-split"), ("excel_merger", "merge-sheets"),
+                          ("french_nbsp", "french-nbsp"), ("xbench_report", "xbench"),
                           ("untranslated_stats", "untranslated-stats"), ("settings", "header-aliases")):
             window.select_tool(key)
             capture(window, name + ".png")
+        window.select_tool("excel_batcher")
+        window.tool_frames["excel_batcher"].tabs.setCurrentIndex(1)
+        capture(window, "batch-restore.png")
         window.select_tool("content_sync")
         sync = window.tool_frames["content_sync"]
         sync.tabs.setCurrentIndex(1)
@@ -91,6 +99,32 @@ def main():
         dialog.open_logs()
         capture(dialog, "operation-logs.png")
         dialog.close()
+        # Capture the actual selection dialogs using only the synthetic files.
+        def capture_check(name):
+            failures = []
+
+            def finish():
+                popup = app.activeModalWidget()
+                try:
+                    capture(popup, name)
+                except Exception as error:
+                    failures.append(error)
+                finally:
+                    if popup is not None:
+                        popup.accept()
+
+            QTimer.singleShot(50, finish)
+            sync.master_to_target_page._targets_checked(inspect_targets(str(targets)))
+            if failures:
+                raise failures[0]
+
+        capture_check("sync-directory-ok.png")
+        sample = targets / "sample.xlsx"
+        try:
+            sample.chmod(stat.S_IREAD)
+            capture_check("sync-directory-readonly.png")
+        finally:
+            sample.chmod(stat.S_IREAD | stat.S_IWRITE)
         window.close()
         app.processEvents()
 

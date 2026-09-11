@@ -6,7 +6,7 @@
 | 任务 | 读取 |
 |---|---|
 | 首次使用或了解能力 | [项目 README](../README.md) |
-| 按 GUI 操作质量检查、内容同步和文件工具 | [GUI 使用指南](qa-workflow-guide/index.html)；[网页维护与验证](qa-workflow-guide/README.md) |
+| 按软件导航查阅全部 GUI 工具及设置 | [GUI 使用指南](qa-workflow-guide/index.html)；[网页维护与验证](qa-workflow-guide/README.md) |
 | 调用 CLI、编写脚本 | [CLI 使用指南](cli-usage.md) |
 | 运行一键检查、理解统一报告 | [workflow README](../tools/workflow/README.md) |
 | 导出或回填 Strings | [PhraseLoom README](../phraseloom/README.md) |

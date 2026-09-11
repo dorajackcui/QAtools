@@ -8,6 +8,7 @@
 
 浏览器工具的 URL 安全策略禁止预览本地 `file:` 页面，不能绕过限制改用其他浏览器入口。
 请在本机浏览器打开 [index.html](qa-workflow-guide/index.html)，确认桌面与约 390px 窄窗口下的
-文字、截图、横向表格、导航锚点和可展开内容正常后，删除此待办并更新[验证记录](qa-workflow-guide/README.md#网页验证)。
+文字、截图、横向表格、导航锚点、当前工具高亮和可展开内容正常；核对三个分组、11 项工具与底部设置，
+并确认禁用脚本后仍可阅读。完成后删除此待办并更新[验证记录](qa-workflow-guide/README.md#网页验证)。
 
 CLI-01 与 PERF-01 已完成，当前入口见[CLI 手册](cli-usage.md#目录批处理)与[性能评估](archive/content-sync-performance.md)。
