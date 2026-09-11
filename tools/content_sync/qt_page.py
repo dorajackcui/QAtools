@@ -11,14 +11,19 @@ from PySide6.QtWidgets import (
 )
 
 from tools.qt_gui_common import (
-    AsyncPage, PathPicker, muted_label, primary_button, section, show_error, show_warning,
+    AsyncPage, PathPicker, muted_label, primary_button, section, show_error, show_warning, show_info,
 )
 from tools.qt_operation_logs import OperationLogDialog
 
 
 def _master_sheets(path: str):
-    from tools.excel_metadata import list_workbook_sheets
-    return list_workbook_sheets(path)
+    from .preflight import inspect_master
+    return inspect_master(path)
+
+
+def _target_check(path: str, **kwargs):
+    from .preflight import inspect_targets
+    return inspect_targets(path, **kwargs)
 
 
 class MasterToTargetPage(AsyncPage):
@@ -160,23 +165,47 @@ class MasterToTargetPage(AsyncPage):
         self.progress.setRange(0, 0 if busy else 1)
 
     def choose_master(self) -> None:
+        if self.has_running_tasks():
+            return
         path, _ = QFileDialog.getOpenFileName(self, "选择 Master 总表", "", "Excel 文件 (*.xlsx *.xlsm)")
         if path:
             self.master_picker.set_path(path)
             self.master_sheet.clear()
-            self._set_busy(True, "正在读取 Master 工作表…")
+            self._set_busy(True, "正在检查 Master 并读取工作表…")
             self.run_in_background(_master_sheets, args=(path,), on_success=self._sheets_loaded,
-                                   on_error=self._fail)
+                                   on_error=self._selection_failed)
 
-    def _sheets_loaded(self, choices) -> None:
-        self.master_sheet.addItems(choices.sheet_names)
-        self.master_sheet.setCurrentText(choices.default_sheet or "")
+    def _sheets_loaded(self, check) -> None:
+        if check.choices is not None:
+            self.master_sheet.addItems(check.choices.sheet_names)
+            self.master_sheet.setCurrentText(check.choices.default_sheet or "")
         self._set_busy(False)
+        messages = list(check.warnings)
+        if check.error:
+            messages.append(f"无法读取工作表：{check.error}")
+        if messages:
+            show_warning(self, "Master 文件检查", "\n\n".join(messages))
 
     def choose_targets(self) -> None:
+        if self.has_running_tasks():
+            return
         path = QFileDialog.getExistingDirectory(self, "选择小表目录", self.target_picker.path())
         if path:
             self.target_picker.set_path(path)
+            self._set_busy(True, "正在统计小表并抽检只读属性…")
+            self.run_in_background(_target_check, args=(path,),
+                                   kwargs={"master": self.master_picker.path(),
+                                           "output": self.output_picker.path(), "reverse": self.reverse},
+                                   on_success=self._targets_checked, on_error=self._selection_failed)
+
+    def _targets_checked(self, check) -> None:
+        self._set_busy(False)
+        display = show_warning if check.readonly or check.errors or not check.total else show_info
+        display(self, "小表目录检查", check.describe(reverse=self.reverse, inplace=not self.output_picker.path()))
+
+    def _selection_failed(self, message: str) -> None:
+        self._set_busy(False, "选择检查未完成")
+        show_warning(self, "选择检查未完成", message)
 
     def choose_output(self) -> None:
         parent = QFileDialog.getExistingDirectory(self, "选择输出位置（将在其中新建结果目录）")

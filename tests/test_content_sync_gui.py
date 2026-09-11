@@ -95,6 +95,72 @@ class ContentSyncGuiTests(unittest.TestCase):
             error.assert_called_once()
         self.page.run_in_background.assert_not_called()
 
+    def test_directory_selection_dispatches_snapshot_and_displays_count(self):
+        from tools.content_sync.preflight import DirectoryCheck
+        self.page.master_picker.set_path("master.xlsx")
+        self.page.run_in_background = Mock()
+        with patch("tools.content_sync.qt_page.QFileDialog.getExistingDirectory", return_value="targets"):
+            self.page.choose_targets()
+        call = self.page.run_in_background.call_args.kwargs
+        self.assertEqual(call["args"], ("targets",))
+        self.assertEqual(call["kwargs"], {"master": "master.xlsx", "output": "", "reverse": False})
+        self.assertFalse(self.page.run_button.isEnabled())
+        with patch("tools.content_sync.qt_page.show_info") as info:
+            call["on_success"](DirectoryCheck(32, 1, tuple(str(i) for i in range(20)), (), ()))
+        self.assertIn("32", info.call_args.args[2])
+        self.assertIn("20 / 32", info.call_args.args[2])
+        self.assertTrue(self.page.run_button.isEnabled())
+
+    def test_master_warning_preserves_sheet_selection_and_selection_errors_preserve_run_logs(self):
+        from tools.content_sync.preflight import MasterCheck
+        from tools.excel_metadata import WorkbookSheetChoices
+        self.page.run_in_background = Mock()
+        with patch("tools.content_sync.qt_page.QFileDialog.getOpenFileName", return_value=("master.xlsx", "")):
+            self.page.choose_master()
+        callback = self.page.run_in_background.call_args.kwargs["on_success"]
+        with patch("tools.content_sync.qt_page.show_warning") as warning:
+            callback(MasterCheck(WorkbookSheetChoices(("Data",), "Data"), ("Master 被占用",)))
+        self.assertIn("占用", warning.call_args.args[2])
+        self.assertEqual(self.page.master_sheet.currentText(), "Data")
+        self.page.result.setPlainText("previous result")
+        with patch("tools.content_sync.qt_page.show_warning"):
+            self.page._selection_failed("scan failed")
+        self.assertEqual(self.page.result.toPlainText(), "previous result")
+        self.assertTrue(self.page.run_button.isEnabled())
+
+    def test_directory_scan_is_background_and_gui_remains_responsive(self):
+        from tools.content_sync.preflight import DirectoryCheck
+        release, started = threading.Event(), threading.Event()
+        owner = threading.get_ident()
+        threads = []
+        def scan(*args, **kwargs):
+            threads.append(threading.get_ident())
+            started.set()
+            if not release.wait(5):
+                raise RuntimeError("GUI did not release scan")
+            return DirectoryCheck(1, 0, ("a.xlsx",), (), ())
+        with patch("tools.content_sync.qt_page.QFileDialog.getExistingDirectory", return_value="targets"), \
+             patch("tools.content_sync.qt_page._target_check", scan), \
+             patch("tools.content_sync.qt_page.show_info") as info, \
+             patch("tools.content_sync.qt_page.show_warning") as warning:
+            try:
+                self.page.choose_targets()
+                deadline = time.monotonic() + 10
+                while self.page.has_running_tasks() and time.monotonic() < deadline:
+                    self.app.processEvents()
+                    if started.is_set() and not release.is_set():
+                        self.assertTrue(self.page.has_running_tasks())
+                        release.set()
+                    time.sleep(0.005)
+            finally:
+                release.set()
+                self.page._thread_pool.waitForDone(10000)
+                self.app.processEvents()
+            info.assert_called_once()
+            warning.assert_not_called()
+        self.assertTrue(threads and all(thread != owner for thread in threads))
+        self.assertFalse(self.page.has_running_tasks())
+
     def test_partial_failure_is_visible_and_controls_are_restored(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

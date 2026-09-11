@@ -37,6 +37,7 @@ qatools gui / toolshub_gui.py
 | Excel COM 原生操作 | [excel_com.py](../tools/excel_com.py) | `test_momotools_utilities.py` |
 | 日志文本与有界 GUI 队列 | [operation_logs.py](../tools/operation_logs.py)、[qt_operation_logs.py](../tools/qt_operation_logs.py) | `test_operation_logs.py` |
 | 内容同步有界文件任务调度 | [content_sync/parallel.py](../tools/content_sync/parallel.py)；业务层负责汇总、日志与冲突顺序 | `test_content_sync_parallel.py`、`test_content_sync_gui.py` |
+| 内容同步选择阶段检查 | [content_sync/preflight.py](../tools/content_sync/preflight.py)；占用提示、目录统计与只读抽检，由 GUI 后台调用 | `test_content_sync_preflight.py`、`test_content_sync_gui.py` |
 | 历史 TB、项目配置与术语匹配 | [history_tb.py](../tools/history_tb.py)、[tb_projects.py](../tools/tb_projects.py)、[term_matching.py](../tools/term_matching.py) | 对应同名测试 |
 
 测试路径未写前缀时均位于 `tests/`。
