@@ -24,6 +24,9 @@ qatools help qa
 
 GUI 表单不显示常驻说明段落，保留输入标签、占位提示、输出预览和运行状态；各工具的详细规则见下方工具文档。
 
+所有图形入口统一使用 PySide6。`phraseloom gui`、`phraseloom-gui` 和旧 GUI
+脚本均打开同一套 Qt 页面；入口对应关系见[仓库地图](docs/repository-map.md#兼容边界)。
+
 ### 自定义表头识别
 
 一键质量检查和法语 NBSP 支持自定义表头别名；优先级、歧义处理和保存方式见

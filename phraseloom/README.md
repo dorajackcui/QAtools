@@ -192,5 +192,6 @@ source_translated.xlsx
 
 ## 实现位置
 
-统一 PySide6 页面在 `qt_page.py`，独立 Tk 页面在 `gui.py`；二者调用相同 Strings 业务。
+唯一 GUI 页面实现在 `qt_page.py`（PySide6）；`gui.py` 只负责将
+`phraseloom gui`、`phraseloom-gui` 和脚本入口转接到工具箱的 PhraseLoom 页面。
 开发约束见 [AGENTS.md](AGENTS.md)，调用参数统一见 [CLI 手册](../docs/cli-usage.md#phraseloom)。

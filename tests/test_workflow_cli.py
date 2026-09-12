@@ -23,6 +23,7 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertIsNone(args.check)
         self.assertEqual(args.start_row, 2)
         self.assertFalse(args.no_term_mark)
+        self.assertFalse(args.tag_check_order)
 
     def test_default_selection_enables_content_checks_but_not_reverse_consistency(self) -> None:
         checks = _selected_checks(None)
@@ -117,6 +118,7 @@ class WorkflowCliTests(unittest.TestCase):
                     ABNORMAL_PUNCTUATION_RULE,
                     "--tag-token-type",
                     "angle",
+                    "--tag-check-order",
                     "-o",
                     "output.xlsx",
                 ]
@@ -136,6 +138,7 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertTrue(kwargs["run_target_text_check"])
         self.assertEqual(kwargs["target_text_rules"], [ABNORMAL_PUNCTUATION_RULE])
         self.assertEqual(kwargs["tag_token_types"], ["angle"])
+        self.assertTrue(kwargs["tag_check_order"])
         self.assertIn("质量检查完成", output.getvalue())
 
     def test_no_term_mark_is_forwarded_as_empty_mark_collection(self) -> None:

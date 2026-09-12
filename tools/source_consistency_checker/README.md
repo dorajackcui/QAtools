@@ -28,6 +28,7 @@ python3 tools/source_consistency_checker/check_source_consistency_gui.py
 ```
 
 也可以运行 `qatools gui`，在“一键质量检查”中选择“同 Source 不同 Target”。
+旧脚本同样打开 PySide6 QA 页，仅预选此检查，并输出统一 QA 报告。
 
 ## 输出
 

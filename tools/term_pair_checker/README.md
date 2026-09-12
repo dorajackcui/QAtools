@@ -53,7 +53,7 @@
 ## 使用与维护
 
 统一 GUI：一键质量检查 → 术语检查；详细设置包含 mark、历史 TB 和 TB 项目。
-独立 Tk GUI `extract_terms_gui.py` 继续兼容，但不是统一页面实现。
+旧脚本 `extract_terms_gui.py` 转接到 Qt QA 页并仅预选术语检查，输出统一 QA 报告。
 
 CLI 示例、全部参数和兼容脚本入口集中在 [CLI 手册](../../docs/cli-usage.md#单项质量检查)。
 默认输出 `term_pair_check_<原文件名>`；表头识别的 GUI 约定见[表头别名](../../docs/gui-conventions.md#表头别名)。

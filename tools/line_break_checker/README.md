@@ -25,6 +25,7 @@ python3 tools/line_break_checker/check_line_breaks_gui.py
 ```
 
 也可以运行 `qatools gui`，在“一键质量检查”中选择“换行数量”。
+旧脚本同样打开 PySide6 QA 页，仅预选换行数量检查，并输出统一 QA 报告。
 
 ## 输出
 

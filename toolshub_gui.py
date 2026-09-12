@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from tools.header_aliases import HeaderAliasStore
+from tools.qt_navigation import ToolNavigationServer, send_tool_selection
 from tools.qt_gui_common import (
     AsyncPage,
     BORDER_COLOR,
@@ -54,6 +55,17 @@ SIDEBAR_WIDTH = 184
 WINDOW_HORIZONTAL_BREATHING_ROOM = 16
 WINDOW_VERTICAL_BREATHING_ROOM = 16
 GUI_INSTANCE_LOCK_NAME = "qatools-toolshub-gui.lock"
+QA_CHECK_WIDGETS = {
+    "term": "term_check",
+    "tag": "tag_check",
+    "line-break": "line_break_check",
+    "consistency": "consistency_check",
+    "target-consistency": "target_consistency_check",
+    "number": "number_check",
+    "url": "url_check",
+    "chinese": "chinese_check",
+    "text": "target_text_check",
+}
 
 
 @dataclass(frozen=True)
@@ -126,6 +138,7 @@ class ToolshubApp(QMainWindow):
         self.current_tool_frame: QWidget | None = None
         self._receiver: WorkflowFileReceiver | None = None
         self._poll_timer: QTimer | None = None
+        self._navigation: ToolNavigationServer | None = None
         self._build_ui()
         self._fit_window_to_screen()
         self.select_tool(self.tool_groups[0].tools[0].key)
@@ -272,6 +285,22 @@ class ToolshubApp(QMainWindow):
         page.load_input_file(str(normalized))
         self._bring_window_to_front()
 
+    def open_tool(self, key: str, checks: list[str] | None = None) -> None:
+        """Select a shared Qt page, optionally presetting the QA checks."""
+        if key not in self.tools_by_key or any(check not in QA_CHECK_WIDGETS for check in (checks or [])):
+            return
+        if checks and key != "workflow":
+            return
+        self.select_tool(key)
+        if checks:
+            page = self.tool_frames["workflow"]
+            for check, widget_name in QA_CHECK_WIDGETS.items():
+                getattr(page, widget_name).setChecked(check in checks)
+
+    def _open_forwarded_tool(self, key: str, checks: list[str]) -> None:
+        self.open_tool(key, checks)
+        self._bring_window_to_front()
+
     def open_french_nbsp_restore_file(self, file_path: str, *, run_immediately: bool = True) -> None:
         normalized = normalize_excel_input_file(file_path, action_name="NBSP restore")
         page = self.tool_frames["french_nbsp"]
@@ -362,6 +391,8 @@ class ToolshubApp(QMainWindow):
             self._poll_timer.stop()
         if self._receiver is not None:
             self._receiver.close()
+        if self._navigation is not None:
+            self._navigation.close()
         super().closeEvent(event)
 
 
@@ -390,6 +421,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     action_group = parser.add_mutually_exclusive_group()
     action_group.add_argument("--qa-workflow", metavar="EXCEL_FILE", help="把 Excel 文件载入一键质量检查页面。")
     action_group.add_argument("--nbsp-restore", metavar="EXCEL_FILE", help="对 Excel 自动执行法语 NBSP 恢复。")
+    action_group.add_argument("--tool", choices=tuple(PAGE_FACTORIES), help="启动时打开指定的 PySide6 工具页面。")
+    parser.add_argument("--check", action="append", choices=tuple(QA_CHECK_WIDGETS), help="配合 --tool workflow 预选检查项，可重复；不会自动运行。")
     parser.add_argument("--smoke-test", action="store_true", help=argparse.SUPPRESS)
     return parser
 
@@ -419,7 +452,10 @@ def _acquire_gui_instance_lock(lock_path: str | None = None) -> QLockFile | None
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_argument_parser().parse_args(argv)
+    parser = build_argument_parser()
+    args = parser.parse_args(argv)
+    if args.check and args.tool != "workflow":
+        parser.error("--check 必须配合 --tool workflow 使用。")
     if args.smoke_test:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     try:
@@ -436,6 +472,9 @@ def main(argv: list[str] | None = None) -> int:
     if not args.smoke_test:
         instance_lock = _acquire_gui_instance_lock()
         if instance_lock is None:
+            if args.tool and not send_tool_selection(args.tool, args.check):
+                print("工具箱正在启动或当前实例不支持页面切换，请稍后重试或重启工具箱。", file=sys.stderr)
+                return 1
             return 0
 
     receiver = WorkflowFileReceiver()
@@ -447,6 +486,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     window = ToolshubApp(show_window=not args.smoke_test)
+    if not args.smoke_test:
+        window._navigation = ToolNavigationServer(window)
+        window._navigation.requested.connect(window._open_forwarded_tool)
+        window._navigation.start()
+    if args.tool:
+        window.open_tool(args.tool, args.check)
     if receiver_started:
         window.attach_receiver(receiver)
     if initial_request:

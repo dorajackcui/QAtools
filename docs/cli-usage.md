@@ -176,7 +176,7 @@ qatools qa ./input.xlsx -c A -t B \
 ## PhraseLoom
 
 `qatools phraseloom` 无参数时进入交互终端；自动化必须选择 `export` 或 `restore`。
-`qatools phraseloom gui` 打开独立兼容 GUI；统一桌面入口仍为 `qatools gui`。
+`qatools phraseloom gui` 打开统一 PySide6 工具箱并选中 PhraseLoom 页面。
 
 导出待翻译 Strings：
 
@@ -409,7 +409,18 @@ qatools untranslated-stats excel_files --sheet Data --header-rows 2 --mode engli
 | `qatools merge-sheets` | `python tools/excel_merger/merge_active_sheets.py` |
 | `qatools xbench` | `python tools/xbench_report_transformer/transform_xbench_report.py` |
 
-独立 Tk GUI 和根目录兼容脚本的定位见[仓库地图](repository-map.md#兼容边界)；它们仍受兼容性约束。
+旧 GUI 脚本统一转接到 PySide6，页面与报告的对应关系见[仓库地图](repository-map.md#兼容边界)。
+
+启动时选择页面或预选 QA 检查（不会自动执行）：
+
+```bash
+qatools gui --tool phraseloom
+qatools gui --tool workflow --check tag
+```
+
+`--tool` 可选值以 `qatools gui --help` 为准；`--check` 可重复，且必须配合
+`--tool workflow`。`qatools phraseloom gui` 和 `phraseloom-gui` 同样打开工具箱中的 PhraseLoom 页面。
+工具箱已运行时，页面选择请求会转交给当前实例并将窗口置前。
 
 ## 参数速查
 
@@ -419,9 +430,9 @@ qatools untranslated-stats excel_files --sheet Data --header-rows 2 --mode engli
 |---|---|
 | `qa` | 必填 `input_file -c/--source-column -t/--target-column`；`-s/--sheet` 默认活动表，`--start-row` 默认 2，`-o/--output` 指定报告；`--check` 可重复 |
 | `qa` 术语 | `--term-mark-style` 可重复，与 `--no-term-mark` 互斥；后者需要 `--history-tb`；历史 TB 范围用 `--history-sheet`、`--history-source-column`、`--history-target-column`、`--history-start-row` |
-| `qa` Tag / 文本 | `--tag-token-type` 可重复；`--tag-angle-config` 为过滤 JSON；`--text-rule` 可重复。`numeric`、`abnormal-ellipsis` 分别为兼容别名 |
+| `qa` Tag / 文本 | `--tag-token-type` 可重复；`--tag-angle-config` 为过滤 JSON；`--tag-check-order` 开启 Tag 顺序检查（默认关闭）；`--text-rule` 可重复。`numeric`、`abnormal-ellipsis` 分别为兼容别名 |
 | `term-check` | 输入/范围/输出参数同检查器习惯；mark 参数名为 `--mark-style`，不是 QA 的 `--term-mark-style`；支持上述 `--history-*` 和 `--no-term-mark`，另有 `--exclusion-config` 候选排除 JSON |
-| `tag-check` | 输入/范围/输出参数同检查器习惯；使用 `--token-type`、`--angle-config`，不带 QA 的 `tag-` 前缀；token 可选 `angle`、`square_color`、`brace`、`newline`、`memoq`（旧别名 `numeric`） |
+| `tag-check` | 输入/范围/输出参数同检查器习惯；使用 `--token-type`、`--angle-config`、`--check-order`（顺序检查默认关闭），不带 QA 的 `tag-` 前缀；token 可选 `angle`、`square_color`、`brace`、`newline`、`memoq`（旧别名 `numeric`） |
 | `line-break-check` / `consistency-check` / `chinese-check` | `input_file`、`-s/--sheet`、`-c/--source-column`、`-t/--target-column`、`--start-row`、`-o/--output` |
 | `french-nbsp` | `input_file`、`-s/--sheet`、`-t/--target-column`、`--start-row`、`-o/--output`；`-r/--result-column` 可选，未指定则在输出副本的 Target 列修复 |
 | `xbench` | `input_file`、`-s/--sheet`、`-o/--output`；输入是 Xbench 报告，不能套用 `-c/-t` |
@@ -438,6 +449,13 @@ Tag 过滤示例：
 
 ```bash
 qatools tag-check input.xlsx -c A -t B --token-type angle --angle-config custom_angle_tags.json
+```
+
+Tag 顺序检查示例（规则见 [Tag README](../tools/tag_placeholder_checker/README.md#规则)）：
+
+```bash
+qatools qa input.xlsx -c A -t B --check tag --tag-check-order
+qatools tag-check input.xlsx -c A -t B --check-order
 ```
 
 术语候选过滤示例：

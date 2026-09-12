@@ -19,6 +19,8 @@
 
 ## GUI
 
+以下旧脚本直接打开工具箱中的 PySide6 页面：
+
 ```bash
 python3 tools/french_nbsp_restorer/restore_french_nbsp_gui.py
 ```

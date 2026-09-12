@@ -1,307 +1,122 @@
 from __future__ import annotations
 
 import io
+import os
 import runpy
-import tkinter as tk
-from tkinter import ttk
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import Mock, patch
 
-from phraseloom.gui import (
-    PhraseLoomApp,
-    PhraseLoomGUI,
-    TASK_BY_KEY,
-    TASKS,
-    build_cli_args,
-    validate_task_specs,
-)
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtWidgets import QApplication, QScrollArea
+from phraseloom.gui import main
+from phraseloom.qt_page import PhraseLoomPage
+from phraseloom.strings_workflow import export_strings_workbook, restore_strings_workbook
 
 
-class GuiTaskSpecTests(unittest.TestCase):
-    def test_gui_module_can_be_loaded_as_a_direct_script(self) -> None:
-        gui_path = Path(__file__).parents[2] / "phraseloom" / "gui.py"
+class PhraseLoomGuiTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = QApplication.instance() or QApplication([])
 
-        namespace = runpy.run_path(
-            str(gui_path),
-            run_name="phraseloom_gui_direct_test",
-        )
+    def setUp(self) -> None:
+        self.page = PhraseLoomPage()
+        self.addCleanup(self.page.close)
+        self.page.run_in_background = Mock()
 
-        self.assertIn("PhraseLoomGUI", namespace)
+    def test_gui_entry_opens_the_shared_qt_page(self) -> None:
+        with patch("toolshub_gui.main", return_value=0) as launch:
+            self.assertEqual(main(), 0)
+        launch.assert_called_once_with(["--tool", "phraseloom"])
 
-    def test_gui_uses_one_export_page_with_restore_as_an_action(self) -> None:
-        validate_task_specs()
-        self.assertEqual(
-            [(task.key, task.command) for task in TASKS],
-            [("export_strings", "export")],
-        )
-        self.assertEqual(TASK_BY_KEY["restore_strings"].command, "restore")
+    def test_gui_module_remains_callable_as_a_direct_script(self) -> None:
+        path = Path(__file__).parents[2] / "phraseloom" / "gui.py"
+        with patch("toolshub_gui.main", return_value=0) as launch, patch("sys.argv", [str(path)]):
+            with self.assertRaises(SystemExit) as result:
+                runpy.run_path(str(path), run_name="__main__")
+        self.assertEqual(result.exception.code, 0)
+        launch.assert_called_once_with(["--tool", "phraseloom"])
 
-    def test_export_builds_clean_cli_args(self) -> None:
-        args = build_cli_args(
-            TASK_BY_KEY["export_strings"],
-            {
-                "input": "/tmp/source.xlsx",
-                "source_col": "en",
-                "target_col": "fr",
-                "context_col": "screen",
-            },
-        )
-        self.assertEqual(args[0:2], ["export", "/tmp/source.xlsx"])
-        self.assertIn("--source-col", args)
-        self.assertIn("--target-col", args)
-        self.assertIn("--context-col", args)
-        self.assertNotIn("--group-similar", args)
-        self.assertNotIn("--tm", args)
-
-    def test_export_can_enable_similar_string_grouping(self) -> None:
-        args = build_cli_args(
-            TASK_BY_KEY["export_strings"],
-            {
-                "input": "/tmp/source.xlsx",
-                "group_similar": True,
-            },
-        )
-        self.assertIn("--group-similar", args)
-
-    def test_export_can_disable_multiline_source_splitting(self) -> None:
-        args = build_cli_args(
-            TASK_BY_KEY["export_strings"],
-            {
-                "input": "/tmp/source.xlsx",
-                "split_lines": False,
-            },
-        )
-        self.assertIn("--no-split-lines", args)
-
-    def test_export_keeps_multiline_source_splitting_enabled_by_default(self) -> None:
-        args = build_cli_args(
-            TASK_BY_KEY["export_strings"],
-            {"input": "/tmp/source.xlsx"},
-        )
-        self.assertNotIn("--no-split-lines", args)
-
-    def test_restore_only_needs_the_strings_workbook(self) -> None:
-        args = build_cli_args(
-            TASK_BY_KEY["restore_strings"],
-            {"input": "/tmp/source_strings.xlsx"},
-        )
-        self.assertEqual(args, ["restore", "/tmp/source_strings.xlsx"])
-
-    def test_restore_button_selects_one_file_and_runs_immediately(self) -> None:
-        app = object.__new__(PhraseLoomGUI)
-        app.root = object()
-        app.output_preview_var = MagicMock()
-        app._start_task = MagicMock()
-
-        with (
-            patch(
-                "phraseloom.gui.filedialog.askopenfilename",
-                return_value="/tmp/source_strings.xlsx",
-            ),
-            patch(
-                "phraseloom.gui.default_restored_output_path",
-                return_value=Path("/tmp/source_translated.xlsx"),
-            ),
-        ):
-            app._choose_and_restore()
-
-        app.output_preview_var.set.assert_called_once_with(
-            "回填输出：source_translated.xlsx"
-        )
-        app._start_task.assert_called_once_with(
-            TASK_BY_KEY["restore_strings"],
-            ["restore", "/tmp/source_strings.xlsx"],
-        )
-
-    def test_missing_input_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "请填写"):
-            build_cli_args(TASK_BY_KEY["restore_strings"], {})
-
-    def test_cli_dispatches_gui_without_eagerly_starting_tk(self) -> None:
+    def test_cli_dispatches_gui_to_qt_entry(self) -> None:
         from phraseloom.cli import _dispatch
-
-        with patch("phraseloom.gui.main", return_value=0) as gui_main:
+        with patch("toolshub_gui.main", return_value=0) as launch:
             self.assertEqual(_dispatch(["gui"]), 0)
-        gui_main.assert_called_once_with()
+        launch.assert_called_once_with(["--tool", "phraseloom"])
 
-    def test_top_level_help_lists_the_two_step_workflow(self) -> None:
+    def test_top_level_help_keeps_export_restore_and_gui(self) -> None:
         from phraseloom.cli import _dispatch
-
-        output = io.StringIO()
-        with redirect_stdout(output):
+        with redirect_stdout(io.StringIO()) as output:
             self.assertEqual(_dispatch(["--help"]), 0)
-        help_text = output.getvalue()
-        self.assertIn("phraseloom export", help_text)
-        self.assertIn("phraseloom restore", help_text)
-        self.assertNotIn("TM", help_text)
-        self.assertNotIn("entity", help_text.lower())
+        for command in ("gui", "export", "restore"):
+            self.assertIn(f"phraseloom {command}", output.getvalue())
+        self.assertNotIn("TM", output.getvalue())
 
+    def test_qt_page_keeps_export_and_secondary_restore_in_one_workspace(self) -> None:
+        self.assertEqual(self.page.export_button.text(), "导出 Strings")
+        self.assertEqual(self.page.restore_button.text(), "回填译文…")
+        self.assertIsNotNone(self.page.findChild(QScrollArea))
+        self.assertTrue(self.page.split_lines.isChecked())
+        self.assertFalse(self.page.group_similar.isChecked())
+        self.assertEqual(self.page.source_column.text(), "source")
+        self.assertEqual(self.page.target_column.text(), "target")
 
-class GuiLayoutTests(unittest.TestCase):
-    def make_app(self) -> tuple[tk.Tk, PhraseLoomGUI]:
-        try:
-            root = tk.Tk()
-        except tk.TclError as exc:
-            self.skipTest(f"Tk display is unavailable: {exc}")
-        root.withdraw()
-        return root, PhraseLoomGUI(root)
+    def test_export_forwards_defaults_and_custom_options(self) -> None:
+        self.page.input_picker.set_path("/tmp/source.xlsx")
+        self.page.run_export()
+        call = self.page.run_in_background.call_args
+        self.assertIs(call.args[0], export_strings_workbook)
+        self.assertEqual(call.kwargs["args"], ("/tmp/source.xlsx",))
+        self.assertEqual(call.kwargs["kwargs"], {
+            "source_col": "source", "target_col": "target", "context_col": None,
+            "group_similar": False, "tag_config": None, "split_lines": True,
+        })
+        self.page.source_column.setText("en")
+        self.page.target_column.setText("fr")
+        self.page.context_column.setText("screen")
+        self.page.group_similar.setChecked(True)
+        self.page.split_lines.setChecked(False)
+        self.page.tag_picker.set_path("/tmp/tags.toml")
+        self.page.run_export()
+        self.assertEqual(self.page.run_in_background.call_args.kwargs["kwargs"], {
+            "source_col": "en", "target_col": "fr", "context_col": "screen",
+            "group_similar": True, "tag_config": "/tmp/tags.toml", "split_lines": False,
+        })
 
-    def test_standalone_gui_matches_workflow_page_structure(self) -> None:
-        root, app = self.make_app()
-        try:
-            root.update()
-            texts = self._collect_widget_texts(root)
-            self.assertIn("导出 Strings", texts)
-            self.assertIn("回填译文…", texts)
-            self.assertIn("输入与范围", texts)
-            self.assertIn("导出选项", texts)
-            self.assertNotIn(
-                "已有 Target 会视为已完成并跳过；重复 Source 只导出一次；Context 留空时自动识别同名列。",
-                texts,
-            )
-            self.assertNotIn(
-                "关闭分行后，多行 Source 将作为一个完整 String 导出；相似句仅调整排列；Tag 配置留空时使用内置规则。",
-                texts,
-            )
-            self.assertIn(
-                "启用相似句分组（未聚类在前，聚类内容在后）",
-                texts,
-            )
-            self.assertIn(
-                "按换行拆分多行 Source（回填时自动合并）",
-                texts,
-            )
-            self.assertNotIn("常用流程", texts)
-            self.assertNotIn("运行结果", texts)
-            self.assertIsInstance(app.scroll_canvas, tk.Canvas)
-            self.assertEqual(app.run_button.grid_info()["column"], 0)
-            self.assertEqual(app.restore_button.grid_info()["column"], 1)
-        finally:
-            root.destroy()
+    def test_missing_input_is_rejected_before_starting_work(self) -> None:
+        with patch("phraseloom.qt_page.show_error") as error:
+            self.page.run_export()
+        error.assert_called_once()
+        self.page.run_in_background.assert_not_called()
 
-    def test_embedded_app_uses_the_existing_workflow_content(self) -> None:
-        try:
-            root = tk.Tk()
-        except tk.TclError as exc:
-            self.skipTest(f"Tk display is unavailable: {exc}")
-        root.withdraw()
+    def test_restore_uses_only_selected_strings_file_and_cancel_does_nothing(self) -> None:
+        with patch("phraseloom.qt_page._choose_excel", return_value=""):
+            self.page.choose_and_restore()
+        self.page.run_in_background.assert_not_called()
+        with (
+            patch("phraseloom.qt_page._choose_excel", return_value="/tmp/source_strings.xlsx"),
+            patch("phraseloom.qt_page.default_restored_output_path", return_value=Path("/tmp/source_translated.xlsx")),
+        ):
+            self.page.choose_and_restore()
+        call = self.page.run_in_background.call_args
+        self.assertIs(call.args[0], restore_strings_workbook)
+        self.assertEqual(call.kwargs["args"], ("/tmp/source_strings.xlsx",))
+        self.assertIn("source_translated.xlsx", self.page.preview.text())
+        self.assertFalse(self.page.export_button.isEnabled())
+        self.assertFalse(self.page.restore_button.isEnabled())
 
-        try:
-            host = tk.Frame(root)
-            host.pack(fill="both", expand=True)
-            app = PhraseLoomApp(host)
-            app.pack(fill="both", expand=True)
-            root.update()
+    def test_error_reenables_actions(self) -> None:
+        self.page._set_running(True)
+        with patch("phraseloom.qt_page.show_error"):
+            self.page._finish_error("失败", "test")
+        self.assertTrue(self.page.export_button.isEnabled())
+        self.assertTrue(self.page.restore_button.isEnabled())
 
-            texts = self._collect_widget_texts(app)
-            self.assertIn("导出 Strings", texts)
-            self.assertIn("回填译文…", texts)
-            self.assertNotIn("常用流程", texts)
-            self.assertIn("输入与范围", texts)
-            self.assertIn("导出选项", texts)
-            self.assertNotIn("运行结果", texts)
-        finally:
-            root.destroy()
-
-    def test_short_content_stays_at_the_top_of_a_tall_viewport(self) -> None:
-        root, app = self.make_app()
-        try:
-            root.geometry("1200x900")
-            root.deiconify()
-            root.update()
-
-            scroll_region = tuple(
-                float(value) for value in app.scroll_canvas.cget("scrollregion").split()
-            )
-            region_height = scroll_region[3] - scroll_region[1]
-            self.assertGreaterEqual(region_height, app.scroll_canvas.winfo_height())
-            self.assertEqual(app.scroll_canvas.canvasy(0), 0.0)
-            self.assertEqual(
-                app.content_frame.winfo_rooty(),
-                app.scroll_canvas.winfo_rooty(),
-            )
-        finally:
-            root.destroy()
-
-    def test_restore_is_a_secondary_action_not_a_separate_workspace(self) -> None:
-        root, app = self.make_app()
-        try:
-            root.update()
-            self.assertEqual(app.current_title.get(), "导出 Strings")
-            texts = self._collect_widget_texts(root)
-            self.assertIn("导出选项", texts)
-            self.assertIn("回填译文…", texts)
-            self.assertNotIn("开始回填", texts)
-            self.assertNotIn("翻译完成的 Strings 工作簿", texts)
-        finally:
-            root.destroy()
-
-    def test_optional_tag_config_can_be_cleared_after_selection(self) -> None:
-        root, app = self.make_app()
-        try:
-            root.update()
-            tag_config_var = app.field_vars["tag_config"]
-            tag_config_var.set(r"C:\configs\tags.toml")
-
-            path_displays = [
-                widget
-                for widget in self._collect_widgets(app)
-                if getattr(widget, "_file_path_source_variable", None)
-                is tag_config_var
-            ]
-            clear_buttons = [
-                widget
-                for widget in self._collect_widgets(app)
-                if isinstance(widget, ttk.Button)
-                and str(widget.cget("text")) == "清空"
-            ]
-            self.assertEqual(len(path_displays), 1)
-            self.assertEqual(len(clear_buttons), 1)
-            self.assertEqual(
-                path_displays[0]._file_path_display_variable.get(),
-                "tags.toml",
-            )
-
-            clear_buttons[0].invoke()
-
-            self.assertEqual(tag_config_var.get(), "")
-            self.assertEqual(
-                path_displays[0]._file_path_display_variable.get(),
-                "未选择文件",
-            )
-        finally:
-            root.destroy()
-
-    def test_initial_window_fits_requested_content(self) -> None:
-        root, _app = self.make_app()
-        try:
-            root.update()
-            content = root.winfo_children()[0]
-            self.assertGreaterEqual(root.winfo_width(), content.winfo_reqwidth())
-            self.assertGreaterEqual(root.winfo_height(), content.winfo_reqheight())
-        finally:
-            root.destroy()
-
-    def _collect_widget_texts(self, widget: tk.Misc) -> set[str]:
-        texts: set[str] = set()
-        for child in widget.winfo_children():
-            try:
-                text = child.cget("text")
-            except tk.TclError:
-                text = ""
-            if text:
-                texts.add(str(text))
-            texts.update(self._collect_widget_texts(child))
-        return texts
-
-    def _collect_widgets(self, widget: tk.Misc) -> list[tk.Misc]:
-        widgets: list[tk.Misc] = []
-        for child in widget.winfo_children():
-            widgets.append(child)
-            widgets.extend(self._collect_widgets(child))
-        return widgets
+    def test_optional_tag_config_can_be_cleared(self) -> None:
+        self.page.tag_picker.set_path("/tmp/tags.toml")
+        self.page.tag_picker.clear_button.click()
+        self.assertEqual(self.page.tag_picker.path(), "")
 
 
 if __name__ == "__main__":

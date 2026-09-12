@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,6 +12,7 @@ from openpyxl import Workbook, load_workbook
 from tools.tag_placeholder_checker.check_tags_and_placeholders import (
     extract_tokens,
     load_angle_patterns_from_file,
+    main,
     process_excel,
 )
 
@@ -131,6 +134,67 @@ class ExtractTokensTests(unittest.TestCase):
 
 
 class ProcessExcelTests(unittest.TestCase):
+    def test_optional_order_check_compares_the_whole_selected_sequence(self) -> None:
+        cases = (
+            ("siblings", "<b>A</b><i>B</i>", "<i>乙</i><b>甲</b>", ("angle",), None, 0, "Tag顺序不一致"),
+            ("placeholders", "{a}{a}{b}", "{a}{b}{a}", ("brace",), None, 0, "Tag顺序不一致"),
+            ("mixed", "<br/>{name}", "{name}<br/>", ("angle", "brace"), None, 0, "Tag顺序不一致"),
+            ("newline", r"{name}\n", r"\n{name}", ("brace", "newline"), None, 0, "Tag顺序不一致"),
+            ("color", "[color=red]A[/color]", "[/color]甲[color=red]", ("square_color",), None, 0, "Tag顺序不一致"),
+            ("memoq", "{1}{2>Text<3}", "{2>译文<3}{1}", ("memoq",), None, 0, "Tag顺序不一致"),
+            ("same", "<b>Hello {name}</b>", "<b>你好 {name}</b>", ("angle", "brace"), None, 0, None),
+            ("empty", None, "无标记", ("angle", "brace"), None, 0, None),
+            ("unselected", "<br/>{name}", "{name}<br/>", ("brace",), None, 0, None),
+            ("filtered", "<br/><i/>", "<i/><br/>", ("angle",), ("br",), 0, None),
+            ("missing", "{a}{a}", "{a}", ("brace",), None, 1, "花括号placeholder不一致"),
+            ("extra", "{a}", "{a}{a}", ("brace",), None, 1, "花括号placeholder不一致"),
+            ("content", "{name}", "{Name}", ("brace",), None, 1, "花括号placeholder不一致"),
+            ("type", "<a>", "{a}", ("angle", "brace"), None, 1, "尖括号tag不一致；花括号placeholder不一致"),
+            ("structure", "<b>A</b><i>B</i>", "<b>A<i>B</i></b>", ("angle",), None, 1, "尖括号tag结构不一致"),
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            for name, source, target, types, patterns, default_rows, strict_issue in cases:
+                with self.subTest(case=name):
+                    workbook = Workbook()
+                    try:
+                        workbook.active.append(["source", "target"])
+                        workbook.active.append([source, target])
+                        workbook.save(input_path)
+                    finally:
+                        workbook.close()
+                    default = process_excel(input_path, "A", "B", token_types=types, angle_patterns=patterns)
+                    self.assertEqual(default.problem_rows, default_rows)
+                    strict = process_excel(input_path, "A", "B", token_types=types, angle_patterns=patterns, check_order=True)
+                    self.assertEqual(strict.problem_rows, int(strict_issue is not None))
+                    result = load_workbook(strict.output_path)
+                    try:
+                        problems = result["标签占位问题"]
+                        self.assertEqual(problems["E2"].value, strict_issue)
+                        if strict_issue == "Tag顺序不一致":
+                            self.assertEqual(strict.problem_count, 1)
+                            self.assertIn("source顺序=", problems["D2"].value)
+                            self.assertIn("target顺序=", problems["D2"].value)
+                    finally:
+                        result.close()
+
+    def test_cli_order_flag_reaches_the_checker_and_defaults_off(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            try:
+                workbook.active.append(["source", "target"])
+                workbook.active.append(["{a}{b}", "{b}{a}"])
+                workbook.save(input_path)
+            finally:
+                workbook.close()
+            for flags, expected in (([], "问题行数: 0"), (["--check-order"], "问题行数: 1")):
+                with self.subTest(flags=flags), patch(
+                    "sys.argv", ["tag-check", str(input_path), "-c", "A", "-t", "B", *flags]
+                ), redirect_stdout(io.StringIO()) as output:
+                    main()
+                    self.assertIn(expected, output.getvalue())
+
     def create_workbook(self, path: Path) -> None:
         workbook = Workbook()
         worksheet = workbook.active

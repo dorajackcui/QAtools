@@ -268,6 +268,7 @@ def run_workflow(
     run_tag_check: bool = True,
     tag_token_types: tuple[str, ...] | list[str] | None = None,
     tag_angle_config_file: str | Path | None = None,
+    tag_check_order: bool = False,
     run_line_break_check: bool = True,
     run_source_consistency_check: bool = True,
     run_target_consistency_check: bool = False,
@@ -369,6 +370,7 @@ def run_workflow(
                 start_row=start_row,
                 token_types=tag_token_types,
                 angle_config_file=tag_angle_config_file,
+                check_order=tag_check_order,
                 format_output=False,
             )
             worksheet_title = tag_summary.worksheet_title

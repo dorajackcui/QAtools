@@ -91,6 +91,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--tag-angle-config", help="尖括号 Tag 过滤配置")
     parser.add_argument(
+        "--tag-check-order",
+        action="store_true",
+        help="检查所选 Tag 的出现顺序，要求类型、内容和数量逐一对应；默认关闭",
+    )
+    parser.add_argument(
         "--text-rule",
         action="append",
         choices=TARGET_TEXT_RULES,
@@ -166,6 +171,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         run_tag_check="tag" in checks,
         tag_token_types=args.tag_token_type,
         tag_angle_config_file=args.tag_angle_config,
+        tag_check_order=args.tag_check_order,
         run_line_break_check="line-break" in checks,
         run_source_consistency_check="consistency" in checks,
         run_target_consistency_check="target-consistency" in checks,

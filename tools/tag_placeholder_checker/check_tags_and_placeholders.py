@@ -539,6 +539,11 @@ def parse_args() -> argparse.Namespace:
         help="检查类型，可重复传入，例如 --token-type angle --token-type memoq",
     )
     parser.add_argument(
+        "--check-order",
+        action="store_true",
+        help="检查所选 Tag 的出现顺序，要求类型、内容和数量逐一对应；默认关闭",
+    )
+    parser.add_argument(
         "--angle-config",
         help=(
             "可选的尖括号tag过滤配置文件路径；不传时检查所有 <...>。"
@@ -589,6 +594,7 @@ def process_excel(
     angle_patterns: tuple[str, ...] | list[str] | None = None,
     angle_config_file: str | Path | None = None,
     output_file: str | Path | None = None,
+    check_order: bool = False,
 ) -> CheckSummary:
     if start_row < 1:
         raise ValueError("开始行必须大于等于 1。")
@@ -626,6 +632,7 @@ def process_excel(
             angle_patterns=angle_patterns,
             angle_config_file=angle_config_file,
             _angle_regexes=angle_regexes,
+            check_order=check_order,
         )
         workbook.save(output_path)
         return summary
@@ -646,6 +653,7 @@ def process_workbook(
     angle_config_file: str | Path | None = None,
     format_output: bool = True,
     _angle_regexes: tuple[re.Pattern[str], ...] | None = None,
+    check_order: bool = False,
 ) -> CheckSummary:
     """Run the selected checks against an already-open workbook without saving it."""
     if start_row < 1:
@@ -751,6 +759,26 @@ def process_workbook(
                 )
             )
 
+        # Existing count/content/structure issues already explain a mismatch.
+        # Compare the combined sequence to also catch moves across token types.
+        if check_order and row_index not in problem_rows_set:
+            source_sequence = [(token.token_type, token.display_text) for token in source_tokens]
+            target_sequence = [(token.token_type, token.display_text) for token in target_tokens]
+            if source_sequence != target_sequence:
+                problem_rows_set.add(row_index)
+                source_order = " → ".join(token.display_text for token in source_tokens)
+                target_order = " → ".join(token.display_text for token in target_tokens)
+                problem_entries.append(
+                    (
+                        row_index,
+                        "Tag顺序不一致",
+                        "Tag顺序不一致。所选片段的类型、内容和数量相同，但出现顺序不同。"
+                        f"；source顺序={source_order}；target顺序={target_order}",
+                        row_source_snapshot,
+                        row_target_snapshot,
+                    )
+                )
+
     summary = CheckSummary(
         worksheet_title=worksheet.title,
         output_path=output_path,
@@ -795,6 +823,7 @@ def main() -> None:
         token_types=args.token_type,
         angle_config_file=args.angle_config,
         output_file=args.output,
+        check_order=args.check_order,
     )
 
     print("处理完成。")

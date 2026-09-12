@@ -27,7 +27,7 @@
 
 ## GUI
 
-单独启动：
+旧脚本直接打开工具箱中的 PySide6 页面：
 
 ```bash
 python3 tools/xbench_report_transformer/transform_xbench_report_gui.py

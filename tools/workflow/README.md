@@ -26,7 +26,7 @@ Tag 和 Target 文本规范的详细设置通过各自右侧入口打开。
 
 点击“全选 / 清空”旁的“记住选项”，可保存当前页面的全部选择：输入文件、工作表、
 Source / Target 列、开始行、各检查的勾选，以及术语标记和历史 TB、Tag 模式和
-过滤配置、Target 文本规范规则等详细设置。未勾选检查的详细设置也会保留。
+顺序检查选项和过滤配置、Target 文本规范规则等详细设置。未勾选检查的详细设置也会保留。
 下次打开 GUI 时自动恢复；后续调整只有再次点击“记住选项”才会更新保存内容。
 选项保存在当前用户配置目录的 `Toolshub/workflow_options.json`（Linux 为
 `toolshub/workflow_options.json`）；恢复时不读取 Excel，也不会自动开始检查。
@@ -69,4 +69,5 @@ Source / Target 列、开始行、各检查的勾选，以及术语标记和历�
 ## 实现位置
 
 统一 PySide6 页面在同目录 `qt_page.py`；页面注册、共享控件和对应测试见[仓库地图](../../docs/repository-map.md)。
+`workflow_gui.py` 只保留打开该页面的启动转接。
 QA 详细设置弹窗及取消恢复逻辑在 `qt_settings.py`；持久化选项在 `gui_options.py`。

@@ -27,11 +27,12 @@ qatools gui / toolshub_gui.py
 | 目录工具 CLI 公共参数、摘要与退出码 | [batch_cli.py](../tools/batch_cli.py)；工具包内 `cli.py` | `test_new_tools_cli.py` |
 | 主窗口、导航、退出保护 | [toolshub_gui.py](../toolshub_gui.py) | `test_toolshub_gui.py` |
 | 页面注册 | [tools/qt_pages.py](../tools/qt_pages.py) | 同上 |
+| 已运行实例的页面跳转 | [qt_navigation.py](../tools/qt_navigation.py) | `test_gui_entries.py` |
 | Qt 主题、输入控件、线程池 | [qt_gui_common.py](../tools/qt_gui_common.py) | GUI 回归 |
 | Qt 页面布局与选择器 | [qt_page_helpers.py](../tools/qt_page_helpers.py) | GUI 回归 |
 | 表头别名编辑页 | [qt_settings_page.py](../tools/qt_settings_page.py) | `test_header_aliases.py`、GUI 回归 |
 | Excel 表头识别、别名 | [excel_metadata.py](../tools/excel_metadata.py)、[header_aliases.py](../tools/header_aliases.py) | 对应同名测试 |
-| Tk 兼容页面公共控件 | [gui_common.py](../tools/gui_common.py)、[tb_project_ui.py](../tools/tb_project_ui.py) | `test_gui_common.py`、`test_gui_excel_selection.py` |
+| 旧 GUI 脚本转接与 Qt 表单行为 | 各工具 `*_gui.py` → `toolshub_gui.py` | `test_gui_entries.py`、`test_gui_excel_selection.py` |
 | 工作簿编辑、保留 VBA | [excel_output.py](../tools/excel_output.py) | `test_excel_output_paths.py` |
 | 新工具扫描、输出路径、原子复制 | [excel_file_ops.py](../tools/excel_file_ops.py) | `test_content_sync.py`、`test_momotools_utilities.py` |
 | Excel COM 原生操作 | [excel_com.py](../tools/excel_com.py) | `test_momotools_utilities.py` |
@@ -65,7 +66,9 @@ qatools gui / toolshub_gui.py
 
 ## 兼容边界
 
-- `tools/*/*_gui.py`、`tools/workflow/workflow_gui.py` 和 `phraseloom/gui.py` 是仍可调用的独立 Tk GUI；不作为新增统一界面的落点。
+- 所有 GUI 仅使用 PySide6。`tools/*/*_gui.py`、`tools/workflow/workflow_gui.py` 和 `phraseloom/gui.py` 只保留启动转接，不再维护独立页面或 Tk 控件。
+- `phraseloom gui` / `phraseloom-gui` 打开 PhraseLoom；Batch、合并、NBSP、Xbench 旧脚本打开对应 Qt 页面；术语、Tag、换行、同 Source 不同 Target、Target 中文旧脚本进入统一 QA 并仅预选对应检查，不自动运行。
+- 单项检查旧 GUI 入口现在使用统一 QA 报告与修订流程；需要原单项报告格式时使用对应 CLI。业务 CLI 和工作簿协议保持兼容。
 - 根目录 `extract_terms_from_excel.py`、`extract_terms_gui.py`、`qatools_cli.py` 保留兼容作用；不能因名称旧就删除。
 - 内容同步、PhraseLoom 和 Batch 复原是三种不同的匹配/映射协议，不合并它们的写回逻辑。
 - 新工具的原位输出约定不应用到既有 QA 报告工具；日志无附加 report 的约定也不适用于 QA 报告工作簿。
@@ -94,7 +97,7 @@ qatools gui / toolshub_gui.py
 |---|---|---|
 | 原 `tools/qt_pages.py` | 1,807 → 39 | 已按工具拆分；最大新页面 696 行，QA 设置独立 314 行；保持原类导入与方法行为 |
 | `tools/excel_batcher/excel_batcher.py` | 1,341 | 后续可分为 OOXML 读写、manifest、拆分/复原编排、CLI；先保留外部函数和工作簿结构契约 |
-| `tools/workflow/workflow_gui.py` | 1,158 | 独立 Tk 兼容入口；不再向这里添加统一 GUI 功能，未获迁移要求前保留 |
+| `tools/workflow/workflow_gui.py` | 1,158 → 20 | 已收敛为 Qt 启动转接；统一页面在同包 `qt_page.py` |
 | `tools/term_pair_checker/extract_terms_from_excel.py` | 958 | 匹配、输出已有辅助模块；后续修改相关规则时再考虑抽 CLI，避免同时搬动复杂回扫逻辑 |
 | `tools/tag_placeholder_checker/check_tags_and_placeholders.py` | 816 | 后续可分 token 提取/结构校验与 Excel 报告；必须保留 memoQ、引号属性、兄弟节点换序测试 |
 | `phraseloom/strings_workflow.py` | 721 | 导出/回填编排已有包边界，暂不为行数改变 Strings 协议 |

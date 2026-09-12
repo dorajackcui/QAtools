@@ -581,6 +581,7 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
                 "term_history_start_row": self.history_start_row.value(),
                 "run_tag_check": self.tag_check.isChecked(),
                 "tag_token_types": tag_types,
+                "tag_check_order": self.tag_check_order.isChecked(),
                 "tag_angle_config_file": self.angle_config.path() or None if "angle" in tag_types else None,
                 "run_line_break_check": self.line_break_check.isChecked(),
                 "run_source_consistency_check": self.consistency_check.isChecked(),

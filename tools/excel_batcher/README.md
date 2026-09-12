@@ -47,3 +47,4 @@
 ## 实现位置
 
 统一 PySide6 页面在同目录 `qt_page.py`；页面注册、共享控件和对应测试见[仓库地图](../../docs/repository-map.md)。
+旧脚本 `excel_batcher_gui.py` 直接打开此 Qt 页面。

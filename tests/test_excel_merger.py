@@ -4,10 +4,9 @@ from collections import OrderedDict
 from datetime import datetime
 import io
 from pathlib import Path
-from types import SimpleNamespace
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from xml.etree import ElementTree as ET
 import zipfile
 
@@ -22,7 +21,6 @@ from tools.excel_merger.merge_active_sheets import (
     read_shared_strings,
     write_output_xlsx,
 )
-from tools.excel_merger.merge_active_sheets_gui import MergeActiveSheetsApp
 
 
 class ExcelMergerTests(unittest.TestCase):
@@ -214,30 +212,6 @@ class ExcelMergerTests(unittest.TestCase):
             ):
                 merge_active_sheets(folder)
 
-    def test_gui_starts_merge_with_the_previewed_output_path(self) -> None:
-        app = MergeActiveSheetsApp.__new__(MergeActiveSheetsApp)
-        app.input_folder_var = SimpleNamespace(get=lambda: r"D:\input")
-        app.keep_all_headers_var = SimpleNamespace(get=lambda: True)
-        app.output_preview_var = SimpleNamespace(set=Mock())
-        app._start_merge_worker = Mock()
-        expected_output = Path(r"D:\input_merged_active_sheet.xlsx")
-
-        with patch(
-            "tools.excel_merger.merge_active_sheets_gui.build_default_output_path",
-            return_value=expected_output,
-        ):
-            app.run_merge()
-
-        app.output_preview_var.set.assert_called_once_with(
-            f"输出文件：{expected_output}"
-        )
-        app._start_merge_worker.assert_called_once_with(
-            {
-                "folder_path": r"D:\input",
-                "output_path": expected_output,
-                "keep_all_headers": True,
-            }
-        )
 
     def test_rejects_output_path_that_would_overwrite_an_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

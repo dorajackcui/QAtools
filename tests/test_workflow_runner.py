@@ -32,6 +32,41 @@ from tools.workflow.revision_applier import (
 
 
 class WorkflowRunnerTests(unittest.TestCase):
+    def test_optional_tag_order_check_reaches_the_unified_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            try:
+                workbook.active.append(["source", "target"])
+                workbook.active.append(["<br/>{name}", "{name}<br/>"])
+                workbook.save(input_path)
+            finally:
+                workbook.close()
+            for options, expected_rows in (({}, 0), ({"tag_check_order": True}, 1)):
+                with self.subTest(options=options):
+                    summary = run_workflow(
+                        input_file=input_path, source_column="A", target_column="B",
+                        run_term_pair_check=False, run_line_break_check=False,
+                        run_source_consistency_check=False, run_number_check=False,
+                        run_url_check=False, run_chinese_target_check=False,
+                        run_target_text_check=False, **options,
+                    )
+                    self.assertEqual(summary.tag_problem_rows, expected_rows)
+                    self.assertEqual(summary.tag_problem_count, expected_rows)
+                    result = load_workbook(summary.output_path)
+                    try:
+                        review = result[WORKFLOW_REVIEW_SHEET_NAME]
+                        issues = [
+                            row for row in review.iter_rows(min_row=2, max_col=6, values_only=True)
+                            if isinstance(row[0], int)
+                        ]
+                        self.assertEqual(len(issues), expected_rows)
+                        if expected_rows:
+                            self.assertIn("Tag顺序不一致", review["E2"].value)
+                            self.assertEqual(review["F2"].value, "Tag 检查")
+                    finally:
+                        result.close()
+
     def create_workbook(self, path: Path) -> None:
         workbook = Workbook()
         worksheet = workbook.active

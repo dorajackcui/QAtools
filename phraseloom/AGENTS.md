@@ -20,7 +20,7 @@ PhraseLoom 是确定性的 Excel Strings 预处理与回填工具，只有两个
 - `tag_engine.py`、`tag_rules.py`：保护内容的提取、校验与恢复。
 - `template_engine.py`：数字、颜色和序列模板。
 - `string_cluster.py`：可选的相似句分组，仅影响分组和顺序。
-- `cli.py`、`interactive.py`：CLI 与终端入口；`qt_page.py`：统一 PySide6 页面；`gui.py`：独立 Tk 兼容 GUI。
+- `cli.py`、`interactive.py`：CLI 与终端入口；`qt_page.py`：唯一 PySide6 页面；`gui.py`：转接到该页面的兼容启动入口。
 - `workbook_schema.py`：当前工作簿常量。
 
 当前用户流程和工作簿契约见 `README.md`；行为细节以

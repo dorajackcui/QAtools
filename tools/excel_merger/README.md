@@ -27,4 +27,4 @@ CLI 示例和兼容参数见 [CLI 手册](../../docs/cli-usage.md#文本修复�
 
 ## 实现位置
 
-统一页面在 `qt_page.py`，业务和 CLI 保持在 `merge_active_sheets.py`；独立 Tk GUI 继续兼容。
+唯一 GUI 页面在 `qt_page.py`（PySide6），业务和 CLI 保持在 `merge_active_sheets.py`；旧 GUI 脚本转接到此页面。

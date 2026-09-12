@@ -487,6 +487,8 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertEqual(workflow.standard_mode.property("segmentedMode"), True)
             self.assertEqual(workflow.memoq_mode.property("segmentedMode"), True)
             self.assertEqual(workflow.tag_mode_group.checkedId(), 0)
+            self.assertFalse(workflow.tag_check_order.isChecked())
+            self.assertTrue(workflow.tag_check_order.isEnabled())
 
             workflow.memoq_mode.setChecked(True)
             self.qt_app.processEvents()
@@ -494,6 +496,7 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertFalse(workflow.standard_mode.isChecked())
             self.assertTrue(workflow.memoq_mode.isChecked())
             self.assertEqual(workflow.tag_mode_group.checkedId(), 1)
+            self.assertTrue(workflow.tag_check_order.isEnabled())
             self.assertTrue(
                 all(not check.isEnabled() for check in workflow.standard_tag_checks)
             )
@@ -520,6 +523,16 @@ class ToolshubLayoutTests(unittest.TestCase):
             window.resize(1000, 660)
             window.show()
             workflow = window.tool_frames["workflow"]
+            workflow.tag_settings_button.click()
+            self.qt_app.processEvents()
+            workflow.tag_check_order.setChecked(True)
+            workflow.tag_settings_dialog.reject()
+            self.assertFalse(workflow.tag_check_order.isChecked())
+            workflow.tag_settings_button.click()
+            self.qt_app.processEvents()
+            workflow.tag_check_order.setChecked(True)
+            workflow.tag_settings_dialog.accept()
+            self.assertTrue(workflow.tag_check_order.isChecked())
             workflow.target_settings_button.click()
             self.qt_app.processEvents()
 
@@ -572,6 +585,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                     for check, checked in zip(workflow.standard_tag_checks, tag_checks, strict=True):
                         check.setChecked(checked)
                     workflow.angle_config.set_path(r"C:\configs\tags.json")
+                    workflow.tag_check_order.setChecked(True)
                     rule_checks = (False, True, False, True)
                     for check, checked in zip(workflow.rule_checks.values(), rule_checks, strict=True):
                         check.setChecked(checked)
@@ -582,6 +596,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                     workflow.mark_book.setChecked(memoq)
                     workflow.history_picker.clear()
                     workflow.angle_config.clear()
+                    workflow.tag_check_order.setChecked(False)
                     workflow.width_rule.setChecked(False)
                 finally:
                     window.close()
@@ -617,6 +632,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                     self.assertEqual(tuple(check.isChecked() for check in restored.standard_tag_checks), tag_checks)
                     self.assertEqual(restored.angle_config.path(), r"C:\configs\tags.json")
                     self.assertEqual(restored.angle_config.isEnabled(), not memoq)
+                    self.assertTrue(restored.tag_check_order.isChecked())
                     self.assertEqual(tuple(check.isChecked() for check in restored.rule_checks.values()), rule_checks)
                     for check, button in (
                         (restored.term_check, restored.term_settings_button),
@@ -640,6 +656,21 @@ class ToolshubLayoutTests(unittest.TestCase):
                     self.assertEqual(restored.target_column.text(), "C")
                 finally:
                     restored_window.close()
+
+    def test_saved_options_without_order_setting_restore_with_order_disabled(self) -> None:
+        window = self.make_app()
+        try:
+            workflow = window.tool_frames["workflow"]
+            options = workflow._capture_options()
+            del options["settings"]["tag"]["check_order"]
+            workflow.options_store.save(options)
+        finally:
+            window.close()
+        restored_window = self.make_app()
+        try:
+            self.assertFalse(restored_window.tool_frames["workflow"].tag_check_order.isChecked())
+        finally:
+            restored_window.close()
 
     def test_invalid_remembered_options_keep_defaults_without_blocking_startup(self) -> None:
         config_path = self.config_dir / "workflow_options.json"
@@ -708,6 +739,10 @@ class ToolshubLayoutTests(unittest.TestCase):
                 call_kwargs["kwargs"]["tag_token_types"],
                 ("angle", "square_color", "brace", "newline"),
             )
+            self.assertFalse(call_kwargs["kwargs"]["tag_check_order"])
+            workflow.tag_check_order.setChecked(True)
+            workflow.run_selected_tasks()
+            self.assertTrue(workflow.run_in_background.call_args.kwargs["kwargs"]["tag_check_order"])
         finally:
             window.close()
 

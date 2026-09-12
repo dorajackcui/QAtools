@@ -17,7 +17,7 @@
 
 ## GUI
 
-独立 GUI：
+旧 GUI 启动脚本（转接到 PySide6 QA 页，仅预选 Target 中文，输出统一 QA 报告）：
 
 ```bash
 python3 tools/chinese_target_checker/check_chinese_target_gui.py

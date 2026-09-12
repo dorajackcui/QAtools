@@ -160,7 +160,7 @@ def send_tool_input_file(
 
 
 class WorkflowFileReceiver:
-    """Own the current Toolshub lock and expose Finder requests to Tk polling."""
+    """Own the current Toolshub lock and expose Finder requests to Qt polling."""
 
     def __init__(
         self,
