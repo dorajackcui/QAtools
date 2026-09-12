@@ -17,6 +17,7 @@ CHECKS = (
     "term",
     "consistency",
     "target-consistency",
+    "substring-consistency",
     "tag",
     "line-break",
     "number",
@@ -24,7 +25,7 @@ CHECKS = (
     "chinese",
     "text",
 )
-DEFAULT_CHECKS = tuple(check for check in CHECKS if check != "target-consistency")
+DEFAULT_CHECKS = tuple(check for check in CHECKS if check not in {"target-consistency", "substring-consistency"})
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -135,6 +136,8 @@ def _print_summary(summary: WorkflowSummary) -> None:
             "同 Target 不同 Source: "
             f"{summary.target_consistency_problem_rows} 个问题行"
         )
+    if summary.ran_substring_consistency_check:
+        print(f"子串译文一致性: {summary.substring_consistency_problem_rows} 个疑似问题行")
     if summary.ran_number_check:
         print(f"数字一致性: {summary.number_problem_rows} 个问题行")
     if summary.ran_url_check:
@@ -175,6 +178,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         run_line_break_check="line-break" in checks,
         run_source_consistency_check="consistency" in checks,
         run_target_consistency_check="target-consistency" in checks,
+        run_substring_consistency_check="substring-consistency" in checks,
         run_number_check="number" in checks,
         run_url_check="url" in checks,
         run_chinese_target_check="chinese" in checks,

@@ -2,18 +2,17 @@
 
 统一 CLI：`qatools consistency-check --help`。
 
-检查 Excel 中完全相同的 `source` 是否对应多个不同 `target`，用于定位同源文本译法不一致问题。
+检查 Excel 中归一化后相同的 `source` 是否对应多个不同 `target`，用于定位同源文本译法不一致问题。
 
 一键质量检查 GUI 和统一报告使用直观名称“同 Source 不同 Target”；现有
 `qatools consistency-check` 命令保持兼容。
 
 ## 规则
 
-- 按 source 单元格文本精确分组，不忽略大小写、空格或换行差异
-- 空 source 和只包含空白字符的 source 跳过
-- target 也按单元格文本精确比较
+- source 分组与 target 版本比较遵循[共享归一化规则](../../docs/consistency-normalization.md)，报告保留各行原文
+- 归一化后为空的 source 跳过
 - 空 target 会作为一种译文参与比较；同一 source 同时出现空 target 和非空 target 时会报错
-- target 完全相同的重复 source 不报错
+- target 归一化后相同的重复 source 不报错
 
 ## CLI
 

@@ -31,6 +31,7 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertIn("number", checks)
         self.assertIn("url", checks)
         self.assertNotIn("target-consistency", checks)
+        self.assertNotIn("substring-consistency", checks)
 
     def test_parser_accepts_new_quality_checks(self) -> None:
         args = build_parser().parse_args(
@@ -114,6 +115,8 @@ class WorkflowCliTests(unittest.TestCase):
                     "chinese",
                     "--check",
                     "text",
+                    "--check",
+                    "substring-consistency",
                     "--text-rule",
                     ABNORMAL_PUNCTUATION_RULE,
                     "--tag-token-type",
@@ -132,6 +135,7 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertFalse(kwargs["run_line_break_check"])
         self.assertFalse(kwargs["run_source_consistency_check"])
         self.assertFalse(kwargs["run_target_consistency_check"])
+        self.assertTrue(kwargs["run_substring_consistency_check"])
         self.assertFalse(kwargs["run_number_check"])
         self.assertFalse(kwargs["run_url_check"])
         self.assertTrue(kwargs["run_chinese_target_check"])

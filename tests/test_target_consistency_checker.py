@@ -48,7 +48,7 @@ class TargetConsistencyExcelTests(unittest.TestCase):
             self.assertEqual(summary.non_empty_target_rows, 7)
             self.assertEqual(summary.repeated_target_count, 3)
             self.assertEqual(summary.inconsistent_target_count, 2)
-            self.assertEqual(summary.problem_rows, 4)
+            self.assertEqual(summary.problem_rows, 5)
             self.assertEqual(
                 summary.output_path,
                 input_path.with_name("target_consistency_check_input.xlsx").resolve(),
@@ -69,14 +69,14 @@ class TargetConsistencyExcelTests(unittest.TestCase):
                     ],
                 )
                 self.assertEqual(
-                    [problem_sheet[f"A{row}"].value for row in range(2, 6)],
-                    [2, 3, 8, 9],
+                    [problem_sheet[f"A{row}"].value for row in range(2, 7)],
+                    [2, 3, 10, 8, 9],
                 )
-                self.assertIn("2 个不同 source", problem_sheet["D2"].value)
-                self.assertEqual(problem_sheet["E2"].value, 2)
-                self.assertEqual(problem_sheet["F2"].value, "2、3")
-                self.assertIsNone(problem_sheet["B4"].value)
-                self.assertEqual(problem_sheet["C4"].value, "共用")
+                self.assertIn("3 个不同 source", problem_sheet["D2"].value)
+                self.assertEqual(problem_sheet["E2"].value, 3)
+                self.assertEqual(problem_sheet["F2"].value, "2、3、10")
+                self.assertIsNone(problem_sheet["B5"].value)
+                self.assertEqual(problem_sheet["C5"].value, "共用")
                 self.assertEqual(problem_sheet["A2"].hyperlink.location, "'Data'!B2")
             finally:
                 workbook.close()

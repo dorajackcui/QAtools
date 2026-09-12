@@ -8,6 +8,7 @@ from pathlib import Path
 
 from openpyxl.utils import column_index_from_string
 
+from tools.consistency_text import normalize_consistency_text
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
@@ -25,6 +26,7 @@ PROBLEM_SHEET_NAME = "同Target不同Source"
 class TargetOccurrence:
     row_index: int
     source_text: str
+    target_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -123,21 +125,22 @@ def process_workbook(
 
     for row_index in range(start_row, last_row + 1):
         target_text = cell_text(worksheet[f"{target_column}{row_index}"].value)
-        if not target_text.strip():
+        target_key = normalize_consistency_text(target_text)
+        if not target_key:
             continue
         source_text = cell_text(worksheet[f"{source_column}{row_index}"].value)
-        occurrences_by_target.setdefault(target_text, []).append(
-            TargetOccurrence(row_index=row_index, source_text=source_text)
+        occurrences_by_target.setdefault(target_key, []).append(
+            TargetOccurrence(row_index=row_index, source_text=source_text, target_text=target_text)
         )
 
     repeated_target_count = 0
     inconsistent_target_count = 0
     problem_entries: list[tuple[int, str, str, str, int, str]] = []
-    for target_text, occurrences in occurrences_by_target.items():
+    for occurrences in occurrences_by_target.values():
         if len(occurrences) < 2:
             continue
         repeated_target_count += 1
-        source_variants = {occurrence.source_text for occurrence in occurrences}
+        source_variants = {normalize_consistency_text(occurrence.source_text) for occurrence in occurrences}
         if len(source_variants) < 2:
             continue
 
@@ -148,7 +151,7 @@ def process_workbook(
                 (
                     occurrence.row_index,
                     occurrence.source_text,
-                    target_text,
+                    occurrence.target_text,
                     f"同一 target 对应 {len(source_variants)} 个不同 source",
                     len(source_variants),
                     grouped_rows,

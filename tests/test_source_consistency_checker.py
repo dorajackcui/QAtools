@@ -32,7 +32,7 @@ class SourceConsistencyExcelTests(unittest.TestCase):
         worksheet["A7"] = "   "
         worksheet["B7"] = "Ignored whitespace source"
         worksheet["A8"] = "Hello "
-        worksheet["B8"] = "Trailing-space source is distinct"
+        worksheet["B8"] = "Third translation"
         worksheet["A9"] = "Empty target"
         worksheet["B9"] = None
         worksheet["A10"] = "Empty target"
@@ -62,7 +62,7 @@ class SourceConsistencyExcelTests(unittest.TestCase):
             self.assertEqual(summary.non_empty_source_rows, 7)
             self.assertEqual(summary.repeated_source_count, 3)
             self.assertEqual(summary.inconsistent_source_count, 2)
-            self.assertEqual(summary.problem_rows, 4)
+            self.assertEqual(summary.problem_rows, 5)
 
             workbook = load_workbook(summary.output_path)
             problem_sheet = workbook[PROBLEM_SHEET_NAME]
@@ -77,21 +77,21 @@ class SourceConsistencyExcelTests(unittest.TestCase):
                     "同组行号",
                 ],
             )
-            self.assertEqual(problem_sheet.max_row, 5)
+            self.assertEqual(problem_sheet.max_row, 6)
             self.assertEqual(
-                [problem_sheet[f"A{row}"].value for row in range(2, 6)],
-                [2, 3, 9, 10],
+                [problem_sheet[f"A{row}"].value for row in range(2, 7)],
+                [2, 3, 8, 9, 10],
             )
             self.assertEqual(problem_sheet["B2"].value, "Hello")
             self.assertEqual(problem_sheet["C2"].value, "Bonjour")
-            self.assertIn("2 个不同 target", problem_sheet["D2"].value)
-            self.assertEqual(problem_sheet["E2"].value, 2)
-            self.assertEqual(problem_sheet["F2"].value, "2、3")
-            self.assertEqual(problem_sheet["B4"].value, "Empty target")
-            self.assertIsNone(problem_sheet["C4"].value)
-            self.assertEqual(problem_sheet["F4"].value, "9、10")
+            self.assertIn("3 个不同 target", problem_sheet["D2"].value)
+            self.assertEqual(problem_sheet["E2"].value, 3)
+            self.assertEqual(problem_sheet["F2"].value, "2、3、8")
+            self.assertEqual(problem_sheet["B5"].value, "Empty target")
+            self.assertIsNone(problem_sheet["C5"].value)
+            self.assertEqual(problem_sheet["F5"].value, "9、10")
             self.assertEqual(problem_sheet["A2"].hyperlink.location, "'Data'!B2")
-            self.assertEqual(problem_sheet["A4"].hyperlink.location, "'Data'!B9")
+            self.assertEqual(problem_sheet["A5"].hyperlink.location, "'Data'!B9")
             self.assertIsNone(problem_sheet["A2"].hyperlink.target)
             self.assertEqual(problem_sheet.freeze_panes, "A2")
             self.assertNotIn(PROBLEM_SHEET_NAME, load_workbook(input_path).sheetnames)

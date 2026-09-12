@@ -13,6 +13,7 @@ if __package__ in {None, ""}:
 
 from openpyxl.utils import column_index_from_string
 
+from tools.consistency_text import normalize_consistency_text
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
@@ -30,6 +31,7 @@ PROBLEM_SHEET_NAME = "同源译文不一致"
 class SourceOccurrence:
     row_index: int
     target_text: str
+    source_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -145,21 +147,22 @@ def process_workbook(
 
     for row_index in range(start_row, last_row + 1):
         source_text = cell_text(worksheet[f"{source_column}{row_index}"].value)
-        if not source_text.strip():
+        source_key = normalize_consistency_text(source_text)
+        if not source_key:
             continue
         target_text = cell_text(worksheet[f"{target_column}{row_index}"].value)
-        occurrences_by_source.setdefault(source_text, []).append(
-            SourceOccurrence(row_index=row_index, target_text=target_text)
+        occurrences_by_source.setdefault(source_key, []).append(
+            SourceOccurrence(row_index=row_index, target_text=target_text, source_text=source_text)
         )
 
     repeated_source_count = 0
     inconsistent_source_count = 0
     problem_entries: list[tuple[int, str, str, str, int, str]] = []
-    for source_text, occurrences in occurrences_by_source.items():
+    for occurrences in occurrences_by_source.values():
         if len(occurrences) < 2:
             continue
         repeated_source_count += 1
-        target_variants = {occurrence.target_text for occurrence in occurrences}
+        target_variants = {normalize_consistency_text(occurrence.target_text) for occurrence in occurrences}
         if len(target_variants) < 2:
             continue
 
@@ -169,7 +172,7 @@ def process_workbook(
             problem_entries.append(
                 (
                     occurrence.row_index,
-                    source_text,
+                    occurrence.source_text,
                     occurrence.target_text,
                     f"同一 source 对应 {len(target_variants)} 个不同 target",
                     len(target_variants),
@@ -200,7 +203,7 @@ def process_workbook(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="检查 Excel 中是否存在完全相同的 source 对应不同 target。"
+        description="检查 Excel 中是否存在归一化后相同的 source 对应不同 target。"
     )
     parser.add_argument("input_file", nargs="?", help="输入 Excel 文件路径，例如 input.xlsx")
     parser.add_argument("-s", "--sheet", help="工作表名称，不填则使用活动工作表")

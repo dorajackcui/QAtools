@@ -61,6 +61,7 @@ QA_CHECK_WIDGETS = {
     "line-break": "line_break_check",
     "consistency": "consistency_check",
     "target-consistency": "target_consistency_check",
+    "substring-consistency": "substring_consistency_check",
     "number": "number_check",
     "url": "url_check",
     "chinese": "chinese_check",

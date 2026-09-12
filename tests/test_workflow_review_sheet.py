@@ -75,7 +75,7 @@ class ReviewSheetOrderingTests(unittest.TestCase):
         finally:
             workbook.close()
 
-    def test_ordering_keeps_exact_source_groups_and_blank_target_variants(self) -> None:
+    def test_ordering_uses_normalized_groups_and_keeps_blank_target_variants(self) -> None:
         workbook = Workbook()
         try:
             sheet = workbook.active
@@ -84,7 +84,7 @@ class ReviewSheetOrderingTests(unittest.TestCase):
                 (12, "Same ", "Y"),
                 (4, "Same", None),
                 (10, "Same", "X"),
-                (6, "Same ", "X"),
+                (6, "【Same】", "“X”"),
                 (14, "Same", None),
                 (8, "same", "X"),
                 (16, "same", "Y"),
@@ -94,8 +94,8 @@ class ReviewSheetOrderingTests(unittest.TestCase):
             rows = collect_review_rows(
                 workbook, (("同 Source 不同 Target", sheet.title),)
             )
-            self.assertEqual([row[0] for row in rows], [4, 14, 10, 6, 12, 8, 16])
-            self.assertEqual([row[2] for row in rows[:3]], ["", "", "X"])
+            self.assertEqual([row[0] for row in rows], [4, 14, 6, 10, 12, 8, 16])
+            self.assertEqual([row[2] for row in rows[:3]], ["", "", "“X”"])
         finally:
             workbook.close()
 

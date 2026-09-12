@@ -9,6 +9,7 @@ from typing import Iterable, Iterator
 from openpyxl.comments import Comment
 from openpyxl.styles import PatternFill
 
+from tools.consistency_text import normalize_consistency_text
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     join_unique_text,
@@ -63,10 +64,10 @@ def _ordered_review_entries(
         item = (row_number, entry)
         # A row in both checks belongs to its Source group and is emitted once.
         if "同 Source 不同 Target" in entry.check_items:
-            variants = source_groups.setdefault(entry.source_text, {})
-            variants.setdefault(entry.target_text, []).append(item)
+            variants = source_groups.setdefault(normalize_consistency_text(entry.source_text), {})
+            variants.setdefault(normalize_consistency_text(entry.target_text), []).append(item)
         elif "同 Target 不同 Source" in entry.check_items:
-            target_groups.setdefault(entry.target_text, []).append(item)
+            target_groups.setdefault(normalize_consistency_text(entry.target_text), []).append(item)
         else:
             other_entries.append(item)
 

@@ -32,6 +32,59 @@ from tools.workflow.revision_applier import (
 
 
 class WorkflowRunnerTests(unittest.TestCase):
+    def test_normalized_checks_merge_raw_rows_and_allow_revision_roundtrip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            source_rows = [
+                ("【阿童木】", "“Astro Boy”"), ("阿童木", "“Other”"),
+                ("悟空", "【Other】"), ("【保存】", "Save"), ("【请保存】", "Wrong"),
+            ]
+            try:
+                workbook.active.title = "Data"
+                workbook.active.append(["source", "target"])
+                for row in source_rows:
+                    workbook.active.append(row)
+                workbook.save(input_path)
+            finally:
+                workbook.close()
+            summary = run_workflow(
+                input_file=input_path, source_column="A", target_column="B",
+                run_term_pair_check=False, run_tag_check=False, run_line_break_check=False,
+                run_number_check=False, run_url_check=False, run_chinese_target_check=False,
+                run_target_text_check=False, run_source_consistency_check=True,
+                run_target_consistency_check=True, run_substring_consistency_check=True,
+            )
+            self.assertEqual(summary.source_consistency_problem_rows, 2)
+            self.assertEqual(summary.target_consistency_problem_rows, 2)
+            self.assertEqual(summary.substring_consistency_problem_rows, 1)
+            report = load_workbook(summary.output_path)
+            try:
+                review = report["问题处理"]
+                rows = [row for row in review.iter_rows(min_row=2, max_col=6, values_only=True)
+                        if isinstance(row[0], int)]
+                self.assertEqual([row[0] for row in rows], [2, 3, 4, 6])
+                for row in rows:
+                    self.assertEqual(row[1:3], source_rows[row[0] - 2])
+                self.assertIn("同 Source 不同 Target", rows[1][5])
+                self.assertIn("同 Target 不同 Source", rows[1][5])
+                self.assertIn("第 3–4 字符", rows[-1][4])
+                review["D2"] = "Astro"
+                review["D5"] = "Please save"
+                report.save(summary.output_path)
+            finally:
+                report.close()
+            revision = apply_workflow_revisions(summary.output_path)
+            self.assertEqual(revision.revised_count, 2)
+            self.assertEqual(revision.conflict_rows, ())
+            revised = load_workbook(revision.output_path)
+            try:
+                self.assertEqual(revised["Data"]["A2"].value, "【阿童木】")
+                self.assertEqual(revised["Data"]["B2"].value, "Astro")
+                self.assertEqual(revised["Data"]["B6"].value, "Please save")
+            finally:
+                revised.close()
+
     def test_optional_tag_order_check_reaches_the_unified_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
@@ -66,6 +119,52 @@ class WorkflowRunnerTests(unittest.TestCase):
                             self.assertEqual(review["F2"].value, "Tag 检查")
                     finally:
                         result.close()
+
+    def test_substring_only_report_supports_revision_roundtrip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            try:
+                workbook.active.title = "Data"
+                workbook.active.append(["source", "target"])
+                workbook.active.append(["保存更改", "Save changes"])
+                workbook.active.append(["是否保存更改？", "Save modifications?"])
+                workbook.save(input_path)
+            finally:
+                workbook.close()
+            summary = run_workflow(
+                input_file=input_path, source_column="A", target_column="B",
+                run_term_pair_check=False, run_tag_check=False,
+                run_line_break_check=False, run_source_consistency_check=False,
+                run_number_check=False, run_url_check=False,
+                run_chinese_target_check=False, run_target_text_check=False,
+                run_substring_consistency_check=True,
+            )
+            self.assertTrue(summary.ran_substring_consistency_check)
+            self.assertEqual(summary.substring_consistency_problem_rows, 1)
+            self.assertEqual(summary.substring_consistency_problem_count, 1)
+            report = load_workbook(summary.output_path)
+            try:
+                self.assertEqual(report.sheetnames, ["Data", "问题处理", "质量检查汇总"])
+                review = report["问题处理"]
+                self.assertEqual(review["A2"].value, 3)
+                self.assertIn("参考行 2", review["E2"].value)
+                self.assertEqual(review["F2"].value, "子串译文一致性")
+                self.assertEqual(list(report["质量检查汇总"].values), [
+                    ("检查项", "问题行数"), ("子串译文一致性", 1),
+                ])
+                review["D2"] = "Save changes?"
+                report.save(summary.output_path)
+            finally:
+                report.close()
+            result = apply_workflow_revisions(summary.output_path)
+            revised = load_workbook(result.output_path)
+            try:
+                self.assertEqual(revised["Data"]["B3"].value, "Save changes?")
+                self.assertEqual(revised["Data"]["B2"].value, "Save changes")
+                self.assertEqual(revised.sheetnames, ["Data"])
+            finally:
+                revised.close()
 
     def create_workbook(self, path: Path) -> None:
         workbook = Workbook()
@@ -250,6 +349,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                     run_line_break_check=True,
                     run_source_consistency_check=True,
                     run_target_consistency_check=True,
+                    run_substring_consistency_check=True,
                     run_number_check=True,
                     run_url_check=True,
                     run_chinese_target_check=True,

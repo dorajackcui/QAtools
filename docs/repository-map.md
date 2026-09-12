@@ -60,8 +60,12 @@ qatools gui / toolshub_gui.py
 | 法语 NBSP | `tools/french_nbsp_restorer/restore_french_nbsp.py` | 同包 `qt_page.py` | [README](../tools/french_nbsp_restorer/README.md)、`test_french_nbsp_restorer.py` |
 | Xbench 转换 | `tools/xbench_report_transformer/transform_xbench_report.py` | 同包 `qt_page.py` | [README](../tools/xbench_report_transformer/README.md)、`test_xbench_report_transformer.py` |
 
+三项一致性检查共用 [consistency_text.py](../tools/consistency_text.py) 生成比较文本和原文偏移，
+规则见[文本归一化](consistency-normalization.md)，覆盖于 `test_consistency_text.py`。
+
 单项检查包：`term_pair_checker`、`tag_placeholder_checker`、`line_break_checker`、
-`source_consistency_checker`、`target_consistency_checker`、`content_fidelity_checker`、
+`source_consistency_checker`、`target_consistency_checker`、`substring_consistency_checker`、
+`content_fidelity_checker`、
 `chinese_target_checker`、`target_text_checker`。业务位于包内处理模块，测试位于 `tests/test_<工具>.py`；
 规则从[文档索引](README.md#业务规则)进入。统一 QA 调用这些处理能力，不复制判定逻辑。
 

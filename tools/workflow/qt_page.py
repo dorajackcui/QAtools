@@ -186,6 +186,10 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
         self.term_check = QCheckBox("术语检查")
         self.consistency_check = QCheckBox("同 Source 不同 Target")
         self.target_consistency_check = QCheckBox("同 Target 不同 Source")
+        self.substring_consistency_check = QCheckBox("子串译文一致性")
+        self.substring_consistency_check.setToolTip(
+            "检查长原文是否沿用其包含短句的参考译文；结果为疑似问题，需要人工复核。"
+        )
         self.tag_check = QCheckBox("Tag / Placeholder")
         self.line_break_check = QCheckBox("换行数量")
         self.number_check = QCheckBox("数字一致性")
@@ -202,10 +206,12 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
             self.url_check,
             self.chinese_check,
             self.target_text_check,
+            self.substring_consistency_check,  # Append to preserve saved option positions.
         )
         for check in self.task_checks:
             check.setChecked(True)
         self.target_consistency_check.setChecked(False)
+        self.substring_consistency_check.setChecked(False)
 
         self.term_settings_button = self._settings_button("术语检查设置")
         self.tag_settings_button = self._settings_button("Tag / Placeholder 设置")
@@ -218,6 +224,7 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
         translation_grid.addWidget(
             self._task_row(self.term_check, self.term_settings_button), 0, 0
         )
+        translation_grid.addWidget(self._task_row(self.substring_consistency_check), 0, 1)
         translation_grid.addWidget(self._task_row(self.consistency_check), 1, 0)
         translation_grid.addWidget(
             self._task_row(self.target_consistency_check), 1, 1
@@ -586,6 +593,7 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
                 "run_line_break_check": self.line_break_check.isChecked(),
                 "run_source_consistency_check": self.consistency_check.isChecked(),
                 "run_target_consistency_check": self.target_consistency_check.isChecked(),
+                "run_substring_consistency_check": self.substring_consistency_check.isChecked(),
                 "run_number_check": self.number_check.isChecked(),
                 "run_url_check": self.url_check.isChecked(),
                 "run_chinese_target_check": self.chinese_check.isChecked(),
@@ -625,6 +633,8 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
                 f"同 Target 不同 Source 组数: {summary.target_consistency_problem_count}",
                 f"同 Target 不同 Source 涉及行数: {summary.target_consistency_problem_rows}",
             ))
+        if summary.ran_substring_consistency_check:
+            lines.append(f"子串译文一致性疑似问题行数: {summary.substring_consistency_problem_rows}")
         if summary.ran_number_check:
             lines.append(f"数字一致性问题行数: {summary.number_problem_rows}")
         if summary.ran_url_check:

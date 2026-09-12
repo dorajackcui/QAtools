@@ -27,6 +27,8 @@
 - 术语与 Tag：[术语检查](../tools/term_pair_checker/README.md)、
   [Tag / Placeholder](../tools/tag_placeholder_checker/README.md)、
   [共享规则](term-and-tag-check-rules.md)
+- 一致性共享规则：[文本归一化](consistency-normalization.md)
+- 子串译文一致性：[子串译文一致性](../tools/substring_consistency_checker/README.md)
 - 双向文本一致性：[同 Source 不同 Target](../tools/source_consistency_checker/README.md)、
   [同 Target 不同 Source](../tools/target_consistency_checker/README.md)
 - 内容保真：[数字与 URL](../tools/content_fidelity_checker/README.md)、

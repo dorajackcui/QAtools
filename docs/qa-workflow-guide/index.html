@@ -64,8 +64,8 @@
               <li><strong>开始检查</strong><span>点击右下角“开始检查”，完成后按提示路径打开生成的报告。</span></li>
             </ol>
             <figure class="shot">
-              <img src="assets/workflow-main.png" alt="QAtools 一键质量检查主页面，显示输入范围、九个检查项目和底部操作按钮" width="1260" height="820">
-              <figcaption> 主页面：默认开启八项常用检查；“同 Target 不同 Source”默认关闭。 带下拉箭头的检查项可打开专项设置；“全选 / 清空”仅控制检查项目。截图为初始配置，已记住的配置可能不同。 </figcaption>
+              <img src="assets/workflow-main.png" alt="QAtools 一键质量检查主页面，显示输入范围、十个检查项目和底部操作按钮" width="1260" height="820">
+              <figcaption> 主页面：默认开启八项常用检查；“同 Target 不同 Source”和“子串译文一致性”默认关闭。 带下拉箭头的检查项可打开专项设置；“全选 / 清空”仅控制检查项目。截图为初始配置，已记住的配置可能不同。 </figcaption>
             </figure>
             <div class="callout">
               <strong>记住当前选项</strong>
@@ -114,7 +114,7 @@
             <p>自动识别不到列时，可以手动填写列字母，或到<a href="#settings">设置</a>保存项目使用的表头别名。</p>
           </section>
           <section id="checks">
-            <h3>九项检查一览</h3>
+            <h3>十项检查一览</h3>
             <div class="group-label">术语与翻译一致性</div>
             <div class="check-grid">
               <article class="card">
@@ -130,14 +130,22 @@
                   <h4>同 Source 不同 Target</h4>
                   <span class="status-pill on">默认开启</span>
                 </div>
-                <p>按 Source 单元格精确分组；完全相同的 Source 对应多个不同 Target 时报告组内每一行。</p>
+                <p>先忽略首尾空白和包裹整个文本的成对引号、括号，再按 Source 分组；对应多个不同 Target 时报告组内每一行，报告保留原文。</p>
               </article>
               <article class="card">
                 <div class="card-head">
                   <h4>同 Target 不同 Source</h4>
                   <span class="status-pill off">默认关闭</span>
                 </div>
-                <p>查找完全相同的非空 Target 是否对应多个 Source。适合发现误复用，但合理复用也很常见。</p>
+                <p>使用相同的文本归一化规则，查找非空 Target 是否对应多个 Source。适合发现误复用，但合理复用也很常见。</p>
+              </article>
+              <article class="card">
+                <div class="card-head">
+                  <h4>子串译文一致性</h4>
+                  <span class="status-pill off">默认关闭</span>
+                </div>
+                <p>在“术语与翻译一致性”中勾选后运行，用于复核长句中短句的译法。</p>
+                <p>报告定位到长句行，问题描述附参考短句行号和译文。结合上下文人工复核，再填写“修改后target”。</p>
               </article>
             </div>
             <div class="group-label">内容保真检查</div>

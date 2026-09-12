@@ -34,6 +34,10 @@ from tools.source_consistency_checker.check_source_consistency import (
     PROBLEM_SHEET_NAME as SOURCE_CONSISTENCY_PROBLEM_SHEET_NAME,
     process_workbook as run_source_consistency_check_workbook,
 )
+from tools.substring_consistency_checker.check_substring_consistency import (
+    PROBLEM_SHEET_NAME as SUBSTRING_CONSISTENCY_PROBLEM_SHEET_NAME,
+    process_workbook as run_substring_consistency_check_workbook,
+)
 from tools.target_consistency_checker.check_target_consistency import (
     PROBLEM_SHEET_NAME as TARGET_CONSISTENCY_PROBLEM_SHEET_NAME,
     process_workbook as run_target_consistency_check_workbook,
@@ -92,6 +96,9 @@ class WorkflowSummary:
     target_consistency_problem_rows: int = 0
     number_problem_rows: int = 0
     url_problem_rows: int = 0
+    ran_substring_consistency_check: bool = False
+    substring_consistency_problem_count: int = 0
+    substring_consistency_problem_rows: int = 0
 
 
 def build_default_output_path(input_file: str | Path) -> Path:
@@ -139,6 +146,8 @@ def finalize_workflow_output(
     source_column: str,
     target_column: str,
     start_row: int,
+    run_substring_consistency_check: bool = False,
+    substring_consistency_problem_rows: int = 0,
     workbook=None,
 ) -> int:
     """Normalize workflow-only sheets and write the compact quality summary."""
@@ -177,6 +186,8 @@ def finalize_workflow_output(
             problem_sheets.append(
                 ("同 Target 不同 Source", TARGET_CONSISTENCY_PROBLEM_SHEET_NAME)
             )
+        if run_substring_consistency_check:
+            problem_sheets.append(("子串译文一致性", SUBSTRING_CONSISTENCY_PROBLEM_SHEET_NAME))
         if run_tag_check:
             problem_sheets.append(("Tag 检查", TAG_PROBLEM_SHEET_NAME))
         if run_line_break_check:
@@ -226,6 +237,8 @@ def finalize_workflow_output(
             summary_rows.append(("同 Source 不同 Target", source_consistency_problem_rows))
         if run_target_consistency_check:
             summary_rows.append(("同 Target 不同 Source", target_consistency_problem_rows))
+        if run_substring_consistency_check:
+            summary_rows.append(("子串译文一致性", substring_consistency_problem_rows))
         if run_tag_check:
             summary_rows.append(("Tag 检查", tag_problem_rows))
         if run_line_break_check:
@@ -272,6 +285,7 @@ def run_workflow(
     run_line_break_check: bool = True,
     run_source_consistency_check: bool = True,
     run_target_consistency_check: bool = False,
+    run_substring_consistency_check: bool = False,
     run_number_check: bool = True,
     run_url_check: bool = True,
     run_chinese_target_check: bool = True,
@@ -285,6 +299,7 @@ def run_workflow(
             run_line_break_check,
             run_source_consistency_check,
             run_target_consistency_check,
+            run_substring_consistency_check,
             run_number_check,
             run_url_check,
             run_chinese_target_check,
@@ -322,6 +337,8 @@ def run_workflow(
     line_break_problem_count = 0
     source_consistency_problem_count = 0
     source_consistency_problem_rows = 0
+    substring_consistency_problem_count = 0
+    substring_consistency_problem_rows = 0
     target_consistency_problem_count = 0
     target_consistency_problem_rows = 0
     number_problem_rows = 0
@@ -422,6 +439,20 @@ def run_workflow(
             )
             target_consistency_problem_rows = target_consistency_summary.problem_rows
 
+        if run_substring_consistency_check:
+            substring_summary = run_substring_consistency_check_workbook(
+                workbook=workflow_workbook,
+                output_path=output_path,
+                source_column=normalized_source_column,
+                target_column=normalized_target_column,
+                sheet=sheet,
+                start_row=start_row,
+                format_output=False,
+            )
+            worksheet_title = substring_summary.worksheet_title
+            substring_consistency_problem_count = substring_summary.problem_count
+            substring_consistency_problem_rows = substring_summary.problem_rows
+
         if run_number_check or run_url_check:
             content_fidelity_summary = run_content_fidelity_check_workbook(
                 workbook=workflow_workbook,
@@ -480,6 +511,7 @@ def run_workflow(
             run_line_break_check=run_line_break_check,
             run_source_consistency_check=run_source_consistency_check,
             run_target_consistency_check=run_target_consistency_check,
+            run_substring_consistency_check=run_substring_consistency_check,
             run_number_check=run_number_check,
             run_url_check=run_url_check,
             run_chinese_target_check=run_chinese_target_check,
@@ -488,6 +520,7 @@ def run_workflow(
             line_break_problem_rows=line_break_problem_count,
             source_consistency_problem_rows=source_consistency_problem_rows,
             target_consistency_problem_rows=target_consistency_problem_rows,
+            substring_consistency_problem_rows=substring_consistency_problem_rows,
             number_problem_rows=number_problem_rows,
             url_problem_rows=url_problem_rows,
             chinese_target_problem_rows=chinese_target_problem_count,
@@ -509,6 +542,8 @@ def run_workflow(
             ran_line_break_check=run_line_break_check,
             ran_source_consistency_check=run_source_consistency_check,
             ran_target_consistency_check=run_target_consistency_check,
+            ran_substring_consistency_check=run_substring_consistency_check,
+            substring_consistency_problem_count=substring_consistency_problem_count,
             ran_number_check=run_number_check,
             ran_url_check=run_url_check,
             ran_chinese_target_check=run_chinese_target_check,
@@ -523,6 +558,7 @@ def run_workflow(
             source_consistency_problem_rows=source_consistency_problem_rows,
             target_consistency_problem_count=target_consistency_problem_count,
             target_consistency_problem_rows=target_consistency_problem_rows,
+            substring_consistency_problem_rows=substring_consistency_problem_rows,
             number_problem_rows=number_problem_rows,
             url_problem_rows=url_problem_rows,
             chinese_target_problem_count=chinese_target_problem_count,

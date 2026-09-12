@@ -397,6 +397,12 @@ class ToolshubLayoutTests(unittest.TestCase):
             )
             self.assertTrue(workflow.consistency_check.isChecked())
             self.assertFalse(workflow.target_consistency_check.isChecked())
+            self.assertFalse(workflow.substring_consistency_check.isChecked())
+            self.assertEqual(workflow.substring_consistency_check.text(), "子串译文一致性")
+            self.assertEqual(
+                workflow.substring_consistency_check.mapTo(workflow, QPoint(0, 0)).y(),
+                workflow.term_check.mapTo(workflow, QPoint(0, 0)).y(),
+            )
             self.assertTrue(workflow.number_check.isChecked())
             self.assertTrue(workflow.url_check.isChecked())
             self.assertIsInstance(workflow.term_settings_button, QToolButton)
@@ -565,7 +571,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                     workflow.source_column.setText("C")
                     workflow.target_column.setText("F")
                     workflow.start_row.setValue(7)
-                    checks = tuple(bool(index % 2) == memoq for index in range(9))
+                    checks = tuple(bool(index % 2) == memoq for index in range(len(workflow.task_checks)))
                     for check, checked in zip(workflow.task_checks, checks, strict=True):
                         check.setChecked(checked)
                     workflow.mark_book.setChecked(not memoq)
@@ -671,6 +677,37 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertFalse(restored_window.tool_frames["workflow"].tag_check_order.isChecked())
         finally:
             restored_window.close()
+
+    def test_legacy_saved_checks_restore_without_enabling_substring_check(self) -> None:
+        window = self.make_app()
+        try:
+            workflow = window.tool_frames["workflow"]
+            options = workflow._capture_options()
+            legacy_checks = [False, True, True, False, True, False, True, False, True]
+            options["checks"] = legacy_checks
+            workflow.options_store.save(options)
+            workflow._restore_options(workflow.options_store.load(workflow._capture_options()))
+            self.assertEqual(
+                tuple(check.isChecked() for check in workflow.task_checks),
+                (*legacy_checks, False),
+            )
+        finally:
+            window.close()
+
+    def test_substring_selection_reaches_background_runner(self) -> None:
+        window = self.make_app()
+        try:
+            window.open_tool("workflow", ["substring-consistency"])
+            workflow = window.tool_frames["workflow"]
+            workflow.input_picker.set_path("input.xlsx")
+            with patch.object(workflow, "run_in_background") as run:
+                workflow.run_selected_tasks()
+            kwargs = run.call_args.kwargs["kwargs"]
+            self.assertTrue(kwargs["run_substring_consistency_check"])
+            self.assertFalse(kwargs["run_source_consistency_check"])
+            self.assertFalse(kwargs["run_target_consistency_check"])
+        finally:
+            window.close()
 
     def test_invalid_remembered_options_keep_defaults_without_blocking_startup(self) -> None:
         config_path = self.config_dir / "workflow_options.json"

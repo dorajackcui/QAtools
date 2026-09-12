@@ -114,6 +114,7 @@ qatools qa ./input.xlsx \
 | `term` | 术语检查 | 开 | [术语检查](../tools/term_pair_checker/README.md) |
 | `consistency` | 同 Source 不同 Target | 开 | [同 Source 不同 Target](../tools/source_consistency_checker/README.md) |
 | `target-consistency` | 同 Target 不同 Source | 关 | [同 Target 不同 Source](../tools/target_consistency_checker/README.md) |
+| `substring-consistency` | 子串译文一致性 | 关 | [子串译文一致性](../tools/substring_consistency_checker/README.md) |
 | `tag` | Tag / Placeholder | 开 | [Tag / Placeholder](../tools/tag_placeholder_checker/README.md) |
 | `line-break` | 换行数量 | 开 | [换行数量](../tools/line_break_checker/README.md) |
 | `number` | 数字一致性 | 开 | [数字与 URL](../tools/content_fidelity_checker/README.md) |
@@ -128,6 +129,12 @@ qatools qa ./input.xlsx -c A -t B \
   --check tag \
   --check line-break \
   --check consistency
+```
+
+仅运行子串译文一致性检查：
+
+```bash
+qatools qa ./input.xlsx -c A -t B --check substring-consistency
 ```
 
 例如同时运行双向一致性检查：

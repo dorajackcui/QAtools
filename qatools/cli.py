@@ -32,7 +32,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         name="qa",
-        summary="一次运行多项质量检查并生成统一报告",
+        summary="一次运行多项质量检查并生成统一报告，含可选子串译文一致性",
         module="tools.workflow.cli",
         mode="argv",
         aliases=("workflow",),

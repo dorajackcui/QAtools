@@ -46,7 +46,18 @@ class WorkflowOptionsStore:
             raise ValueError(f"无法读取记住的选项：{exc}") from exc
         if not isinstance(payload, dict) or payload.get("version") != 1:
             raise ValueError("记住的选项版本不支持。")
-        return _restore_values(payload.get("options"), defaults)
+        options = payload.get("options")
+        # Version 1 originally stored nine checkboxes positionally. The new
+        # optional check is appended, so old selections keep their meanings.
+        if isinstance(options, dict):
+            checks = options.get("checks")
+            if (
+                isinstance(checks, list)
+                and len(checks) == 9
+                and len(defaults.get("checks", ())) == 10
+            ):
+                options = {**options, "checks": [*checks, False]}
+        return _restore_values(options, defaults)
 
     def save(self, options: dict[str, Any]) -> None:
         payload = {"version": 1, "options": options}
