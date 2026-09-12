@@ -9,14 +9,15 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import uuid
 from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QCoreApplication, QEvent
+from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QProcess, QTimer
 from PySide6.QtWidgets import QApplication
 from toolshub_gui import QA_CHECK_WIDGETS, ToolshubApp, build_argument_parser, main
-from tools.qt_navigation import ToolNavigationServer, send_tool_selection
+from tools.qt_navigation import ToolNavigationServer
 
 
 ENTRIES = {
@@ -91,22 +92,55 @@ class GuiEntryTests(unittest.TestCase):
         window.assert_not_called()
 
     def test_navigation_server_delivers_page_and_check_selection(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            name = str(Path(directory) / "navigation")
-            server = ToolNavigationServer(name=name)
-            received = []
-            server.requested.connect(lambda tool, checks: received.append((tool, checks)))
-            try:
-                self.assertTrue(server.start(), server.server.errorString())
-                with patch("tools.qt_navigation.navigation_server_name", return_value=name):
-                    self.assertTrue(send_tool_selection("workflow", ["tag"]))
-                server.server.waitForNewConnection(1000)
-                self.app.processEvents()
-                self.assertEqual(received, [("workflow", ["tag"])])
-            finally:
-                server.close()
-                server.deleteLater()
-                QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        name = f"qatools-navigation-test-{uuid.uuid4().hex}"
+        server = ToolNavigationServer(name=name)
+        client = QProcess()
+        loop = QEventLoop()
+        timeout = QTimer()
+        timeout.setSingleShot(True)
+        timeout.timeout.connect(loop.quit)
+        received = []
+
+        def finish_if_ready() -> None:
+            if received and client.state() == QProcess.ProcessState.NotRunning:
+                loop.quit()
+
+        def receive(tool: str, checks: list[str]) -> None:
+            received.append((tool, checks))
+            finish_if_ready()
+
+        server.requested.connect(receive)
+        client.finished.connect(finish_if_ready)
+        # Windows named-pipe writes need the server to service its event loop.
+        # A separate client process exercises the real application arrangement.
+        client.setWorkingDirectory(str(Path(__file__).resolve().parents[1]))
+        client_code = (
+            "import sys\n"
+            "from unittest.mock import patch\n"
+            "from PySide6.QtCore import QCoreApplication\n"
+            "from tools.qt_navigation import send_tool_selection\n"
+            "app = QCoreApplication([])\n"
+            "with patch('tools.qt_navigation.navigation_server_name', return_value=sys.argv[1]):\n"
+            "    raise SystemExit(0 if send_tool_selection('workflow', ['tag']) else 1)\n"
+        )
+        try:
+            self.assertTrue(server.start(), server.server.errorString())
+            client.start(sys.executable, ["-c", client_code, name])
+            self.assertTrue(client.waitForStarted(5000), client.errorString())
+            timeout.start(10000)
+            loop.exec()
+            self.assertEqual(client.state(), QProcess.ProcessState.NotRunning, "Navigation client timed out")
+            self.assertEqual(client.exitStatus(), QProcess.ExitStatus.NormalExit)
+            self.assertEqual(client.exitCode(), 0, bytes(client.readAllStandardError()).decode(errors="replace"))
+            self.assertEqual(received, [("workflow", ["tag"])])
+        finally:
+            timeout.stop()
+            if client.state() != QProcess.ProcessState.NotRunning:
+                client.kill()
+                client.waitForFinished(5000)
+            server.close()
+            server.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def test_navigation_rejects_invalid_and_oversized_messages(self) -> None:
         server = ToolNavigationServer()
