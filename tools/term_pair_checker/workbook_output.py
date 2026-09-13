@@ -10,9 +10,7 @@ from openpyxl.styles import Font, PatternFill
 
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
-    ROW_PROBLEM_SEPARATOR,
     build_prefixed_output_path,
-    format_row_problem_text,
     join_unique_text,
     write_output_table,
 )
@@ -35,18 +33,27 @@ def build_default_output_path(input_path: Path) -> Path:
     return build_prefixed_output_path(input_path, "term_pair_check_")
 
 
+def format_problem_entry(entry: "ProblemEntry") -> str:
+    """Render one term issue without repeating the report's column labels."""
+    if entry.description:
+        # Count issues already have a complete description; their source/target
+        # lists do not necessarily form aligned term pairs.
+        return entry.description
+    mapping = f"“{entry.problem_source_term}” → “{entry.expected_target_term}”"
+    details = []
+    if entry.actual_target_term is not None:
+        details.append(f"当前：“{entry.actual_target_term}”")
+    if entry.term_source:
+        details.append("历史术语表" if entry.term_source == "历史TB" else entry.term_source)
+    return f"{mapping}（{'；'.join(details)}）" if details else mapping
+
+
 def build_row_problem_summaries(problem_entries: Iterable["ProblemEntry"]) -> dict[int, str]:
     summaries_by_row: dict[int, list[str]] = {}
-    for problem_entry in problem_entries:
-        summary = format_row_problem_text(
-            problem_entry.problem_source_term,
-            problem_entry.expected_target_term,
-            problem_entry.description,
-        )
-        if summary:
-            summaries_by_row.setdefault(problem_entry.row_index, []).append(summary)
+    for entry in problem_entries:
+        summaries_by_row.setdefault(entry.row_index, []).append(format_problem_entry(entry))
     return {
-        row_index: ROW_PROBLEM_SEPARATOR.join(summaries)
+        row_index: join_unique_text(summaries, separator="\n")
         for row_index, summaries in summaries_by_row.items()
     }
 
@@ -118,20 +125,13 @@ def write_problem_sheet(
     rows = []
     for source_row, row_entries in entries_by_row.items():
         first_entry = row_entries[0]
-        descriptions = (
-            format_row_problem_text(
-                entry.problem_source_term,
-                entry.expected_target_term,
-                entry.description,
-            )
-            for entry in row_entries
-        )
+        descriptions = (format_problem_entry(entry) for entry in row_entries)
         rows.append(
             (
                 source_row,
                 first_entry.source_snapshot,
                 first_entry.target_snapshot,
-                join_unique_text(descriptions),
+                join_unique_text(descriptions, separator="\n"),
                 join_unique_text(entry.problem_source_term for entry in row_entries),
                 join_unique_text(entry.expected_target_term for entry in row_entries),
                 join_unique_text(entry.term_source for entry in row_entries),

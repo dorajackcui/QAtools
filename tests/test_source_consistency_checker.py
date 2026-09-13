@@ -84,7 +84,7 @@ class SourceConsistencyExcelTests(unittest.TestCase):
             )
             self.assertEqual(problem_sheet["B2"].value, "Hello")
             self.assertEqual(problem_sheet["C2"].value, "Bonjour")
-            self.assertIn("3 个不同 target", problem_sheet["D2"].value)
+            self.assertEqual(problem_sheet["D2"].value, "3 种译法（第 2、3、8 行）")
             self.assertEqual(problem_sheet["E2"].value, 3)
             self.assertEqual(problem_sheet["F2"].value, "2、3、8")
             self.assertEqual(problem_sheet["B5"].value, "Empty target")

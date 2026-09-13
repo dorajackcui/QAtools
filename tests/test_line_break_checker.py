@@ -82,7 +82,7 @@ class LineBreakExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A2"].value, 3)
             self.assertEqual(problem_sheet["B2"].value, "第一行\n第二行\n第三行")
             self.assertEqual(problem_sheet["C2"].value, "First\nSecond")
-            self.assertIn("换行数量不一致", problem_sheet["D2"].value)
+            self.assertEqual(problem_sheet["D2"].value, "原文 2 个，译文 1 个")
             self.assertEqual(problem_sheet["E2"].value, 2)
             self.assertEqual(problem_sheet["F2"].value, 1)
             self.assertEqual(problem_sheet["G2"].value, -1)

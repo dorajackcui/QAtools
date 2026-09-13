@@ -170,15 +170,21 @@ def _problem_entry(
 ) -> tuple[int, str, str, str, str, str, str, str]:
     source_counter = Counter(source_values)
     target_counter = Counter(target_values)
+    missing = _format_values(source_counter - target_counter)
+    extra = _format_values(target_counter - source_counter)
+    description = "；".join(
+        f"{difference}：{value}"
+        for difference, value in (("缺少", missing), ("多出", extra)) if value
+    )
     return (
         row_index,
         source_text,
         target_text,
-        f"{label}不一致",
+        description,
         _format_values(source_counter),
         _format_values(target_counter),
-        _format_values(source_counter - target_counter),
-        _format_values(target_counter - source_counter),
+        missing,
+        extra,
     )
 
 

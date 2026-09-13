@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
 
 from tools.workflow.cli import _selected_checks, build_parser, main
@@ -15,6 +15,14 @@ from tools.target_text_checker.check_target_text import (
 
 
 class WorkflowCliTests(unittest.TestCase):
+    def test_parser_rejects_invalid_substring_thresholds(self) -> None:
+        for option in ("--substring-min-cjk-chars", "--substring-min-other-chars"):
+            for value in ("0", "-1", "1000001", "2.5"):
+                with self.subTest(option=option, value=value), redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as error:
+                        build_parser().parse_args(["input.xlsx", "-c", "A", "-t", "B", option, value])
+                    self.assertEqual(error.exception.code, 2)
+
     def test_parser_uses_default_check_set_when_check_is_omitted(self) -> None:
         args = build_parser().parse_args(
             ["input.xlsx", "-c", "A", "-t", "B"]
@@ -24,6 +32,8 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertEqual(args.start_row, 2)
         self.assertFalse(args.no_term_mark)
         self.assertFalse(args.tag_check_order)
+        self.assertEqual(args.substring_min_cjk_chars, 3)
+        self.assertEqual(args.substring_min_other_chars, 2)
 
     def test_default_selection_enables_content_checks_but_not_reverse_consistency(self) -> None:
         checks = _selected_checks(None)
@@ -117,6 +127,8 @@ class WorkflowCliTests(unittest.TestCase):
                     "text",
                     "--check",
                     "substring-consistency",
+                    "--substring-min-cjk-chars", "5",
+                    "--substring-min-other-chars", "4",
                     "--text-rule",
                     ABNORMAL_PUNCTUATION_RULE,
                     "--tag-token-type",
@@ -136,6 +148,8 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertFalse(kwargs["run_source_consistency_check"])
         self.assertFalse(kwargs["run_target_consistency_check"])
         self.assertTrue(kwargs["run_substring_consistency_check"])
+        self.assertEqual(kwargs["substring_min_cjk_chars"], 5)
+        self.assertEqual(kwargs["substring_min_other_chars"], 4)
         self.assertFalse(kwargs["run_number_check"])
         self.assertFalse(kwargs["run_url_check"])
         self.assertTrue(kwargs["run_chinese_target_check"])

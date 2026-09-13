@@ -88,6 +88,7 @@ class TargetTextRuleTests(unittest.TestCase):
             [LEADING_TRAILING_SPACES_RULE],
         )
         self.assertEqual(issues[0].matched_content, "开头 1 个空格、结尾 2 个空格")
+        self.assertEqual(issues[0].description, "头部空格：1 个；尾部空格：2 个")
         self.assertEqual(
             find_text_issues(
                 "Hello ",
@@ -184,16 +185,16 @@ class TargetTextExcelTests(unittest.TestCase):
                         2,
                         "row 2",
                         "Wait..  now,，",
-                        "Target 中存在异常或重复标点符号。",
+                        "异常标点：“..”、“,，”",
                         "异常标点符号",
                         "..、,，",
                     ),
-                    (2, "row 2", "Wait..  now,，", "Target 中存在连续空格。", "连续空格", "2 个空格"),
+                    (2, "row 2", "Wait..  now,，", "连续空格：2 个", "连续空格", "2 个空格"),
                     (
                         2,
                         "row 2",
                         "Wait..  now,，",
-                        "Target 中存在同类字符的全半角混用。",
+                        "全半角混用：逗号（半角 , / 全角 ，）",
                         "全半角混用",
                         "逗号（半角 , / 全角 ，）",
                     ),
@@ -201,7 +202,7 @@ class TargetTextExcelTests(unittest.TestCase):
                         4,
                         "row 4",
                         "（mixed)",
-                        "Target 中存在同类字符的全半角混用。",
+                        "全半角混用：圆括号（半角 ) / 全角 （）",
                         "全半角混用",
                         "圆括号（半角 ) / 全角 （）",
                     ),

@@ -155,7 +155,7 @@ def process_workbook(
                 row_index,
                 cell_text(source_value),
                 cell_text(target_value),
-                "source / target 换行数量不一致",
+                f"原文 {source_count} 个，译文 {target_count} 个",
                 source_count,
                 target_count,
                 target_count - source_count,

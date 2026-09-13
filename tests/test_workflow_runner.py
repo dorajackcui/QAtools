@@ -54,6 +54,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                 run_number_check=False, run_url_check=False, run_chinese_target_check=False,
                 run_target_text_check=False, run_source_consistency_check=True,
                 run_target_consistency_check=True, run_substring_consistency_check=True,
+                substring_min_cjk_chars=2,
             )
             self.assertEqual(summary.source_consistency_problem_rows, 2)
             self.assertEqual(summary.target_consistency_problem_rows, 2)
@@ -68,7 +69,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                     self.assertEqual(row[1:3], source_rows[row[0] - 2])
                 self.assertIn("同 Source 不同 Target", rows[1][5])
                 self.assertIn("同 Target 不同 Source", rows[1][5])
-                self.assertIn("第 3–4 字符", rows[-1][4])
+                self.assertEqual(rows[-1][4], "【子串译文一致性】“【保存】” → “Save”（参考第 5 行）")
                 review["D2"] = "Astro"
                 review["D5"] = "Please save"
                 report.save(summary.output_path)
@@ -115,7 +116,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                         ]
                         self.assertEqual(len(issues), expected_rows)
                         if expected_rows:
-                            self.assertIn("Tag顺序不一致", review["E2"].value)
+                            self.assertIn("【Tag 检查】原文：", review["E2"].value)
                             self.assertEqual(review["F2"].value, "Tag 检查")
                     finally:
                         result.close()
@@ -148,7 +149,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                 self.assertEqual(report.sheetnames, ["Data", "问题处理", "质量检查汇总"])
                 review = report["问题处理"]
                 self.assertEqual(review["A2"].value, 3)
-                self.assertIn("参考行 2", review["E2"].value)
+                self.assertIn("参考第 2 行", review["E2"].value)
                 self.assertEqual(review["F2"].value, "子串译文一致性")
                 self.assertEqual(list(report["质量检查汇总"].values), [
                     ("检查项", "问题行数"), ("子串译文一致性", 1),
@@ -298,17 +299,19 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertIn("换行数量检查", review_sheet["F5"].value)
             self.assertIn("Target 中文检查", review_sheet["F5"].value)
             row_three_description = review_sheet["E5"].value
-            self.assertIn("source术语：Alpha", row_three_description)
-            self.assertIn("预期target术语：阿尔法", row_three_description)
-            self.assertIn("术语来源：本批次新增", row_three_description)
-            self.assertIn("问题类型：尖括号tag不一致", row_three_description)
-            self.assertIn("source换行数：1", row_three_description)
-            self.assertIn("target换行数：0", row_three_description)
-            self.assertIn("数量差：-1", row_three_description)
-            self.assertIn("命中字符：", row_three_description)
+            self.assertIn("【术语检查】“Alpha” → “阿尔法”（当前：“错误阿尔法”；本批次新增）", row_three_description)
+            self.assertNotIn("source术语：", row_three_description)
+            self.assertNotIn("预期target术语：", row_three_description)
+            self.assertNotIn("术语来源：", row_three_description)
+            self.assertIn("【Tag 检查】缺少：<color=red>", row_three_description)
+            self.assertIn("【换行数量检查】原文 1 个，译文 0 个", row_three_description)
+            self.assertIn("【Target 中文检查】命中：", row_three_description)
+            for redundant in ("问题类型：", "source换行数：", "target换行数：", "数量差：", "命中字符："):
+                self.assertNotIn(redundant, row_three_description)
             row_four_description = review_sheet["E2"].value
-            self.assertIn("target版本数：2", row_four_description)
-            self.assertIn("同组行号：4、5", row_four_description)
+            self.assertIn("【同 Source 不同 Target】2 种译法（第 4、5 行）", row_four_description)
+            self.assertNotIn("target版本数：", row_four_description)
+            self.assertNotIn("同组行号：", row_four_description)
             for review_row, source_row in enumerate((4, 5, 2, 3), start=2):
                 row_cell = review_sheet.cell(review_row, 1)
                 self.assertEqual(row_cell.hyperlink.location, f"'Data'!B{source_row}")
@@ -429,7 +432,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             output_workbook = load_workbook(summary.output_path)
             review_sheet = output_workbook[WORKFLOW_REVIEW_SHEET_NAME]
             self.assertEqual(review_sheet["A2"].value, 2)
-            self.assertIn("尖括号tag结构不一致", review_sheet["E2"].value)
+            self.assertIn("【Tag 检查】嵌套或闭合结构不同", review_sheet["E2"].value)
             self.assertEqual(review_sheet["F2"].value, "Tag 检查")
             output_workbook.close()
 
@@ -483,9 +486,9 @@ class WorkflowRunnerTests(unittest.TestCase):
                     "数字一致性；URL 一致性",
                 )
                 self.assertEqual(review_sheet["F2"].value, "同 Target 不同 Source")
-                self.assertIn("Target 缺少：10", review_sheet["E4"].value)
+                self.assertIn("缺少：10", review_sheet["E4"].value)
                 self.assertIn(
-                    "Target 多出：https://new.example/path",
+                    "多出：https://new.example/path",
                     review_sheet["E4"].value,
                 )
                 self.assertEqual(
@@ -529,8 +532,8 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(summary.tag_problem_rows, 1)
             output_workbook = load_workbook(summary.output_path)
             review_sheet = output_workbook[WORKFLOW_REVIEW_SHEET_NAME]
-            self.assertIn("target缺少=< >、<>", review_sheet["E2"].value)
-            self.assertIn("target缺少={}", review_sheet["E2"].value)
+            self.assertIn("缺少：< >、<>", review_sheet["E2"].value)
+            self.assertIn("缺少：{}", review_sheet["E2"].value)
             self.assertEqual(review_sheet["F2"].value, "Tag 检查")
             output_workbook.close()
 
@@ -1062,7 +1065,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             output_workbook = load_workbook(summary.output_path)
             review_sheet = output_workbook[WORKFLOW_REVIEW_SHEET_NAME]
             self.assertEqual(review_sheet["F2"].value, "Target 文本规范检查")
-            self.assertIn("异常标点符号", review_sheet["E2"].value)
+            self.assertIn("异常标点：", review_sheet["E2"].value)
             self.assertNotIn("连续空格", review_sheet["E2"].value)
             self.assertEqual(
                 list(output_workbook[WORKFLOW_SUMMARY_SHEET_NAME].values),

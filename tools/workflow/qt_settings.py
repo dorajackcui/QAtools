@@ -20,6 +20,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 from tools.qt_gui_common import PathPicker, horizontal_rule
+from tools.substring_consistency_checker.check_substring_consistency import (
+    DEFAULT_MIN_CJK_CHARS, DEFAULT_MIN_OTHER_CHARS, MAX_MIN_CHARS,
+)
 from tools.target_text_checker.check_target_text import (
     ABNORMAL_PUNCTUATION_RULE,
     CONSECUTIVE_SPACES_RULE,
@@ -213,11 +216,30 @@ class WorkflowSettingsMixin:
         layout.addLayout(grid)
 
 
+    def _build_substring_settings(self) -> None:
+        self.substring_settings_dialog, layout = self._create_settings_dialog(
+            "substring", "子串译文一致性设置", minimum_width=420,
+        )
+        grid = QGridLayout()
+        self.substring_min_cjk_chars = QSpinBox()
+        self.substring_min_other_chars = QSpinBox()
+        for row, (label, widget, default) in enumerate((
+            ("CJK 子串最小有效字符数", self.substring_min_cjk_chars, DEFAULT_MIN_CJK_CHARS),
+            ("其他文字子串最小有效字符数", self.substring_min_other_chars, DEFAULT_MIN_OTHER_CHARS),
+        )):
+            widget.setRange(1, MAX_MIN_CHARS)
+            widget.setValue(default)
+            widget.setToolTip("统计文字和字母；空白、标点、数字、Tag 和占位符不计数。含 CJK 文字时使用 CJK 下限。")
+            grid.addWidget(QLabel(label), row, 0)
+            grid.addWidget(widget, row, 1)
+        layout.addLayout(grid)
+
     def _open_settings_dialog(self, name: str) -> None:
         dialogs = {
             "term": self.term_settings_dialog,
             "tag": self.tag_settings_dialog,
             "target": self.target_settings_dialog,
+            "substring": self.substring_settings_dialog,
         }
         self._settings_snapshots[name] = self._capture_settings_state(name)
         dialog = dialogs[name]
@@ -228,6 +250,11 @@ class WorkflowSettingsMixin:
 
 
     def _capture_settings_state(self, name: str) -> dict[str, Any]:
+        if name == "substring":
+            return {
+                "min_cjk_chars": self.substring_min_cjk_chars.value(),
+                "min_other_chars": self.substring_min_other_chars.value(),
+            }
         if name == "term":
             return {
                 "mark_book": self.mark_book.isChecked(),
@@ -279,6 +306,10 @@ class WorkflowSettingsMixin:
 
 
     def _restore_settings_state(self, name: str, snapshot: dict[str, Any]) -> None:
+        if name == "substring":
+            self.substring_min_cjk_chars.setValue(snapshot["min_cjk_chars"])
+            self.substring_min_other_chars.setValue(snapshot["min_other_chars"])
+            return
         if name == "term":
             self.mark_book.setChecked(snapshot["mark_book"])
             self.mark_square.setChecked(snapshot["mark_square"])

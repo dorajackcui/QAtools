@@ -11,6 +11,9 @@ from tools.target_text_checker.check_target_text import (
 )
 from tools.term_pair_checker.term_marks import SUPPORTED_MARKS
 from tools.workflow.workflow_runner import WorkflowSummary, run_workflow
+from tools.substring_consistency_checker.check_substring_consistency import (
+    DEFAULT_MIN_CJK_CHARS, DEFAULT_MIN_OTHER_CHARS, MAX_MIN_CHARS,
+)
 
 
 CHECKS = (
@@ -26,6 +29,13 @@ CHECKS = (
     "text",
 )
 DEFAULT_CHECKS = tuple(check for check in CHECKS if check not in {"target-consistency", "substring-consistency"})
+
+
+def _minimum_characters(value: str) -> int:
+    number = int(value)
+    if not 1 <= number <= MAX_MIN_CHARS:
+        raise argparse.ArgumentTypeError(f"必须为 1–{MAX_MIN_CHARS} 的整数")
+    return number
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -58,6 +68,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         choices=CHECKS,
         help="只运行指定检查；可重复传入。不传时运行全部常用检查。",
+    )
+
+    parser.add_argument(
+        "--substring-min-cjk-chars", type=_minimum_characters, default=DEFAULT_MIN_CJK_CHARS,
+        help="CJK 子串最小有效字符数，默认 3；仅用于子串译文一致性",
+    )
+    parser.add_argument(
+        "--substring-min-other-chars", type=_minimum_characters, default=DEFAULT_MIN_OTHER_CHARS,
+        help="其他文字子串最小有效字符数，默认 2；仅用于子串译文一致性",
     )
 
     term_mark_group = parser.add_mutually_exclusive_group()
@@ -179,6 +198,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         run_source_consistency_check="consistency" in checks,
         run_target_consistency_check="target-consistency" in checks,
         run_substring_consistency_check="substring-consistency" in checks,
+        substring_min_cjk_chars=args.substring_min_cjk_chars,
+        substring_min_other_chars=args.substring_min_other_chars,
         run_number_check="number" in checks,
         run_url_check="url" in checks,
         run_chinese_target_check="chinese" in checks,

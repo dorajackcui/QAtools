@@ -54,7 +54,7 @@
             <h2 id="workflow-title">一键质量检查</h2>
             <p class="tool-intro">选择检查项目，一次生成报告；在报告中填写修订，再回到软件应用。</p>
           </header>
-          <nav class="local-toc" aria-label="一键质量检查正文目录"><strong>本节内容</strong><a href="#quick-start">快速上手</a><a href="#input">输入与范围</a><a href="#checks">检查项目</a><a href="#term-settings">术语设置</a><a href="#tag-settings">Tag 设置</a><a href="#target-settings">文本规范</a><a href="#report">查看报告</a><a href="#revision">应用修订</a></nav>
+          <nav class="local-toc" aria-label="一键质量检查正文目录"><strong>本节内容</strong><a href="#quick-start">快速上手</a><a href="#input">输入与范围</a><a href="#checks">检查项目</a><a href="#term-settings">术语设置</a><a href="#tag-settings">Tag 设置</a><a href="#target-settings">文本规范</a><a href="#substring-settings">子串设置</a><a href="#report">查看报告</a><a href="#revision">应用修订</a></nav>
           <section id="quick-start">
             <h3>快速上手</h3>
             <ol class="steps">
@@ -144,7 +144,8 @@
                   <h4>子串译文一致性</h4>
                   <span class="status-pill off">默认关闭</span>
                 </div>
-                <p>在“术语与翻译一致性”中勾选后运行，用于复核长句中短句的译法。</p>
+                <p>在“术语与翻译一致性”中勾选后运行，用于复核长句中短句的译法。右侧箭头可设置子串最小有效字符数。</p>
+                <p><a href="#substring-settings">查看子串专项配置 ↓</a></p>
                 <p>报告定位到长句行，问题描述附参考短句行号和译文。结合上下文人工复核，再填写“修改后target”。</p>
               </article>
             </div>
@@ -269,6 +270,16 @@
                 <figcaption>Target 文本规范：至少保留一项规则，否则 GUI 会阻止开始检查。</figcaption>
               </figure>
             </div>
+          </section>
+          <section id="substring-settings">
+            <h3>子串译文一致性设置</h3>
+            <p>勾选“子串译文一致性”，点击右侧下拉箭头。CJK 子串最小有效字符数默认 3，其他文字默认 2；可根据项目调整，再点击“确定”。</p>
+            <p>“取消”会恢复打开前的数值；主页面的“记住选项”会保存这些设置。阈值只限制参考子串，不限制母串。</p>
+            <p>同时运行术语检查时，完整 Source 等于本次有效 Source 术语的条目会自动排除，交由术语检查处理；仅包含术语的长句仍会检查。</p>
+            <figure class="shot">
+              <img src="assets/substring-settings.png" alt="子串译文一致性设置，CJK 最小有效字符数为 3，其他文字为 2" width="420" height="160">
+              <figcaption>有效字符不包含空白、标点、数字、Tag 或占位符；中文短词“合作”“确认”默认不作为参考。</figcaption>
+            </figure>
           </section>
           <section id="report">
             <h3>检查报告怎么看</h3>

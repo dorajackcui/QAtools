@@ -152,7 +152,7 @@ def process_workbook(
                     occurrence.row_index,
                     occurrence.source_text,
                     occurrence.target_text,
-                    f"同一 target 对应 {len(source_variants)} 个不同 source",
+                    f"{len(source_variants)} 种原文（第 {grouped_rows} 行）",
                     len(source_variants),
                     grouped_rows,
                 )

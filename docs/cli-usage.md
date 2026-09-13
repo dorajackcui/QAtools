@@ -137,6 +137,16 @@ qatools qa ./input.xlsx -c A -t B \
 qatools qa ./input.xlsx -c A -t B --check substring-consistency
 ```
 
+子串检查可用 `--substring-min-cjk-chars`（默认 3）和
+`--substring-min-other-chars`（默认 2）设置最小有效字符数，两者均接受 1–1,000,000 的整数。
+计数及术语排除规则见[子串检查说明](../tools/substring_consistency_checker/README.md#规则)。
+例如与术语检查一起运行并设置 CJK 下限：
+
+```bash
+qatools qa ./input.xlsx -c A -t B --check term --check substring-consistency \
+  --history-tb ./terms.xlsx --substring-min-cjk-chars 3 --substring-min-other-chars 2
+```
+
 例如同时运行双向一致性检查：
 
 ```bash

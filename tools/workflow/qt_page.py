@@ -86,6 +86,7 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
         self._build_term_settings()
         self._build_tag_settings()
         self._build_target_text_settings()
+        self._build_substring_settings()
 
         self.run_button = primary_button("开始检查")
         self.revision_button = QPushButton("应用修订")
@@ -213,6 +214,8 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
         self.target_consistency_check.setChecked(False)
         self.substring_consistency_check.setChecked(False)
 
+        self.substring_settings_button = self._settings_button("子串译文一致性设置")
+        self.substring_settings_button.setEnabled(self.substring_consistency_check.isChecked())
         self.term_settings_button = self._settings_button("术语检查设置")
         self.tag_settings_button = self._settings_button("Tag / Placeholder 设置")
         self.target_settings_button = self._settings_button("Target 文本规范设置")
@@ -224,7 +227,7 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
         translation_grid.addWidget(
             self._task_row(self.term_check, self.term_settings_button), 0, 0
         )
-        translation_grid.addWidget(self._task_row(self.substring_consistency_check), 0, 1)
+        translation_grid.addWidget(self._task_row(self.substring_consistency_check, self.substring_settings_button), 0, 1)
         translation_grid.addWidget(self._task_row(self.consistency_check), 1, 0)
         translation_grid.addWidget(
             self._task_row(self.target_consistency_check), 1, 1
@@ -264,6 +267,10 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
         layout.addLayout(target_grid)
         self.content_layout.addWidget(box)
 
+        self.substring_settings_button.clicked.connect(
+            lambda: self._open_settings_dialog("substring")
+        )
+        self.substring_consistency_check.toggled.connect(self.substring_settings_button.setEnabled)
         self.term_settings_button.clicked.connect(
             lambda: self._open_settings_dialog("term")
         )
@@ -297,7 +304,7 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
             "checks": tuple(check.isChecked() for check in self.task_checks),
             "settings": {
                 name: self._capture_settings_state(name)
-                for name in ("term", "tag", "target")
+                for name in ("term", "tag", "target", "substring")
             },
         }
 
@@ -594,6 +601,8 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
                 "run_source_consistency_check": self.consistency_check.isChecked(),
                 "run_target_consistency_check": self.target_consistency_check.isChecked(),
                 "run_substring_consistency_check": self.substring_consistency_check.isChecked(),
+                "substring_min_cjk_chars": self.substring_min_cjk_chars.value(),
+                "substring_min_other_chars": self.substring_min_other_chars.value(),
                 "run_number_check": self.number_check.isChecked(),
                 "run_url_check": self.url_check.isChecked(),
                 "run_chinese_target_check": self.chinese_check.isChecked(),

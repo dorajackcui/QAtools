@@ -31,6 +31,19 @@ METADATA_VALUE_COLUMN = 8
 WORKFLOW_SCHEMA_VERSION = "2"
 
 
+_DESCRIPTION_DETAIL_HEADERS = {
+    "术语检查": {"source术语", "预期target术语", "术语来源"},
+    "同 Source 不同 Target": {"target版本数", "同组行号"},
+    "同 Target 不同 Source": {"source版本数", "同组行号"},
+    "Tag 检查": {"问题类型"},
+    "数字一致性": {"Source 内容", "Target 内容", "Target 缺少", "Target 多出"},
+    "URL 一致性": {"Source 内容", "Target 内容", "Target 缺少", "Target 多出"},
+    "换行数量检查": {"source换行数", "target换行数", "数量差"},
+    "Target 中文检查": {"命中字符"},
+    "Target 文本规范检查": {"问题类型", "命中内容"},
+}
+
+
 @dataclass
 class _ReviewEntry:
     source_text: str = ""
@@ -124,6 +137,10 @@ def collect_review_rows(
             detail_parts = []
             for column_index in range(5, len(row_values) + 1):
                 detail_header = headers[column_index - 1]
+                # These details are already represented in the concise description.
+                # Keep standalone report columns and any unfamiliar extra fields.
+                if detail_header in _DESCRIPTION_DETAIL_HEADERS.get(check_item, ()):
+                    continue
                 detail_value = cell_text(row_values[column_index - 1]).strip()
                 if detail_header and detail_value:
                     detail_parts.append(f"{detail_header}：{detail_value}")

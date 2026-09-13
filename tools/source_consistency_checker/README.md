@@ -36,3 +36,5 @@ python3 tools/source_consistency_checker/check_source_consistency_gui.py
 - `行号 / source原文 / target原文 / 问题描述`
 - target 版本数
 - 同组全部行号
+
+问题描述使用 `2 种译法（第 3、8、12 行）`，保留版本数和完整同组行号。

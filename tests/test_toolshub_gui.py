@@ -462,6 +462,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                         workflow.term_settings_button,
                         workflow.tag_settings_button,
                         workflow.target_settings_button,
+                        workflow.substring_settings_button,
                     )
                 )
             )
@@ -473,6 +474,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                         workflow.term_settings_button,
                         workflow.tag_settings_button,
                         workflow.target_settings_button,
+                        workflow.substring_settings_button,
                     )
                 )
             )
@@ -520,6 +522,47 @@ class ToolshubLayoutTests(unittest.TestCase):
                 all(check.isEnabled() for check in workflow.standard_tag_checks)
             )
             self.assertTrue(workflow.angle_config.isEnabled())
+        finally:
+            window.close()
+
+    def test_substring_settings_defaults_cancel_and_accept(self) -> None:
+        window = self.make_app()
+        try:
+            page = window.tool_frames["workflow"]
+            self.assertFalse(page.substring_settings_button.isEnabled())
+            self.assertEqual(page.substring_min_cjk_chars.value(), 3)
+            self.assertEqual(page.substring_min_other_chars.value(), 2)
+            page.substring_consistency_check.setChecked(True)
+            page.substring_settings_button.click()
+            self.assertTrue(page.substring_settings_dialog.isVisible())
+            page.substring_min_cjk_chars.setValue(5)
+            page.substring_min_other_chars.setValue(4)
+            page.substring_settings_dialog.reject()
+            self.assertEqual(page.substring_min_cjk_chars.value(), 3)
+            self.assertEqual(page.substring_min_other_chars.value(), 2)
+            page.substring_settings_button.click()
+            page.substring_min_cjk_chars.setValue(6)
+            page.substring_settings_dialog.accept()
+            self.assertEqual(page.substring_min_cjk_chars.value(), 6)
+        finally:
+            window.close()
+
+    def test_old_settings_restore_with_default_substring_thresholds(self) -> None:
+        window = self.make_app()
+        try:
+            page = window.tool_frames["workflow"]
+            options = page._capture_options()
+            del options["settings"]["substring"]
+            options["input"]["source"] = "C"
+            page.options_store.save(options)
+        finally:
+            window.close()
+        window = self.make_app()
+        try:
+            page = window.tool_frames["workflow"]
+            self.assertEqual(page.source_column.text(), "C")
+            self.assertEqual(page.substring_min_cjk_chars.value(), 3)
+            self.assertEqual(page.substring_min_other_chars.value(), 2)
         finally:
             window.close()
 
@@ -595,6 +638,8 @@ class ToolshubLayoutTests(unittest.TestCase):
                     rule_checks = (False, True, False, True)
                     for check, checked in zip(workflow.rule_checks.values(), rule_checks, strict=True):
                         check.setChecked(checked)
+                    workflow.substring_min_cjk_chars.setValue(5)
+                    workflow.substring_min_other_chars.setValue(4)
                     workflow.remember_options_button.click()
                     self.assertIn("已记住", workflow.status.text())
                     saved_bytes = workflow.options_store.config_path.read_bytes()
@@ -624,6 +669,8 @@ class ToolshubLayoutTests(unittest.TestCase):
                     self.assertEqual(restored.source_column.text(), "C")
                     self.assertEqual(restored.target_column.text(), "F")
                     self.assertEqual(restored.start_row.value(), 7)
+                    self.assertEqual(restored.substring_min_cjk_chars.value(), 5)
+                    self.assertEqual(restored.substring_min_other_chars.value(), 4)
                     self.assertEqual(tuple(check.isChecked() for check in restored.task_checks), checks)
                     self.assertEqual(restored.mark_book.isChecked(), not memoq)
                     self.assertEqual(restored.mark_square.isChecked(), memoq)
@@ -700,10 +747,14 @@ class ToolshubLayoutTests(unittest.TestCase):
             window.open_tool("workflow", ["substring-consistency"])
             workflow = window.tool_frames["workflow"]
             workflow.input_picker.set_path("input.xlsx")
+            workflow.substring_min_cjk_chars.setValue(6)
+            workflow.substring_min_other_chars.setValue(3)
             with patch.object(workflow, "run_in_background") as run:
                 workflow.run_selected_tasks()
             kwargs = run.call_args.kwargs["kwargs"]
             self.assertTrue(kwargs["run_substring_consistency_check"])
+            self.assertEqual(kwargs["substring_min_cjk_chars"], 6)
+            self.assertEqual(kwargs["substring_min_other_chars"], 3)
             self.assertFalse(kwargs["run_source_consistency_check"])
             self.assertFalse(kwargs["run_target_consistency_check"])
         finally:

@@ -72,7 +72,7 @@ class TargetConsistencyExcelTests(unittest.TestCase):
                     [problem_sheet[f"A{row}"].value for row in range(2, 7)],
                     [2, 3, 10, 8, 9],
                 )
-                self.assertIn("3 个不同 source", problem_sheet["D2"].value)
+                self.assertIn("3 种原文（第 ", problem_sheet["D2"].value)
                 self.assertEqual(problem_sheet["E2"].value, 3)
                 self.assertEqual(problem_sheet["F2"].value, "2、3、10")
                 self.assertIsNone(problem_sheet["B5"].value)

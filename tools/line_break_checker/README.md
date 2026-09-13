@@ -33,3 +33,5 @@ python3 tools/line_break_checker/check_line_breaks_gui.py
 
 - `行号 / source原文 / target原文 / 问题描述`
 - source / target 换行数及数量差（target 减 source）
+
+问题描述使用 `原文 2 个，译文 1 个`；换行数及数量差的附加列保持不变。

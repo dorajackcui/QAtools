@@ -78,6 +78,9 @@ class ContentFidelityExcelTests(unittest.TestCase):
                     [2, 7],
                 )
                 self.assertEqual(url_sheet["A2"].value, 3)
+                self.assertEqual(number_sheet["D2"].value, "缺少：10；多出：11")
+                self.assertEqual(number_sheet["D3"].value, "缺少：10")
+                self.assertEqual(url_sheet["D2"].value, "缺少：https://a.example/x(1)；多出：https://b.example/x(1)")
                 self.assertIn("10", number_sheet["G2"].value)
                 self.assertIn("11", number_sheet["H2"].value)
                 self.assertEqual(url_sheet["G2"].value, "https://a.example/x(1)")

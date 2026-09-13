@@ -32,8 +32,8 @@ Source 与 Target 都先生成用于比较的文本；原单元格、报告原�
 - 子串检查使用归一化后的 Source 判断重复、参考资格和包含关系；使用归一化后的
   Target 判断参考译文是否冲突及是否匹配。归一化后相同的 Source 不作为彼此的子串。
 - 报告保留每行原文；双向一致性组与组内译文版本的展示顺序也使用相同比较文本。
-- 子串命中位置换算回各自原始 Source 的字符坐标。参考组的 Source / Target 展示
-  首个参考行的原文，其他参考行可能有不同包裹形式，但归一化后等价。
+- 子串参考组的 Source / Target 展示首个参考行的原文，其他参考行可能有不同包裹形式，
+  但归一化后等价。报告格式见[子串检查说明](../tools/substring_consistency_checker/README.md#报告与性能)。
 - 回填仍按原行号及原始 Source 精确核对，不因归一化放宽冲突校验。
 
 实现位于 [consistency_text.py](../tools/consistency_text.py)，测试位于

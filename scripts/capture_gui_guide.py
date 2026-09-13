@@ -55,7 +55,7 @@ def main():
 
         capture(window, "workflow-main.png")
         workflow = window.tool_frames["workflow"]
-        for name, dialog_name in (("term-settings", "term"), ("tag-settings", "tag"), ("target-text-settings", "target")):
+        for name, dialog_name in (("term-settings", "term"), ("tag-settings", "tag"), ("target-text-settings", "target"), ("substring-settings", "substring")):
             workflow._open_settings_dialog(dialog_name)
             dialog = getattr(workflow, f"{dialog_name}_settings_dialog")
             capture(dialog, name + ".png")

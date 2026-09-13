@@ -14,6 +14,7 @@ if __package__ in {None, ""}:
 
 from openpyxl.utils import column_index_from_string
 
+from tools.consistency_text import normalize_consistency_text
 from tools.term_matching import (
     TermMappingEntry,
     build_matcher,
@@ -80,6 +81,7 @@ class ProblemEntry:
     source_snapshot: str
     target_snapshot: str
     affected_source_terms: tuple[str, ...] | None = field(default=None, compare=False)
+    actual_target_term: str | None = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -334,6 +336,7 @@ def append_problem(
     target_snapshot: str,
     *,
     affected_source_terms: Iterable[str] | None = None,
+    actual_target_term: str | None = None,
 ) -> None:
     problem_entries.append(
         ProblemEntry(
@@ -342,6 +345,7 @@ def append_problem(
             expected_target_term=expected_target_term,
             term_source=term_source,
             description=problem_description,
+            actual_target_term=actual_target_term,
             source_snapshot=source_snapshot,
             target_snapshot=target_snapshot,
             affected_source_terms=(
@@ -569,6 +573,7 @@ def process_workbook(
     history_start_row: int = 2,
     include_row_problem_column: bool = True,
     format_output: bool = True,
+    checked_source_terms: set[str] | None = None,
 ) -> tuple[str, str, str, Path, int, int]:
     """Run terminology checks against an already-open workbook without saving it."""
     if start_row < 1:
@@ -675,9 +680,10 @@ def process_workbook(
                         source_term.plain_text,
                         existing_term_pair.target_plain_text,
                         existing_term_pair.term_source,
-                        f"target术语不匹配：实际术语 - {target_term.plain_text}",
+                        "",
                         source_snapshot,
                         target_snapshot,
+                        actual_target_term=target_term.plain_text,
                     )
 
             if not row_has_problem:
@@ -699,8 +705,8 @@ def process_workbook(
                     format_expected_target_terms(source_terms, term_mapping),
                     format_expected_term_sources(source_terms, term_mapping),
                     (
-                        f"source/target术语数量不一致：{len(source_terms)}（预期数量）- "
-                        f"{len(target_terms)}（实际数量）"
+                        f"术语标记数量不一致：原文 {len(source_terms)} 个，"
+                        f"译文 {len(target_terms)} 个"
                     ),
                     build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                     build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
@@ -733,8 +739,8 @@ def process_workbook(
                     format_expected_target_terms(source_terms, term_mapping),
                     format_expected_term_sources(source_terms, term_mapping),
                     (
-                        f"source/target术语数量不一致：{len(source_terms)}（预期数量）- "
-                        f"{len(target_terms)}（实际数量）"
+                        f"术语标记数量不一致：原文 {len(source_terms)} 个，"
+                        f"译文 {len(target_terms)} 个"
                     ),
                     build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                     build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
@@ -775,8 +781,8 @@ def process_workbook(
                     format_expected_target_terms(source_terms, term_mapping),
                     format_expected_term_sources(source_terms, term_mapping),
                     (
-                        f"source/target术语数量不一致：{len(source_terms)}（预期数量）- "
-                        f"{len(target_terms)}（实际数量）"
+                        f"术语标记数量不一致：原文 {len(source_terms)} 个，"
+                        f"译文 {len(target_terms)} 个"
                     ),
                     build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                     build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
@@ -802,7 +808,7 @@ def process_workbook(
                 entry.source_term,
                 entry.target_term,
                 lookup_term_source(entry.source_term, term_mapping),
-                "target缺少预期术语",
+                "",
                 build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
                 build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
             )
@@ -840,6 +846,14 @@ def process_workbook(
     )
 
     delete_legacy_term_sheets(workbook)
+
+    if checked_source_terms is not None:
+        # Share the actual in-memory vocabulary without rereading the TB or
+        # inferring it from the report (which only lists involved terms).
+        checked_source_terms.update(
+            entry.source_term for entry in mapping_entries
+            if normalize_consistency_text(entry.target_term)
+        )
 
     return (
         worksheet.title,

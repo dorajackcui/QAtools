@@ -35,6 +35,9 @@ from tools.source_consistency_checker.check_source_consistency import (
     process_workbook as run_source_consistency_check_workbook,
 )
 from tools.substring_consistency_checker.check_substring_consistency import (
+    DEFAULT_MIN_CJK_CHARS,
+    DEFAULT_MIN_OTHER_CHARS,
+    validate_minimum_characters,
     PROBLEM_SHEET_NAME as SUBSTRING_CONSISTENCY_PROBLEM_SHEET_NAME,
     process_workbook as run_substring_consistency_check_workbook,
 )
@@ -286,6 +289,8 @@ def run_workflow(
     run_source_consistency_check: bool = True,
     run_target_consistency_check: bool = False,
     run_substring_consistency_check: bool = False,
+    substring_min_cjk_chars: int = DEFAULT_MIN_CJK_CHARS,
+    substring_min_other_chars: int = DEFAULT_MIN_OTHER_CHARS,
     run_number_check: bool = True,
     run_url_check: bool = True,
     run_chinese_target_check: bool = True,
@@ -307,6 +312,9 @@ def run_workflow(
         )
     ):
         raise ValueError("请至少选择一个质量检查项目。")
+
+    if run_substring_consistency_check:
+        validate_minimum_characters(substring_min_cjk_chars, substring_min_other_chars)
 
     input_path = Path(input_file).expanduser().resolve()
     if not input_path.exists():
@@ -347,6 +355,7 @@ def run_workflow(
     target_text_problem_count = 0
     target_text_problem_rows = 0
 
+    checked_source_terms: set[str] = set()
     workflow_workbook = load_workbook_for_editing(input_path)
     try:
         # Each checker sheet is transient: the finalizer merges its values into
@@ -373,6 +382,7 @@ def run_workflow(
                 history_source_column=term_history_source_column,
                 history_target_column=term_history_target_column,
                 history_start_row=term_history_start_row,
+                checked_source_terms=checked_source_terms if run_substring_consistency_check else None,
                 include_row_problem_column=False,
                 format_output=False,
             )
@@ -448,6 +458,9 @@ def run_workflow(
                 sheet=sheet,
                 start_row=start_row,
                 format_output=False,
+                min_cjk_chars=substring_min_cjk_chars,
+                min_other_chars=substring_min_other_chars,
+                checked_source_terms=checked_source_terms,
             )
             worksheet_title = substring_summary.worksheet_title
             substring_consistency_problem_count = substring_summary.problem_count

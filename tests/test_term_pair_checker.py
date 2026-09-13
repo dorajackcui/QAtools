@@ -39,8 +39,8 @@ class ExtractTermsTests(unittest.TestCase):
                     row_index=7,
                     problem_source_term="Alpha",
                     expected_target_term="ALPHA_OK",
-                    term_source="本批次新增",
-                    description="target缺少预期术语",
+                    term_source="历史TB",
+                    description="",
                     source_snapshot="source",
                     target_snapshot="target",
                 ),
@@ -49,7 +49,8 @@ class ExtractTermsTests(unittest.TestCase):
                     problem_source_term="Beta",
                     expected_target_term="BETA_OK",
                     term_source="本批次新增",
-                    description="target术语不匹配：实际术语 - WRONG",
+                    description="",
+                    actual_target_term="WRONG",
                     source_snapshot="source",
                     target_snapshot="target",
                 ),
@@ -60,8 +61,8 @@ class ExtractTermsTests(unittest.TestCase):
             summaries,
             {
                 7: (
-                    "Alpha -> ALPHA_OK：target缺少预期术语；"
-                    "Beta -> BETA_OK：target术语不匹配：实际术语 - WRONG"
+                    "“Alpha” → “ALPHA_OK”（历史术语表）\n"
+                    "“Beta” → “BETA_OK”（当前：“WRONG”；本批次新增）"
                 )
             },
         )
@@ -176,15 +177,15 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A2"].value, 5)
             self.assertEqual(problem_sheet["B2"].value, "第四行 [Alpha] 加【Gamma】")
             self.assertEqual(problem_sheet["C2"].value, "第四行只有 [阿尔法]")
-            self.assertIn("source/target术语数量不一致", str(problem_sheet["D2"].value))
-            self.assertIn("target缺少预期术语", str(problem_sheet["D2"].value))
+            self.assertIn("术语标记数量不一致", str(problem_sheet["D2"].value))
+            self.assertIn(" → ", str(problem_sheet["D2"].value))
             self.assertEqual(problem_sheet["E2"].value, "Alpha、Gamma；Gamma")
             self.assertEqual(problem_sheet["F2"].value, "阿尔法、伽马；伽马")
             self.assertEqual(problem_sheet["G2"].value, "本批次新增")
             self.assertEqual(problem_sheet["A3"].value, 4)
             self.assertEqual(problem_sheet["B3"].value, "第三行复用 【Beta】")
             self.assertEqual(problem_sheet["C3"].value, "第三行复用 【错误贝塔】")
-            self.assertIn("target术语不匹配：实际术语 - 错误贝塔", problem_sheet["D3"].value)
+            self.assertIn("当前：“错误贝塔”", problem_sheet["D3"].value)
             self.assertEqual(problem_sheet["E3"].value, "Beta")
             self.assertEqual(problem_sheet["F3"].value, "贝塔")
             self.assertEqual(problem_sheet["G3"].value, "本批次新增")
@@ -255,7 +256,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A2"].value, 2)
             self.assertEqual(problem_sheet["B2"].value, "第三行先出现苹果")
             self.assertEqual(problem_sheet["C2"].value, "第三行先出现banana")
-            self.assertIn("target缺少预期术语", problem_sheet["D2"].value)
+            self.assertIn(" → ", problem_sheet["D2"].value)
             self.assertEqual(problem_sheet["E2"].value, "苹果")
             self.assertEqual(problem_sheet["F2"].value, "apple")
             self.assertEqual(problem_sheet["G2"].value, "本批次新增")
@@ -298,8 +299,8 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(
                 data_sheet["C4"].value,
                 (
-                    "Alpha、Beta -> ALPHA_OK、BETA_OK：source/target术语数量不一致："
-                    "2（预期数量）- 1（实际数量）；Beta -> BETA_OK：target缺少预期术语"
+                    "术语标记数量不一致：原文 2 个，译文 1 个\n"
+                    "“Beta” → “BETA_OK”（本批次新增）"
                 ),
             )
 
@@ -307,8 +308,8 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A2"].value, 4)
             self.assertEqual(problem_sheet.max_row, 2)
             self.assertEqual(problem_sheet["B2"].value, "复用 [Alpha] and [Beta]")
-            self.assertIn("source/target术语数量不一致", str(problem_sheet["D2"].value))
-            self.assertIn("target缺少预期术语", str(problem_sheet["D2"].value))
+            self.assertIn("术语标记数量不一致", str(problem_sheet["D2"].value))
+            self.assertIn(" → ", str(problem_sheet["D2"].value))
             self.assertEqual(problem_sheet["E2"].value, "Alpha、Beta；Beta")
             self.assertEqual(problem_sheet["F2"].value, "ALPHA_OK、BETA_OK；BETA_OK")
 
@@ -350,7 +351,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A2"].value, 4)
             self.assertEqual(problem_sheet["E2"].value, "Attack")
             self.assertEqual(problem_sheet["F2"].value, "ATK")
-            self.assertIn("target", problem_sheet["D2"].value)
+            self.assertEqual(problem_sheet["D2"].value, "“Attack” → “ATK”（本批次新增）")
 
     def test_process_excel_preserves_mark_boundaries_next_to_digits(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -414,8 +415,8 @@ class ProcessExcelTests(unittest.TestCase):
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet["A2"].value, 4)
             self.assertEqual(problem_sheet.max_row, 2)
-            self.assertIn("target术语不匹配：实际术语 - WRONG", problem_sheet["D2"].value)
-            self.assertIn("target缺少预期术语", problem_sheet["D2"].value)
+            self.assertIn("当前：“WRONG”", problem_sheet["D2"].value)
+            self.assertIn(" → ", problem_sheet["D2"].value)
             self.assertEqual(problem_sheet["E2"].value, "Alpha；Beta")
             self.assertEqual(problem_sheet["F2"].value, "ALPHA_OK；BETA_OK")
 
@@ -448,7 +449,7 @@ class ProcessExcelTests(unittest.TestCase):
             result_workbook = load_workbook(saved_path)
             data_sheet = result_workbook["Data"]
             expected_problem = (
-                "Sunlight -> Rayon Soleil：target术语不匹配：实际术语 - Lumiere solaire"
+                "“Sunlight” → “Rayon Soleil”（当前：“Lumiere solaire”；本批次新增）"
             )
             self.assertEqual(data_sheet["C3"].value, expected_problem)
 
@@ -457,7 +458,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A2"].value, 3)
             self.assertEqual(problem_sheet["E2"].value, "Sunlight")
             self.assertEqual(problem_sheet["F2"].value, "Rayon Soleil")
-            self.assertIn("target术语不匹配：实际术语 - Lumiere solaire", problem_sheet["D2"].value)
+            self.assertIn("当前：“Lumiere solaire”", problem_sheet["D2"].value)
 
     def test_process_excel_treats_marked_target_as_aligned_for_unmarked_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -550,7 +551,7 @@ class ProcessExcelTests(unittest.TestCase):
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet["A2"].value, 4)
             self.assertEqual(problem_sheet["E2"].value, "Poison")
-            self.assertIn("target缺少预期术语", problem_sheet["D2"].value)
+            self.assertIn(" → ", problem_sheet["D2"].value)
 
     def test_process_excel_treats_simple_s_plural_source_and_target_as_aligned(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -642,7 +643,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet.max_row, 2)
             self.assertEqual(problem_sheet["A2"].value, 3)
             self.assertEqual(problem_sheet["F2"].value, "éclat")
-            self.assertIn("target缺少预期术语", problem_sheet["D2"].value)
+            self.assertIn(" → ", problem_sheet["D2"].value)
 
     def test_process_excel_skips_plural_signature_variants(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -858,7 +859,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["E2"].value, "Apple")
             self.assertEqual(problem_sheet["F2"].value, "历史苹果")
             self.assertEqual(problem_sheet["G2"].value, "历史TB")
-            self.assertIn("target缺少预期术语", problem_sheet["D2"].value)
+            self.assertIn(" → ", problem_sheet["D2"].value)
             self.assertEqual(problem_sheet["A3"].value, 4)
             self.assertEqual(problem_sheet["E3"].value, "Apple")
             self.assertEqual(problem_sheet["F3"].value, "历史苹果")
@@ -1135,7 +1136,7 @@ class ProcessExcelTests(unittest.TestCase):
             self.assertEqual(term_count, 1)
             self.assertEqual(problem_count, 1)
             problem_sheet = load_workbook(output_path)["问题列"]
-            self.assertIn("target术语不匹配", problem_sheet["D2"].value)
+            self.assertIn("当前：", problem_sheet["D2"].value)
             self.assertIn("Wrong", problem_sheet["D2"].value)
 
     def test_process_excel_ignores_target_case_for_marked_pairs(self) -> None:

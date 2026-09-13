@@ -143,7 +143,7 @@ def _find_abnormal_punctuation(text: str) -> TextIssue | None:
     return TextIssue(
         rule=ABNORMAL_PUNCTUATION_RULE,
         issue_type=RULE_LABELS[ABNORMAL_PUNCTUATION_RULE],
-        description="Target 中存在异常或重复标点符号。",
+        description="异常标点：" + _format_unique(f"“{match}”" for match in abnormal_matches),
         matched_content=_format_unique(abnormal_matches),
     )
 
@@ -158,7 +158,7 @@ def _find_consecutive_spaces(text: str) -> TextIssue | None:
     return TextIssue(
         rule=CONSECUTIVE_SPACES_RULE,
         issue_type=RULE_LABELS[CONSECUTIVE_SPACES_RULE],
-        description="Target 中存在连续空格。",
+        description="连续空格：" + _format_unique(f"{len(match)} 个" for match in matches),
         matched_content=lengths,
     )
 
@@ -171,6 +171,7 @@ def _find_leading_trailing_spaces(text: str) -> TextIssue | None:
 
     if leading_count == len(text):
         matched_content = f"首尾 {leading_count} 个空格"
+        description = f"首尾空格：{leading_count} 个"
     else:
         positions = []
         if leading_count:
@@ -178,11 +179,15 @@ def _find_leading_trailing_spaces(text: str) -> TextIssue | None:
         if trailing_count:
             positions.append(f"结尾 {trailing_count} 个空格")
         matched_content = "、".join(positions)
+        description = "；".join(
+            f"{label}空格：{count} 个"
+            for label, count in (("头部", leading_count), ("尾部", trailing_count)) if count
+        )
 
     return TextIssue(
         rule=LEADING_TRAILING_SPACES_RULE,
         issue_type=RULE_LABELS[LEADING_TRAILING_SPACES_RULE],
-        description="Target 开头或结尾存在普通空格。",
+        description=description,
         matched_content=matched_content,
     )
 
@@ -205,7 +210,7 @@ def _find_mixed_width(text: str) -> TextIssue | None:
     return TextIssue(
         rule=MIXED_WIDTH_RULE,
         issue_type=RULE_LABELS[MIXED_WIDTH_RULE],
-        description="Target 中存在同类字符的全半角混用。",
+        description="全半角混用：" + "；".join(matched_pairs),
         matched_content="；".join(matched_pairs),
     )
 

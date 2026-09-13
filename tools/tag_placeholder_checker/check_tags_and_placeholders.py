@@ -434,17 +434,11 @@ def build_problem_description(
 ) -> str:
     missing_counter = source_counter - target_counter
     extra_counter = target_counter - source_counter
-    label = TOKEN_LABELS[token_type]
-
-    description_lines = [
-        f"{label}不一致。",
-        f"source={format_counter(source_counter)}",
-        f"target={format_counter(target_counter)}",
-    ]
+    description_lines = []
     if missing_counter:
-        description_lines.append(f"target缺少={format_counter(missing_counter)}")
+        description_lines.append(f"缺少：{format_counter(missing_counter)}")
     if extra_counter:
-        description_lines.append(f"target多出={format_counter(extra_counter)}")
+        description_lines.append(f"多出：{format_counter(extra_counter)}")
     return "；".join(description_lines)
 
 
@@ -468,9 +462,7 @@ def write_problem_sheet(
                 source_row,
                 first_entry[3],
                 first_entry[4],
-                join_unique_text(
-                    f"{entry[1]}：{entry[2]}" for entry in row_entries
-                ),
+                join_unique_text(entry[2] for entry in row_entries),
                 join_unique_text(entry[1] for entry in row_entries),
             )
         )
@@ -738,10 +730,7 @@ def process_workbook(
             problem_rows_set.add(row_index)
             if counters_match:
                 problem_type = "尖括号tag结构不一致"
-                problem_description = (
-                    "尖括号tag结构不一致。source/target 的 tag 文本和数量相同，"
-                    "但嵌套或闭合结构不同。"
-                )
+                problem_description = "嵌套或闭合结构不同"
             else:
                 problem_type = f"{TOKEN_LABELS[token_type]}不一致"
                 problem_description = build_problem_description(
@@ -772,8 +761,7 @@ def process_workbook(
                     (
                         row_index,
                         "Tag顺序不一致",
-                        "Tag顺序不一致。所选片段的类型、内容和数量相同，但出现顺序不同。"
-                        f"；source顺序={source_order}；target顺序={target_order}",
+                        f"原文：{source_order}；译文：{target_order}",
                         row_source_snapshot,
                         row_target_snapshot,
                     )

@@ -93,7 +93,7 @@ class ChineseTargetExcelTests(unittest.TestCase):
             self.assertEqual(problem_sheet["A2"].value, 3)
             self.assertEqual(problem_sheet["B2"].value, "hello again")
             self.assertEqual(problem_sheet["C2"].value, "包含中文 target")
-            self.assertIn("包含中文", problem_sheet["D2"].value)
+            self.assertEqual(problem_sheet["D2"].value, "命中：“包”“含”“中”“文”")
             self.assertEqual(problem_sheet["E2"].value, "包含中文")
             self.assertEqual(problem_sheet["A2"].hyperlink.location, "'Data'!B3")
             self.assertIsNone(problem_sheet["A2"].hyperlink.target)

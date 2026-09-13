@@ -152,7 +152,7 @@ def process_workbook(
                 row_index,
                 cell_text(source_value),
                 cell_text(target_value),
-                f"Target 中包含中文或全角标点：{chinese_characters}",
+                "命中：" + "".join(f"“{char}”" for char in chinese_characters),
                 chinese_characters,
             )
         )
