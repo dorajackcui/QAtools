@@ -37,4 +37,6 @@ python3 tools/source_consistency_checker/check_source_consistency_gui.py
 - target 版本数
 - 同组全部行号
 
-问题描述使用 `2 种译法（第 3、8、12 行）`，保留版本数和完整同组行号。
+问题描述使用 `2 种译法：1: Astro Boy；2: Atom`，按归一化后的不同译法去重，
+按首次出现顺序编号，每种展示首次出现的原文；归一化后为空时显示 `[空译文]`。
+独立问题表的版本数和完整同组行号列保持不变。

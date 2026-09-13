@@ -29,7 +29,7 @@ class ReviewSheetOrderingTests(unittest.TestCase):
                 (50, "Save", "Save B", "20、50、80、90"),
                 (80, "Save", "Save A", "20、50、80、90"),
             ):
-                source_sheet.append([row, source, target, f"2 种译法（第 {grouped_rows} 行）", grouped_rows])
+                source_sheet.append([row, source, target, f"2 种译法：1: {source} B；2: {source} A", grouped_rows])
 
             target_sheet = workbook.create_sheet("Target 问题")
             target_sheet.append(PROBLEM_BASE_HEADERS + ("同组行号",))
@@ -42,7 +42,8 @@ class ReviewSheetOrderingTests(unittest.TestCase):
                 (10, "Alpha", "Shared Z", "10、70"),
                 (110, "Gamma", "Shared A", "30、110"),
             ):
-                target_sheet.append([row, source, target, f"2 种原文（第 {grouped_rows} 行）", grouped_rows])
+                variants = {"Save A": "1: Extra；2: Save", "Shared Z": "1: Zulu；2: Alpha", "Shared A": "1: Beta；2: Gamma"}
+                target_sheet.append([row, source, target, f"2 种原文：{variants[target]}", grouped_rows])
 
             checks = (
                 ("Tag 检查", tag_sheet.title),
@@ -63,8 +64,8 @@ class ReviewSheetOrderingTests(unittest.TestCase):
                     "Save A",
                     None,
                     "【Tag 检查】Tag 缺失；"
-                    "【同 Target 不同 Source】2 种原文（第 20、80、100 行）；"
-                    "【同 Source 不同 Target】2 种译法（第 20、50、80、90 行）",
+                    "【同 Target 不同 Source】2 种原文：1: Extra；2: Save；"
+                    "【同 Source 不同 Target】2 种译法：1: Save B；2: Save A",
                     "Tag 检查；同 Target 不同 Source；同 Source 不同 Target",
                 ),
             )

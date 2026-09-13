@@ -69,6 +69,8 @@ class ConsistencyNormalizationTests(unittest.TestCase):
                 issues = list(workbook[problem_sheet].values)[1:]
                 self.assertEqual([row[0] for row in issues], [4, 5, 6])
                 self.assertTrue(all(row[4] == 2 and row[5] == "4、5、6" for row in issues))
+                label = "原文" if reverse else "译法"
+                self.assertTrue(all(row[3] == f"2 种{label}：1: Goku；2: 【Monkey King】" for row in issues))
                 expected = [tuple(reversed(row)) if reverse else row for row in rows[2:5]]
                 self.assertEqual([row[1:3] for row in issues], expected)
 

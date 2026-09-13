@@ -75,8 +75,8 @@ class SubstringConsistencyTests(unittest.TestCase):
         self.assertEqual(summary.problem_count, 2)
         self.assertEqual([row[0] for row in issues], [4, 5])
         self.assertEqual(issues[0][1:3], ("【 阿童木登场 】", "‘Wrong’"))
-        self.assertIn("参考第 2、3", issues[0][3])
-        self.assertEqual(issues[0][3], "“【阿童木】” → “‘Astro Boy’”（参考第 2、3 行）")
+        self.assertIn("参考原表第 2、3", issues[0][3])
+        self.assertEqual(issues[0][3], "“【阿童木】” → “‘Astro Boy’”（参考原表第 2、3 行）")
         self.assertEqual(issues[0][3], issues[1][3])
 
     def test_normalized_equal_sources_are_not_containment_and_conflicts_still_skip(self):
@@ -114,8 +114,8 @@ class SubstringConsistencyTests(unittest.TestCase):
         self.assertEqual(summary.problem_count, 1)
         self.assertEqual(summary.problem_rows, 1)
         self.assertEqual(issues[0][:3], (4, "是否保存更改？", "Save modifications?"))
-        self.assertIn("参考第 2、3", issues[0][3])
-        self.assertEqual(issues[0][3], "“保存更改” → “Save changes”（参考第 2、3 行）")
+        self.assertIn("参考原表第 2、3", issues[0][3])
+        self.assertEqual(issues[0][3], "“保存更改” → “Save changes”（参考原表第 2、3 行）")
         self.assertEqual(workbook[PROBLEM_SHEET_NAME]["A2"].hyperlink.location, "'Data'!B4")
         self.assertEqual(workbook["Data"]["B4"].value, "Save modifications?")
 
@@ -154,8 +154,8 @@ class SubstringConsistencyTests(unittest.TestCase):
         self.assertEqual(summary.problem_count, 4)
         self.assertEqual([issue[0] for issue in issues], [4, 5])
         self.assertEqual(len(issues[0][3].splitlines()), 2)
-        self.assertIn("参考第 2", issues[0][3])
-        self.assertIn("参考第 3", issues[0][3])
+        self.assertIn("参考原表第 2", issues[0][3])
+        self.assertIn("参考原表第 3", issues[0][3])
 
     def test_details_are_bounded_but_count_is_complete(self):
         children = [f"测试词条{index:03}" for index in range(DETAIL_LIMIT + 5)]
@@ -165,7 +165,7 @@ class SubstringConsistencyTests(unittest.TestCase):
         ])
         self.assertEqual(summary.problem_count, len(children))
         self.assertEqual(len(issues), 1)
-        self.assertEqual(issues[0][3].count("参考第"), DETAIL_LIMIT)
+        self.assertEqual(issues[0][3].count("参考原表第"), DETAIL_LIMIT)
         self.assertIn("另 5 条未展示", issues[0][3])
 
     def test_long_reference_excerpts_and_duplicate_row_lists_are_explicitly_truncated(self):

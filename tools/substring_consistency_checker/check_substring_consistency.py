@@ -183,7 +183,7 @@ def process_workbook(
                     first = reference_rows[0]
                     details.append(
                         f"“{_excerpt(first.source)}” → “{_excerpt(first.target)}”"
-                        f"（参考第 {row_text} 行）"
+                        f"（参考原表第 {row_text} 行）"
                     )
             if missing:
                 description = "\n".join(details)

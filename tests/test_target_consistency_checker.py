@@ -72,10 +72,11 @@ class TargetConsistencyExcelTests(unittest.TestCase):
                     [problem_sheet[f"A{row}"].value for row in range(2, 7)],
                     [2, 3, 10, 8, 9],
                 )
-                self.assertIn("3 种原文（第 ", problem_sheet["D2"].value)
+                self.assertEqual(problem_sheet["D2"].value, "3 种原文：1: Save；2: Store；3: Trailing-space target")
                 self.assertEqual(problem_sheet["E2"].value, 3)
                 self.assertEqual(problem_sheet["F2"].value, "2、3、10")
                 self.assertIsNone(problem_sheet["B5"].value)
+                self.assertEqual(problem_sheet["D5"].value, "2 种原文：1: [空原文]；2: Non-empty source")
                 self.assertEqual(problem_sheet["C5"].value, "共用")
                 self.assertEqual(problem_sheet["A2"].hyperlink.location, "'Data'!B2")
             finally:

@@ -162,19 +162,25 @@ def process_workbook(
         if len(occurrences) < 2:
             continue
         repeated_source_count += 1
-        target_variants = {normalize_consistency_text(occurrence.target_text) for occurrence in occurrences}
+        target_variants: dict[str, str] = {}
+        for occurrence in occurrences:
+            key = normalize_consistency_text(occurrence.target_text)
+            target_variants.setdefault(key, occurrence.target_text if key else "[空译文]")
         if len(target_variants) < 2:
             continue
 
         inconsistent_source_count += 1
         grouped_rows = "、".join(str(occurrence.row_index) for occurrence in occurrences)
+        description = f"{len(target_variants)} 种译法：" + "；".join(
+            f"{index}: {text}" for index, text in enumerate(target_variants.values(), 1)
+        )
         for occurrence in occurrences:
             problem_entries.append(
                 (
                     occurrence.row_index,
                     occurrence.source_text,
                     occurrence.target_text,
-                    f"{len(target_variants)} 种译法（第 {grouped_rows} 行）",
+                    description,
                     len(target_variants),
                     grouped_rows,
                 )

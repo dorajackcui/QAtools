@@ -69,7 +69,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                     self.assertEqual(row[1:3], source_rows[row[0] - 2])
                 self.assertIn("同 Source 不同 Target", rows[1][5])
                 self.assertIn("同 Target 不同 Source", rows[1][5])
-                self.assertEqual(rows[-1][4], "【子串译文一致性】“【保存】” → “Save”（参考第 5 行）")
+                self.assertEqual(rows[-1][4], "【子串译文一致性】“【保存】” → “Save”（参考原表第 5 行）")
                 review["D2"] = "Astro"
                 review["D5"] = "Please save"
                 report.save(summary.output_path)
@@ -149,7 +149,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                 self.assertEqual(report.sheetnames, ["Data", "问题处理", "质量检查汇总"])
                 review = report["问题处理"]
                 self.assertEqual(review["A2"].value, 3)
-                self.assertIn("参考第 2 行", review["E2"].value)
+                self.assertIn("参考原表第 2 行", review["E2"].value)
                 self.assertEqual(review["F2"].value, "子串译文一致性")
                 self.assertEqual(list(report["质量检查汇总"].values), [
                     ("检查项", "问题行数"), ("子串译文一致性", 1),
@@ -309,7 +309,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             for redundant in ("问题类型：", "source换行数：", "target换行数：", "数量差：", "命中字符："):
                 self.assertNotIn(redundant, row_three_description)
             row_four_description = review_sheet["E2"].value
-            self.assertIn("【同 Source 不同 Target】2 种译法（第 4、5 行）", row_four_description)
+            self.assertIn("【同 Source 不同 Target】2 种译法：1: 译文一；2: 译文二", row_four_description)
             self.assertNotIn("target版本数：", row_four_description)
             self.assertNotIn("同组行号：", row_four_description)
             for review_row, source_row in enumerate((4, 5, 2, 3), start=2):
