@@ -14,6 +14,9 @@ QAtools Windows 安装版
 
 以后收到新版本时，直接运行新安装包即可覆盖升级。安装程序会沿用原安装目录和
 快捷方式；历史 TB 等用户配置保存在 %APPDATA%\Toolshub，不会因升级被删除。
+从 0.1.2 起安装包只提供 GUI。覆盖安装会删除安装目录中的旧 QAtools-CLI.exe、
+QAtools-CLI.cmd，以及 _internal 下不再需要的 NumPy/OpenBLAS、PythonWin 和 YAML 组件。
+其他用户文件和配置不会被这项清理删除。
 
 图形界面
 --------
@@ -22,22 +25,19 @@ QAtools Windows 安装版
 
 工具箱包含一键质量检查、PhraseLoom、法语 NBSP 恢复、Batch 拆分与复原、
 活动工作表合并、Xbench QA 转换、Master 与小表双向同步、列操作、兼容性重存、
-同名文件替换和未翻译统计。这些工具同时提供 GUI 和 CLI。一键质量检查内含术语、双向文本一致性、
+同名文件替换和未翻译统计。一键质量检查内含术语、双向及子串译文一致性、
 Tag / Placeholder、换行、数字、URL 和 Target 文本质量检查。
 
 命令行
 ------
-安装目录中同时提供 QAtools-CLI.exe。示例：
+此安装包不附带 CLI。需要命令行的用户可安装 Python 3.11+，在源码目录执行
+python -m pip install -e .，再使用 qatools 命令。完整参数见仓库 docs/cli-usage.md。
 
-  QAtools-CLI.exe --help
-  QAtools-CLI.exe list
-  QAtools-CLI.exe qa input.xlsx -c A -t B
-  QAtools-CLI.exe phraseloom export source.xlsx
-  QAtools-CLI.exe batch split input.xlsx --batch-size 1000
-  QAtools-CLI.exe batch restore input_batches -o input_restored.xlsx
-  QAtools-CLI.exe merge-sheets excel_files -o merged.xlsx
-
-也可以双击 QAtools-CLI.cmd 查看帮助。
+打包依赖
+--------
+保留 PySide6、openpyxl、pyahocorasick、Excel COM 及 Pillow（用于保留工作簿图片）。
+排除规则维护在 packaging/gui-excludes.txt：Tk、NumPy（含 OpenBLAS）、PyYAML、
+PythonWin 界面模块均非本工具 GUI 工作流所需；源码 CLI 和业务处理器仍保留。
 
 卸载
 ----

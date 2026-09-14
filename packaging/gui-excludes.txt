@@ -1,0 +1,8 @@
+# Optional integrations unused by QAtools' Qt/Excel file workflows.
+tkinter
+_tkinter
+sv_ttk
+numpy
+yaml
+pywin
+win32ui

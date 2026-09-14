@@ -132,6 +132,34 @@ class GuiFunctionalTests(unittest.TestCase):
         restored = self.read(self.root / "strings-source_translated.xlsx")
         self.assertEqual([row[2] for row in restored[1:]], ["Bonjour Alice", "Bonjour Alice", "Bonjour Bob"])
 
+    def test_qa_preserves_embedded_workbook_images(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is required by the Windows image-preserving bundle")
+        from openpyxl.drawing.image import Image as WorkbookImage
+
+        image_path = self.root / "fixture.png"
+        with Image.new("RGB", (4, 4), "red") as fixture:
+            fixture.save(image_path)
+        source = self.workbook("image.xlsx", [["source", "target"], ["{a}", "{b}"]])
+        book = load_workbook(source)
+        try:
+            book.active.add_image(WorkbookImage(image_path), "E2")
+            book.save(source)
+        finally:
+            book.close()
+        self.window.open_tool("workflow", ["tag"])
+        page = self.window.tool_frames["workflow"]
+        page.load_input_file(str(source))
+        self.run_button(page, page.run_button)
+        book = load_workbook(page.last_workflow_output_path)
+        try:
+            self.assertEqual(len(book["Data"]._images), 1)
+            self.assertEqual(book["Data"]._images[0]._data(), image_path.read_bytes())
+        finally:
+            book.close()
+
     def test_batch_split_and_restore(self):
         rows = [["source", "target"], ["First", "Premier"], ["Second", "Deuxième"]]
         source = self.workbook("batch.xlsx", rows)

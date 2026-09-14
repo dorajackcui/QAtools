@@ -21,6 +21,7 @@ from tools.workflow.workflow_runner import (
     run_workflow,
 )
 from tools.workflow.review_sheet import (
+    WORKFLOW_METADATA_SHEET_NAME,
     WORKFLOW_REVIEW_SHEET_NAME,
     collect_review_rows,
     read_review_metadata,
@@ -146,7 +147,9 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(summary.substring_consistency_problem_count, 1)
             report = load_workbook(summary.output_path)
             try:
-                self.assertEqual(report.sheetnames, ["Data", "问题处理", "质量检查汇总"])
+                self.assertEqual(report.sheetnames, [
+                    "Data", "问题处理", WORKFLOW_METADATA_SHEET_NAME, "质量检查汇总",
+                ])
                 review = report["问题处理"]
                 self.assertEqual(review["A2"].value, 3)
                 self.assertIn("参考原表第 2 行", review["E2"].value)
@@ -238,6 +241,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                     "Data",
                     "术语表",
                     WORKFLOW_REVIEW_SHEET_NAME,
+                    WORKFLOW_METADATA_SHEET_NAME,
                     WORKFLOW_SUMMARY_SHEET_NAME,
                 ],
             )
@@ -316,10 +320,10 @@ class WorkflowRunnerTests(unittest.TestCase):
                 row_cell = review_sheet.cell(review_row, 1)
                 self.assertEqual(row_cell.hyperlink.location, f"'Data'!B{source_row}")
                 self.assertIsNone(row_cell.hyperlink.target)
-            self.assertTrue(review_sheet.column_dimensions["G"].hidden)
-            self.assertTrue(review_sheet.column_dimensions["H"].hidden)
+            self.assertEqual(review_sheet.max_column, 6)
+            self.assertEqual(workbook[WORKFLOW_METADATA_SHEET_NAME].sheet_state, "veryHidden")
             self.assertEqual(len(review_sheet.data_validations.dataValidation), 0)
-            metadata = read_review_metadata(review_sheet)
+            metadata = read_review_metadata(workbook)
             self.assertEqual(metadata["data_sheet_name"], "Data")
             self.assertEqual(metadata["source_column"], "A")
             self.assertEqual(metadata["target_column"], "B")

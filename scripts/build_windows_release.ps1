@@ -14,7 +14,7 @@ $tagRulesPath = Join-Path $projectRoot "phraseloom\tag_rules.toml"
 $iconPath = Join-Path $projectRoot "packaging\QAtools.ico"
 $installerScript = Join-Path $projectRoot "packaging\QAtools.iss"
 $guiEntry = Join-Path $projectRoot "toolshub_gui.py"
-$cliEntry = Join-Path $projectRoot "qatools_cli.py"
+$guiExcludesPath = Join-Path $projectRoot "packaging\gui-excludes.txt"
 $originalTemp = [Environment]::GetEnvironmentVariable("TEMP", "Process")
 $originalTmp = [Environment]::GetEnvironmentVariable("TMP", "Process")
 $originalPath = [Environment]::GetEnvironmentVariable("PATH", "Process")
@@ -117,6 +117,9 @@ try {
     Invoke-ProjectPython `
         -Description "Excel COM packaging dependencies (install .[excel-com])" `
         -Arguments @("-c", "import pythoncom, pywintypes, win32com.client, win32timezone")
+    Invoke-ProjectPython `
+        -Description "Workbook image preservation dependency (install Pillow)" `
+        -Arguments @("-c", "from PIL import Image")
     $innoSetupCompiler = Resolve-InnoSetupCompiler
 
     if (-not $SkipTests) {
@@ -153,9 +156,6 @@ try {
         "-m", "PyInstaller",
         "--noconfirm",
         "--clean",
-        "--exclude-module", "tkinter",
-        "--exclude-module", "_tkinter",
-        "--exclude-module", "sv_ttk",
         "--icon", $iconPath,
         "--paths", $projectRoot,
         "--hidden-import", "win32timezone",
@@ -164,6 +164,12 @@ try {
         "--specpath", $specDir,
         "--add-data", "$tagRulesPath;phraseloom"
     )
+    foreach ($module in (Get-Content -LiteralPath $guiExcludesPath)) {
+        $module = $module.Trim()
+        if ($module -and -not $module.StartsWith("#")) {
+            $commonArguments += @("--exclude-module", $module)
+        }
+    }
 
     Invoke-ProjectPython `
         -Description "GUI build" `
@@ -175,61 +181,18 @@ try {
             $guiEntry
         ))
 
-    $hiddenImports = @(
-        "toolshub_gui",
-        "tools.workflow.cli",
-        "phraseloom.cli",
-        "tools.term_pair_checker.extract_terms_from_excel",
-        "tools.tag_placeholder_checker.check_tags_and_placeholders",
-        "tools.line_break_checker.check_line_breaks",
-        "tools.source_consistency_checker.check_source_consistency",
-        "tools.chinese_target_checker.check_chinese_target",
-        "tools.french_nbsp_restorer.restore_french_nbsp",
-        "tools.excel_batcher.excel_batcher",
-        "tools.excel_merger.merge_active_sheets",
-        "tools.xbench_report_transformer.transform_xbench_report",
-        "tools.content_sync.cli",
-        "tools.column_tools.cli",
-        "tools.excel_compatibility.cli",
-        "tools.deep_replace.cli",
-        "tools.untranslated_stats.cli"
-    )
-    $cliArguments = $commonArguments + @(
-        "--onefile",
-        "--console",
-        "--name", "QAtools-CLI"
-    )
-    foreach ($module in $hiddenImports) {
-        $cliArguments += @("--hidden-import", $module)
-    }
-    $cliArguments += $cliEntry
-
-    Invoke-ProjectPython -Description "CLI build" -Arguments $cliArguments
-
     $guiBundleDir = Join-Path $exeDir "QAtools"
     Copy-Item -LiteralPath (Join-Path $guiBundleDir "QAtools.exe") -Destination $appDir
     Copy-Item -LiteralPath (Join-Path $guiBundleDir "_internal") -Destination $appDir -Recurse
-    Copy-Item -LiteralPath (Join-Path $exeDir "QAtools-CLI.exe") -Destination $appDir
-    Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\QAtools-CLI.cmd") -Destination $appDir
     Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\README-Windows.txt") -Destination $appDir
 
-    # Verify the frozen programs, including every persistent Qt page, without
+    # Verify the frozen GUI, including every persistent Qt page, without
     # showing the application window.
     $smokeTemp = Join-Path $buildRoot "smoke-temp"
     New-Item -ItemType Directory -Path $smokeTemp -Force | Out-Null
     $env:TEMP = $smokeTemp
     $env:TMP = $smokeTemp
 
-    & (Join-Path $appDir "QAtools-CLI.exe") --version
-    if ($LASTEXITCODE -ne 0) {
-        throw "Frozen CLI smoke test failed with exit code $LASTEXITCODE"
-    }
-    foreach ($command in @("content-sync", "columns", "compatibility", "deep-replace", "untranslated-stats")) {
-        & (Join-Path $appDir "QAtools-CLI.exe") $command --help
-        if ($LASTEXITCODE -ne 0) {
-            throw "Frozen CLI help failed for $command with exit code $LASTEXITCODE"
-        }
-    }
     $guiSmokeProcess = Start-Process `
         -FilePath (Join-Path $appDir "QAtools.exe") `
         -ArgumentList "--smoke-test" `
@@ -244,6 +207,7 @@ try {
     @(
         "QAtools $Version",
         "Windows $architecture",
+        "GUI only",
         "Built at $builtAt",
         "Python $((& $PythonCommand --version) -replace '^Python\s+', '')"
     ) | Set-Content -LiteralPath (Join-Path $appDir "VERSION.txt") -Encoding UTF8

@@ -90,7 +90,8 @@ GUI 表单不显示常驻说明段落，保留输入标签、占位提示、输�
 powershell -ExecutionPolicy Bypass -File scripts\build_windows_release.ps1
 ```
 
-脚本会运行回归测试，并在 `dist/` 生成单个 Windows 安装包。安装程序按当前用户
+脚本会运行回归测试，并在 `dist/` 生成仅含 GUI 的 Windows 安装包。源码仍提供 CLI。
+安装程序按当前用户
 安装；后续版本直接运行新安装包即可覆盖升级。安装说明见
 [README-Windows.txt](packaging/README-Windows.txt)。
 

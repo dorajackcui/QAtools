@@ -32,6 +32,16 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; Flags: unchecked
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[InstallDelete]
+; Only obsolete files owned by QAtools; preserve user files and configuration.
+Type: files; Name: "{app}\QAtools-CLI.exe"
+Type: files; Name: "{app}\QAtools-CLI.cmd"
+Type: filesandordirs; Name: "{app}\_internal\numpy"
+Type: filesandordirs; Name: "{app}\_internal\numpy.libs"
+Type: filesandordirs; Name: "{app}\_internal\numpy-*.dist-info"
+Type: filesandordirs; Name: "{app}\_internal\Pythonwin"
+Type: filesandordirs; Name: "{app}\_internal\yaml"
+
 [Icons]
 Name: "{group}\QAtools"; Filename: "{app}\QAtools.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\QAtools"; Filename: "{app}\QAtools.exe"; WorkingDir: "{app}"; Tasks: desktopicon

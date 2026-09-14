@@ -26,9 +26,9 @@ WORKFLOW_REVIEW_HEADERS = (
     "问题描述",
     "检查项",
 )
-METADATA_KEY_COLUMN = 7
-METADATA_VALUE_COLUMN = 8
-WORKFLOW_SCHEMA_VERSION = "2"
+WORKFLOW_METADATA_SHEET_NAME = "_qa_workflow_metadata"
+WORKFLOW_SCHEMA_VERSION = "3"
+_METADATA_REPORT_TYPE = "qatools.workflow"
 
 
 _DESCRIPTION_DETAIL_HEADERS = {
@@ -172,7 +172,7 @@ def collect_review_rows(
 
 
 def write_review_metadata(
-    worksheet,
+    workbook,
     *,
     input_file: str | Path,
     data_sheet_name: str,
@@ -182,7 +182,24 @@ def write_review_metadata(
     generated_sheet_names: Iterable[str],
     remove_term_helper: bool,
 ) -> None:
+    for sheet_name in workbook.sheetnames:
+        if sheet_name.casefold() != WORKFLOW_METADATA_SHEET_NAME.casefold():
+            continue
+        existing = workbook[sheet_name]
+        if (
+            sheet_name == data_sheet_name
+            or existing["A1"].value != "report_type"
+            or existing["B1"].value != _METADATA_REPORT_TYPE
+        ):
+            raise ValueError(
+                f"工作表“{sheet_name}”与检查报告的内部信息表重名，请重命名后重试。"
+            )
+        del workbook[sheet_name]
+    worksheet = workbook.create_sheet(WORKFLOW_METADATA_SHEET_NAME)
+    worksheet.sheet_state = "veryHidden"
+    worksheet.protection.sheet = True
     metadata = (
+        ("report_type", _METADATA_REPORT_TYPE),
         ("schema_version", WORKFLOW_SCHEMA_VERSION),
         ("input_file", str(Path(input_file).expanduser().resolve())),
         ("data_sheet_name", data_sheet_name),
@@ -193,20 +210,41 @@ def write_review_metadata(
         ("remove_term_helper", "1" if remove_term_helper else "0"),
     )
     for row_index, (key, value) in enumerate(metadata, start=1):
-        worksheet.cell(row_index, METADATA_KEY_COLUMN, key)
-        worksheet.cell(row_index, METADATA_VALUE_COLUMN, value)
-    worksheet.column_dimensions["G"].hidden = True
-    worksheet.column_dimensions["H"].hidden = True
+        worksheet.cell(row_index, 1, key)
+        worksheet.cell(row_index, 2, value)
 
 
-def read_review_metadata(worksheet) -> dict[str, object]:
-    metadata: dict[str, object] = {}
-    for row_index in range(1, 20):
-        key = worksheet.cell(row_index, METADATA_KEY_COLUMN).value
-        if key is None:
-            continue
-        metadata[str(key)] = worksheet.cell(row_index, METADATA_VALUE_COLUMN).value
-    return metadata
+def read_review_metadata(workbook) -> dict[str, object]:
+    if WORKFLOW_METADATA_SHEET_NAME in workbook.sheetnames:
+        worksheet = workbook[WORKFLOW_METADATA_SHEET_NAME]
+        metadata = {
+            str(key): value
+            for key, value in worksheet.iter_rows(
+                min_row=1, max_row=20, min_col=1, max_col=2, values_only=True
+            )
+            if key is not None
+        }
+        if (
+            metadata.get("report_type") != _METADATA_REPORT_TYPE
+            or str(metadata.get("schema_version", "")) != WORKFLOW_SCHEMA_VERSION
+        ):
+            raise ValueError("检查报告内部信息损坏或版本不受支持，请重新运行一键质量检查。")
+        return metadata
+
+    # Previously generated reports kept schema 2 metadata in hidden G/H columns.
+    if WORKFLOW_REVIEW_SHEET_NAME in workbook.sheetnames:
+        worksheet = workbook[WORKFLOW_REVIEW_SHEET_NAME]
+        if worksheet.max_column >= 8:
+            metadata = {
+                str(key): value
+                for key, value in worksheet.iter_rows(
+                    min_row=1, max_row=19, min_col=7, max_col=8, values_only=True
+                )
+                if key is not None
+            }
+            if str(metadata.get("schema_version", "")) == "2":
+                return metadata
+    return {}
 
 
 def write_review_sheet(
@@ -251,7 +289,7 @@ def write_review_sheet(
         worksheet.cell(worksheet_row, 4).fill = editable_fill
 
     write_review_metadata(
-        worksheet,
+        workbook,
         input_file=input_file,
         data_sheet_name=current_sheet_name,
         source_column=source_column,

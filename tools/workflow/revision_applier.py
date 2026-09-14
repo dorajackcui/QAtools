@@ -14,6 +14,7 @@ from tools.excel_output import (
     load_workbook_for_editing,
 )
 from tools.workflow.review_sheet import (
+    WORKFLOW_METADATA_SHEET_NAME,
     WORKFLOW_REVIEW_SHEET_NAME,
     WORKFLOW_SCHEMA_VERSION,
     cell_text,
@@ -34,23 +35,26 @@ class RevisionSummary:
 def build_default_revised_output_path(report_file: str | Path) -> Path:
     report_path = Path(report_file).expanduser().resolve()
     original_name = report_path.name
+    workbook = None
     try:
         workbook = load_workbook(report_path, read_only=True)
         if WORKFLOW_REVIEW_SHEET_NAME in workbook.sheetnames:
-            metadata = read_review_metadata(workbook[WORKFLOW_REVIEW_SHEET_NAME])
+            metadata = read_review_metadata(workbook)
             input_file = metadata.get("input_file")
             if input_file:
                 original_name = Path(str(input_file)).name
-        workbook.close()
     except Exception:
         pass
+    finally:
+        if workbook is not None:
+            workbook.close()
     return report_path.with_name(f"revised_{original_name}")
 
 
-def _required_metadata(review_sheet) -> dict[str, object]:
-    metadata = read_review_metadata(review_sheet)
-    if str(metadata.get("schema_version", "")) != WORKFLOW_SCHEMA_VERSION:
-        raise ValueError("问题处理工作表版本不受支持，请重新运行一键质量检查。")
+def _required_metadata(workbook) -> dict[str, object]:
+    metadata = read_review_metadata(workbook)
+    if not metadata:
+        raise ValueError("检查报告缺少内部回填信息，请重新运行一键质量检查。")
     for key in ("data_sheet_name", "source_column", "target_column"):
         if not metadata.get(key):
             raise ValueError("问题处理工作表缺少回填信息，请重新运行一键质量检查。")
@@ -95,7 +99,7 @@ def apply_workflow_revisions(
         if WORKFLOW_REVIEW_SHEET_NAME not in workbook.sheetnames:
             raise ValueError("未找到“问题处理”工作表，请选择 workflow 检查报告。")
         review_sheet = workbook[WORKFLOW_REVIEW_SHEET_NAME]
-        metadata = _required_metadata(review_sheet)
+        metadata = _required_metadata(workbook)
         data_sheet_name = str(metadata["data_sheet_name"])
         source_column = str(metadata["source_column"]).strip().upper()
         target_column = str(metadata["target_column"]).strip().upper()
@@ -148,6 +152,8 @@ def apply_workflow_revisions(
             if name
         }
         generated_sheet_names.add(WORKFLOW_REVIEW_SHEET_NAME)
+        if str(metadata.get("schema_version")) == WORKFLOW_SCHEMA_VERSION:
+            generated_sheet_names.add(WORKFLOW_METADATA_SHEET_NAME)
         _remove_workflow_artifacts(
             workbook,
             data_sheet_name,
