@@ -6,10 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from openpyxl import load_workbook
-from openpyxl.utils import column_index_from_string
 
 from tools.excel_output import (
-    ROW_PROBLEM_COLUMN_HEADER,
     find_last_value_row,
     load_workbook_for_editing,
 )
@@ -64,19 +62,11 @@ def _required_metadata(workbook) -> dict[str, object]:
 def _remove_workflow_artifacts(
     workbook,
     data_sheet_name: str,
-    target_column: str,
     generated_sheet_names: set[str],
-    remove_term_helper: bool,
 ) -> None:
     for sheet_name in generated_sheet_names:
         if sheet_name in workbook.sheetnames and sheet_name != data_sheet_name:
             del workbook[sheet_name]
-
-    if remove_term_helper:
-        data_sheet = workbook[data_sheet_name]
-        helper_column_index = column_index_from_string(target_column) + 1
-        if data_sheet.cell(1, helper_column_index).value == ROW_PROBLEM_COLUMN_HEADER:
-            data_sheet.delete_cols(helper_column_index)
 
 
 def apply_workflow_revisions(
@@ -157,9 +147,7 @@ def apply_workflow_revisions(
         _remove_workflow_artifacts(
             workbook,
             data_sheet_name,
-            target_column,
             generated_sheet_names,
-            remove_term_helper=cell_text(metadata.get("remove_term_helper")) == "1",
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         workbook.save(output_path)

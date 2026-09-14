@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -12,7 +12,6 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.worksheet.hyperlink import Hyperlink
 
 
-ROW_PROBLEM_COLUMN_HEADER = "术语QA问题"
 ROW_PROBLEM_SEPARATOR = "；"
 PROBLEM_BASE_HEADERS = ("行号", "source原文", "target原文", "问题描述")
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="D9EAF7")
@@ -37,6 +36,16 @@ def validate_distinct_source_target_columns(
     """Reject a configuration that would compare one column with itself."""
     if source_column.strip().upper() == target_column.strip().upper():
         raise ValueError("source 列和 target 列不能相同。")
+
+
+def validate_report_output_path(input_file: str | Path, output_file: str | Path) -> None:
+    """Reject path aliases and existing hard links to the input workbook."""
+    input_path = Path(input_file).expanduser().resolve()
+    output_path = Path(output_file).expanduser().resolve()
+    if input_path == output_path or (
+        output_path.exists() and input_path.samefile(output_path)
+    ):
+        raise ValueError("检查报告输出路径不能与输入文件相同，请选择新的文件。")
 
 
 def find_last_value_row(
@@ -181,37 +190,3 @@ def add_row_number_hyperlinks(
 def build_prefixed_output_path(input_file: str | Path, prefix: str) -> Path:
     input_path = Path(input_file).expanduser()
     return input_path.with_name(f"{prefix}{input_path.name}")
-
-
-def format_row_problem_text(source_term: str, expected_target_term: str, description: str) -> str:
-    source = source_term.strip()
-    expected_target = expected_target_term.strip()
-    description = description.strip()
-
-    if source and expected_target:
-        problem_subject = f"{source} -> {expected_target}"
-    elif source:
-        problem_subject = source
-    elif expected_target:
-        problem_subject = f"-> {expected_target}"
-    else:
-        return description
-
-    if not description:
-        return problem_subject
-    return f"{problem_subject}：{description}"
-
-
-def insert_row_problem_column(
-    worksheet,
-    target_column: str,
-    row_problem_texts: Mapping[int, str],
-) -> None:
-    target_column_index = column_index_from_string(target_column.strip().upper())
-    problem_column_index = target_column_index + 1
-
-    worksheet.insert_cols(problem_column_index)
-    worksheet.cell(1, problem_column_index, ROW_PROBLEM_COLUMN_HEADER)
-    for row_index, problem_text in sorted(row_problem_texts.items()):
-        if problem_text:
-            worksheet.cell(row_index, problem_column_index, problem_text)

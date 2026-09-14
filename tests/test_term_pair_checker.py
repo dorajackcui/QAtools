@@ -31,9 +31,12 @@ class ExtractTermsTests(unittest.TestCase):
         )
 
     def test_workbook_output_helpers_are_available_from_focused_module(self) -> None:
-        from tools.term_pair_checker.workbook_output import build_row_problem_summaries
+        from tools.term_pair_checker.workbook_output import write_problem_sheet
 
-        summaries = build_row_problem_summaries(
+        workbook = Workbook()
+        self.addCleanup(workbook.close)
+        write_problem_sheet(
+            workbook, workbook.active.title, "B",
             [
                 term_pair_module.ProblemEntry(
                     row_index=7,
@@ -58,13 +61,9 @@ class ExtractTermsTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            summaries,
-            {
-                7: (
-                    "“Alpha” → “ALPHA_OK”（历史术语表）\n"
-                    "“Beta” → “BETA_OK”（当前：“WRONG”；本批次新增）"
-                )
-            },
+            workbook["问题列"]["D2"].value,
+            "“Alpha” → “ALPHA_OK”（历史术语表）\n"
+            "“Beta” → “BETA_OK”（当前：“WRONG”；本批次新增）",
         )
 
     def test_extract_terms_supports_selected_term_marks_in_text_order(self) -> None:
@@ -293,11 +292,9 @@ class ProcessExcelTests(unittest.TestCase):
             data_sheet = result_workbook["Data"]
             self.assertEqual(data_sheet["A1"].value, "source")
             self.assertEqual(data_sheet["B1"].value, "target")
-            self.assertEqual(data_sheet["C1"].value, "术语QA问题")
-            self.assertIsNone(data_sheet["C2"].value)
-            self.assertIsNone(data_sheet["C3"].value)
+            self.assertEqual(data_sheet.max_column, 2)
             self.assertEqual(
-                data_sheet["C4"].value,
+                result_workbook["问题列"]["D2"].value,
                 (
                     "术语标记数量不一致：原文 2 个，译文 1 个\n"
                     "“Beta” → “BETA_OK”（本批次新增）"
@@ -343,8 +340,9 @@ class ProcessExcelTests(unittest.TestCase):
 
             result_workbook = load_workbook(saved_path)
             data_sheet = result_workbook["Data"]
-            self.assertIn("Attack", data_sheet["C4"].value)
-            self.assertNotIn("Battle_Target_Enemy", data_sheet["C4"].value)
+            self.assertEqual(data_sheet.max_column, 2)
+            self.assertIn("Attack", result_workbook["问题列"]["D2"].value)
+            self.assertNotIn("Battle_Target_Enemy", result_workbook["问题列"]["D2"].value)
 
             problem_sheet = result_workbook[term_pair_module.PROBLEM_SHEET_NAME]
             self.assertEqual(problem_sheet.max_row, 2)
@@ -451,7 +449,8 @@ class ProcessExcelTests(unittest.TestCase):
             expected_problem = (
                 "“Sunlight” → “Rayon Soleil”（当前：“Lumiere solaire”；本批次新增）"
             )
-            self.assertEqual(data_sheet["C3"].value, expected_problem)
+            self.assertEqual(data_sheet.max_column, 2)
+            self.assertEqual(result_workbook["问题列"]["D2"].value, expected_problem)
 
             problem_sheet = result_workbook["问题列"]
             self.assertEqual(problem_sheet.max_row, 2)

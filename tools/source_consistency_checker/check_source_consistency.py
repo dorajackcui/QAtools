@@ -14,12 +14,14 @@ if __package__ in {None, ""}:
 from openpyxl.utils import column_index_from_string
 
 from tools.consistency_text import normalize_consistency_text
+from tools.report_text import format_consistency_variants
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
     find_last_value_row,
     load_workbook_for_editing,
     validate_distinct_source_target_columns,
+    validate_report_output_path,
     write_output_table,
 )
 
@@ -104,6 +106,7 @@ def process_excel(
         else build_default_output_path(input_path)
     )
 
+    validate_report_output_path(input_path, output_path)
     workbook = load_workbook_for_editing(input_path)
     try:
         summary = process_workbook(
@@ -171,9 +174,7 @@ def process_workbook(
 
         inconsistent_source_count += 1
         grouped_rows = "、".join(str(occurrence.row_index) for occurrence in occurrences)
-        description = f"{len(target_variants)} 种译法：" + "；".join(
-            f"{index}: {text}" for index, text in enumerate(target_variants.values(), 1)
-        )
+        description = format_consistency_variants(list(target_variants.values()), "译法")
         for occurrence in occurrences:
             problem_entries.append(
                 (

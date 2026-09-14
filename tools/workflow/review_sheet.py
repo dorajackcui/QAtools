@@ -10,6 +10,11 @@ from openpyxl.comments import Comment
 from openpyxl.styles import PatternFill
 
 from tools.consistency_text import normalize_consistency_text
+from tools.report_text import (
+    CHECK_DESCRIPTION_LIMIT,
+    EXCEL_CELL_TEXT_LIMIT,
+    truncate_report_text,
+)
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     join_unique_text,
@@ -49,7 +54,7 @@ class _ReviewEntry:
     source_text: str = ""
     target_text: str = ""
     check_items: list[str] = field(default_factory=list)
-    descriptions: list[str] = field(default_factory=list)
+    descriptions: dict[str, list[str]] = field(default_factory=dict)
 
 
 def cell_text(value: object) -> str:
@@ -155,8 +160,9 @@ def collect_review_rows(
                 if combined_description
                 else f"【{check_item}】"
             )
-            if formatted_description not in entry.descriptions:
-                entry.descriptions.append(formatted_description)
+            descriptions = entry.descriptions.setdefault(check_item, [])
+            if formatted_description not in descriptions:
+                descriptions.append(formatted_description)
 
     return [
         (
@@ -164,11 +170,24 @@ def collect_review_rows(
             entry.source_text,
             entry.target_text,
             None,
-            join_unique_text(entry.descriptions),
+            _bounded_descriptions(entry),
             join_unique_text(entry.check_items),
         )
         for row_number, entry in _ordered_review_entries(entries_by_row)
     ]
+
+
+def _bounded_descriptions(entry: _ReviewEntry) -> str:
+    # Give each check a separate budget, including its label and truncation
+    # notice, so an early long description cannot hide later checks.
+    count = len(entry.descriptions)
+    if not count:
+        return ""
+    budget = min(CHECK_DESCRIPTION_LIMIT, (EXCEL_CELL_TEXT_LIMIT - count + 1) // count)
+    return join_unique_text(
+        truncate_report_text(join_unique_text(descriptions), budget)
+        for descriptions in entry.descriptions.values()
+    )
 
 
 def write_review_metadata(
@@ -180,7 +199,6 @@ def write_review_metadata(
     target_column: str,
     start_row: int,
     generated_sheet_names: Iterable[str],
-    remove_term_helper: bool,
 ) -> None:
     for sheet_name in workbook.sheetnames:
         if sheet_name.casefold() != WORKFLOW_METADATA_SHEET_NAME.casefold():
@@ -207,7 +225,6 @@ def write_review_metadata(
         ("target_column", target_column),
         ("start_row", start_row),
         ("generated_sheet_names", "\n".join(generated_sheet_names)),
-        ("remove_term_helper", "1" if remove_term_helper else "0"),
     )
     for row_index, (key, value) in enumerate(metadata, start=1):
         worksheet.cell(row_index, 1, key)
@@ -257,7 +274,6 @@ def write_review_sheet(
     start_row: int,
     problem_sheets: Iterable[tuple[str, str]],
     generated_sheet_names: Iterable[str],
-    remove_term_helper: bool,
 ) -> int:
     rows = collect_review_rows(workbook, problem_sheets)
     worksheet = write_output_table(
@@ -296,6 +312,5 @@ def write_review_sheet(
         target_column=target_column,
         start_row=start_row,
         generated_sheet_names=generated_sheet_names,
-        remove_term_helper=remove_term_helper,
     )
     return len(rows)

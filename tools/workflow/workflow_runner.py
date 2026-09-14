@@ -21,10 +21,10 @@ from tools.content_fidelity_checker.check_content_fidelity import (
     process_workbook as run_content_fidelity_check_workbook,
 )
 from tools.excel_output import (
-    ROW_PROBLEM_COLUMN_HEADER,
     build_prefixed_output_path,
     load_workbook_for_editing,
     validate_distinct_source_target_columns,
+    validate_report_output_path,
 )
 from tools.line_break_checker.check_line_breaks import (
     PROBLEM_SHEET_NAME as LINE_BREAK_PROBLEM_SHEET_NAME,
@@ -173,7 +173,7 @@ def finalize_workflow_output(
         if worksheet_title == WORKFLOW_SUMMARY_SHEET_NAME:
             raise ValueError(f"数据工作表名称不能为 {WORKFLOW_SUMMARY_SHEET_NAME}")
 
-        if TAG_SUMMARY_SHEET_NAME in workbook.sheetnames:
+        if run_tag_check and TAG_SUMMARY_SHEET_NAME in workbook.sheetnames:
             del workbook[TAG_SUMMARY_SHEET_NAME]
         if WORKFLOW_SUMMARY_SHEET_NAME in workbook.sheetnames:
             del workbook[WORKFLOW_SUMMARY_SHEET_NAME]
@@ -218,18 +218,11 @@ def finalize_workflow_output(
             start_row=start_row,
             problem_sheets=problem_sheets,
             generated_sheet_names=generated_sheet_names,
-            remove_term_helper=False,
         )
 
         for _, problem_sheet_name in problem_sheets:
             if problem_sheet_name in workbook.sheetnames:
                 del workbook[problem_sheet_name]
-
-        if run_term_pair_check:
-            data_sheet = workbook[worksheet_title]
-            helper_column_index = column_index_from_string(target_column) + 1
-            if data_sheet.cell(1, helper_column_index).value == ROW_PROBLEM_COLUMN_HEADER:
-                data_sheet.delete_cols(helper_column_index)
 
         summary_sheet = workbook.create_sheet(WORKFLOW_SUMMARY_SHEET_NAME)
         summary_sheet.append(["检查项", "问题行数"])
@@ -336,6 +329,7 @@ def run_workflow(
         else build_default_output_path(input_path)
     )
 
+    validate_report_output_path(input_path, output_path)
     worksheet_title = sheet or ""
     term_count = 0
     term_problem_count = 0
@@ -358,6 +352,9 @@ def run_workflow(
     checked_source_terms: set[str] = set()
     workflow_workbook = load_workbook_for_editing(input_path)
     try:
+        # Rebuilding result sheets can change the active sheet's numeric index.
+        # Resolve the input once so every checker reads the same business sheet.
+        sheet = workflow_workbook[sheet].title if sheet else workflow_workbook.active.title
         # Each checker sheet is transient: the finalizer merges its values into
         # 问题处理 and deletes it. Skip styling and hyperlinks that cannot survive.
         if run_term_pair_check:
@@ -383,7 +380,6 @@ def run_workflow(
                 history_target_column=term_history_target_column,
                 history_start_row=term_history_start_row,
                 checked_source_terms=checked_source_terms if run_substring_consistency_check else None,
-                include_row_problem_column=False,
                 format_output=False,
             )
 

@@ -46,7 +46,7 @@ class WorkflowMetadataTests(unittest.TestCase):
                 self.workbook, current_sheet_name="Data", input_file=self.root / "original.xlsx",
                 source_column="A", target_column="B", start_row=2,
                 problem_sheets=[("Tag 检查", "Issues")],
-                generated_sheet_names=[WORKFLOW_REVIEW_SHEET_NAME], remove_term_helper=False,
+                generated_sheet_names=[WORKFLOW_REVIEW_SHEET_NAME],
             )
         finally:
             del self.workbook["Issues"]

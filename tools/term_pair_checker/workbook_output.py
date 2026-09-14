@@ -48,16 +48,6 @@ def format_problem_entry(entry: "ProblemEntry") -> str:
     return f"{mapping}（{'；'.join(details)}）" if details else mapping
 
 
-def build_row_problem_summaries(problem_entries: Iterable["ProblemEntry"]) -> dict[int, str]:
-    summaries_by_row: dict[int, list[str]] = {}
-    for entry in problem_entries:
-        summaries_by_row.setdefault(entry.row_index, []).append(format_problem_entry(entry))
-    return {
-        row_index: join_unique_text(summaries, separator="\n")
-        for row_index, summaries in summaries_by_row.items()
-    }
-
-
 def write_term_sheet(
     workbook,
     worksheet_title: str,

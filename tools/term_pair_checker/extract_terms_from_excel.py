@@ -29,7 +29,7 @@ from tools.history_tb import (
 )
 from tools.excel_output import (
     find_last_value_row,
-    insert_row_problem_column,
+    validate_report_output_path,
     load_workbook_for_editing,
     validate_distinct_source_target_columns,
 )
@@ -48,7 +48,6 @@ from tools.term_pair_checker.workbook_output import (
     PROBLEM_SHEET_NAME,
     TERM_SHEET_NAME,
     build_default_output_path,
-    build_row_problem_summaries,
     delete_legacy_term_sheets,
     write_problem_sheet,
     write_term_sheet,
@@ -571,7 +570,6 @@ def process_workbook(
     history_source_column: str | None = None,
     history_target_column: str | None = None,
     history_start_row: int = 2,
-    include_row_problem_column: bool = True,
     format_output: bool = True,
     checked_source_terms: set[str] | None = None,
 ) -> tuple[str, str, str, Path, int, int]:
@@ -815,13 +813,6 @@ def process_workbook(
 
     problem_entries = dedupe_problem_entries(problem_entries)
 
-    if include_row_problem_column:
-        insert_row_problem_column(
-            worksheet,
-            target_column,
-            build_row_problem_summaries(problem_entries),
-        )
-
     sorted_problem_entries = sorted(
         problem_entries,
         key=lambda entry: (
@@ -881,7 +872,6 @@ def process_excel(
     history_target_column: str | None = None,
     history_start_row: int = 2,
     output_file: str | Path | None = None,
-    include_row_problem_column: bool = True,
 ) -> tuple[str, str, str, Path, int, int]:
     if start_row < 1:
         raise ValueError("开始行必须大于等于 1。")
@@ -902,6 +892,7 @@ def process_excel(
         else build_default_output_path(input_path)
     )
 
+    validate_report_output_path(input_path, output_path)
     workbook = load_workbook_for_editing(input_path)
     try:
         result = process_workbook(
@@ -921,7 +912,6 @@ def process_excel(
             history_source_column=history_source_column,
             history_target_column=history_target_column,
             history_start_row=history_start_row,
-            include_row_problem_column=include_row_problem_column,
         )
         workbook.save(output_path)
         return result

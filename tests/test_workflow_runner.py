@@ -327,7 +327,7 @@ class WorkflowRunnerTests(unittest.TestCase):
             self.assertEqual(metadata["data_sheet_name"], "Data")
             self.assertEqual(metadata["source_column"], "A")
             self.assertEqual(metadata["target_column"], "B")
-            self.assertEqual(metadata["remove_term_helper"], "0")
+            self.assertNotIn("remove_term_helper", metadata)
             workbook.close()
 
     def test_workflow_loads_and_saves_the_main_workbook_once(self) -> None:

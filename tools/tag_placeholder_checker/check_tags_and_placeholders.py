@@ -25,6 +25,7 @@ from tools.excel_output import (
     load_workbook_for_editing,
     rebuild_output_sheet,
     validate_distinct_source_target_columns,
+    validate_report_output_path,
     write_output_table,
 )
 
@@ -611,6 +612,7 @@ def process_excel(
         else build_default_output_path(input_path)
     )
 
+    validate_report_output_path(input_path, output_path)
     workbook = load_workbook_for_editing(input_path)
     try:
         summary = process_workbook(
