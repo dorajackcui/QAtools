@@ -8,6 +8,7 @@ from tools.excel_batcher.qt_page import ExcelBatcherPage
 from tools.excel_merger.qt_page import ExcelMergerPage
 from tools.workflow.qt_page import WorkflowPage
 from tools.content_sync.qt_page import ContentSyncPage
+from tools.file_collector.qt_page import FileCollectorPage
 from tools.excel_utilities_pages import ColumnToolsPage, CompatibilityPage, DeepReplacePage, UntranslatedStatsPage
 
 
@@ -16,6 +17,7 @@ PAGE_FACTORIES = {
     "column_tools": ColumnToolsPage,
     "compatibility": CompatibilityPage,
     "deep_replace": DeepReplacePage,
+    "file_collector": FileCollectorPage,
     "untranslated_stats": UntranslatedStatsPage,
     "workflow": WorkflowPage,
     "phraseloom": PhraseLoomPage,

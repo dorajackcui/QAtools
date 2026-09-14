@@ -124,7 +124,7 @@ class ToolshubLayoutTests(unittest.TestCase):
         }
         self.assertEqual(grouped_tools["常用流程"], ["一键质量检查", "PhraseLoom", "内容同步"])
         self.assertEqual(list(grouped_tools), ["常用流程", "文件与表格", "翻译辅助"])
-        self.assertEqual(grouped_tools["文件与表格"], ["兼容性重存", "列操作", "Batch 拆分", "合并表格", "同名文件替换"])
+        self.assertEqual(grouped_tools["文件与表格"], ["兼容性重存", "列操作", "Batch 拆分", "合并表格", "同名文件替换", "文件提取"])
         self.assertEqual(
             grouped_tools["翻译辅助"],
             ["法语 NBSP 恢复", "未翻译统计", "Xbench QA 转换"],
@@ -146,12 +146,13 @@ class ToolshubLayoutTests(unittest.TestCase):
                     "column_tools",
                     "compatibility",
                     "deep_replace",
+                    "file_collector",
                     "untranslated_stats",
                     "xbench_report",
                     "settings",
                 },
             )
-            self.assertEqual(window.page_stack.count(), 12)
+            self.assertEqual(window.page_stack.count(), 13)
             self.assertIsInstance(window.tool_frames["workflow"], WorkflowPage)
             self.assertIsInstance(window.tool_frames["phraseloom"], PhraseLoomPage)
             self.assertIsInstance(window.tool_frames["settings"], SettingsPage)
@@ -326,6 +327,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                 window.tool_frames["column_tools"].run_button,
                 window.tool_frames["compatibility"].run_button,
                 window.tool_frames["deep_replace"].run_button,
+                window.tool_frames["file_collector"].run_button,
                 window.tool_frames["untranslated_stats"].run_button,
                 window.tool_frames["xbench_report"].run_button,
                 window.tool_frames["excel_batcher"].split_button,

@@ -25,7 +25,7 @@ QAtools-CLI.cmd，以及 _internal 下不再需要的 NumPy/OpenBLAS、PythonWin
 
 工具箱包含一键质量检查、PhraseLoom、法语 NBSP 恢复、Batch 拆分与复原、
 活动工作表合并、Xbench QA 转换、Master 与小表双向同步、列操作、兼容性重存、
-同名文件替换和未翻译统计。一键质量检查内含术语、双向及子串译文一致性、
+同名文件替换、文件提取和未翻译统计。一键质量检查内含术语、双向及子串译文一致性、
 Tag / Placeholder、换行、数字、URL 和 Target 文本质量检查。
 
 命令行

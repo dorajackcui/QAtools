@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import tempfile
 
 
@@ -76,7 +77,7 @@ def generated_directory(folder: Path) -> bool:
 
 
 def excel_files(folder: str | Path, *, extensions: Iterable[str] = EXCEL_EXTENSIONS,
-                exclude: Iterable[Path] = ()) -> tuple[list[Path], list[Path]]:
+                exclude: Iterable[Path] = (), skip_links: bool = False) -> tuple[list[Path], list[Path]]:
     root = Path(folder).expanduser().resolve()
     if not root.is_dir():
         raise ValueError(f"目录不存在: {root}")
@@ -85,6 +86,10 @@ def excel_files(folder: str | Path, *, extensions: Iterable[str] = EXCEL_EXTENSI
     extensions = set(extensions)
 
     def excluded_path(path: Path) -> bool:
+        if skip_links:
+            info = path.lstat()
+            if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+                return True  # Windows reparse points include directory junctions.
         resolved = path.resolve()
         return (not resolved.is_relative_to(root)
                 or any(resolved == item or resolved.is_relative_to(item) for item in excluded))

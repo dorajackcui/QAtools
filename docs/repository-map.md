@@ -55,6 +55,7 @@ qatools gui / toolshub_gui.py
 | 内容同步 | `tools/content_sync/master_to_target.py`、`target_to_master.py` | 同包 `qt_page.py` | [README](../tools/content_sync/README.md)、`test_content_sync*.py`、`test_momotools_utilities.py` |
 | 列操作 / 兼容性重存 | `tools/column_tools/processor.py`、`tools/excel_compatibility/processor.py` | `tools/excel_utilities_pages.py` | [列操作](../tools/column_tools/README.md)、[重存](../tools/excel_compatibility/README.md)、`test_momotools_utilities.py` |
 | 同名文件替换 / 未翻译统计 | `tools/deep_replace/replacer.py`、`tools/untranslated_stats/stats.py` | 同上 | [替换](../tools/deep_replace/README.md)、[统计](../tools/untranslated_stats/README.md)、`test_momotools_utilities.py` |
+| 文件提取 | `tools/file_collector/collector.py` | 同包 `qt_page.py` | [README](../tools/file_collector/README.md)、`test_file_collector.py`、`test_file_collector_gui.py` |
 | Batch 拆分与复原 | `tools/excel_batcher/excel_batcher.py` | 同包 `qt_page.py` | [README](../tools/excel_batcher/README.md)、`test_excel_batcher.py` |
 | 合并表格 | `tools/excel_merger/merge_active_sheets.py` | 同包 `qt_page.py` | [README](../tools/excel_merger/README.md)、`test_excel_merger.py` |
 | 法语 NBSP | `tools/french_nbsp_restorer/restore_french_nbsp.py` | 同包 `qt_page.py` | [README](../tools/french_nbsp_restorer/README.md)、`test_french_nbsp_restorer.py` |

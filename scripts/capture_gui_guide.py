@@ -63,6 +63,7 @@ def main():
 
         for key, name in (("phraseloom", "phraseloom"), ("content_sync", "sync-master-to-target"), ("compatibility", "compatibility"),
                           ("column_tools", "columns"), ("deep_replace", "deep-replace"),
+                          ("file_collector", "file-collector"),
                           ("excel_batcher", "batch-split"), ("excel_merger", "merge-sheets"),
                           ("french_nbsp", "french-nbsp"), ("xbench_report", "xbench"),
                           ("untranslated_stats", "untranslated-stats"), ("settings", "header-aliases")):

@@ -197,7 +197,7 @@ sys.meta_path.insert(0, Blocker())
 from qatools.cli import main
 commands = [['content-sync'], ['content-sync', 'master-to-target'], ['content-sync', 'target-to-master'],
             ['columns'], ['columns', 'clear'], ['columns', 'insert'], ['columns', 'delete'],
-            ['compatibility'], ['deep-replace'], ['untranslated-stats']]
+            ['compatibility'], ['deep-replace'], ['collect-files'], ['untranslated-stats']]
 for command in commands:
     assert main(command + ['--help']) == 0
 '''

@@ -60,6 +60,7 @@ GUI 表单不显示常驻说明段落，保留输入标签、占位提示、输�
 | 文件与表格 | [Batch 拆分](tools/excel_batcher/README.md) | `qatools batch` | 分批处理大型工作表并按原行位复原 |
 | 文件与表格 | [合并表格](tools/excel_merger/README.md) | `qatools merge-sheets` | 合并目录内工作簿的活动工作表 |
 | 文件与表格 | [同名文件替换](tools/deep_replace/README.md) | `qatools deep-replace` | 递归替换整个同名文件 |
+| 文件与表格 | [文件提取](tools/file_collector/README.md) | `qatools collect-files` | 按清单预览并提取 Excel，支持保留目录结构 |
 | 翻译辅助 | [法语 NBSP 恢复](tools/french_nbsp_restorer/README.md) | `qatools french-nbsp` | 恢复法语标点所需的不换行空格 |
 | 翻译辅助 | [未翻译统计](tools/untranslated_stats/README.md) | `qatools untranslated-stats` | 中文字符/英文词数及行数汇总 |
 | 翻译辅助 | [Xbench QA 转换](tools/xbench_report_transformer/README.md) | `qatools xbench` | 把 Xbench 报告转换为行级问题表 |

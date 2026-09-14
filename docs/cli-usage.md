@@ -52,6 +52,7 @@ qatools tag-check --help
 | `qatools columns` | 清空、插入或删除工作簿列 |
 | `qatools compatibility` | 用桌面 Excel 原格式重存工作簿 |
 | `qatools deep-replace` | 按文件名替换整个 Excel 文件 |
+| `qatools collect-files` | 按文件名清单提取 Excel 到新目录 |
 | `qatools untranslated-stats` | 统计工作簿未翻译量 |
 
 可用别名：
@@ -87,11 +88,35 @@ if ($LASTEXITCODE -ne 0) { throw "QAtools 执行失败" }
 
 ## 功能可用范围
 
+文件提取同时提供 GUI 预览和 CLI，调用与退出码见[文件提取](#文件提取)。
+
 内容同步双向、列操作、兼容性重存、同名文件替换和未翻译统计同时提供 GUI 与 CLI，
 共用业务处理器。命令及退出码见下方[目录批处理](#目录批处理)。
 
 同 Target 不同 Source、数字、URL、Target 文本规范通过 `qa --check` 使用，未单独登记命令。
 QA 的“应用修订”目前是 GUI 动作，也没有对应的 `qa` 子命令。
+
+## 文件提取
+
+```powershell
+qatools collect-files "D:\project" --names-file "D:\list.txt" -o "D:\delivery" --dry-run
+qatools collect-files "D:\project" --names-file "D:\list.txt" -o "D:\delivery" --preserve-tree
+```
+
+| 参数 | 用途 |
+|---|---|
+| `source_dir` | 必填，递归扫描的来源目录 |
+| `--names-file` | 必填，UTF-8 TXT 文件名清单，支持 BOM |
+| `-o / --output-dir` | 必填，新输出目录 |
+| `--preserve-tree` | 保留来源相对路径；省略则平铺 |
+| `--comma-separated` | 在换行和 Tab 之外，额外按中英文逗号分隔 |
+| `--dry-run` | 只展示匹配计划，不创建目录或复制文件 |
+| `--quiet` | 隐藏逐文件成功日志，保留摘要、失败、跳过和未找到信息 |
+
+退出码：`0` 完整成功（预览时表示全部可复制）；`3` 有未找到、冲突、跳过或部分失败；
+`1` 启动/复核失败或全部复制失败；`2` 命令参数错误。没有匹配项返回 `3`。
+`--dry-run` 不保存跨进程计划；正式命令会重新扫描、复核再复制。
+匹配、重名与输出契约见[文件提取 README](../tools/file_collector/README.md)。
 
 ## 一键质量检查
 

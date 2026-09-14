@@ -28,6 +28,7 @@
             <a data-tool="excel_batcher" href="#excel-batcher">Batch 拆分</a>
             <a data-tool="excel_merger" href="#excel-merger">合并表格</a>
             <a data-tool="deep_replace" href="#deep-replace">同名文件替换</a>
+            <a data-tool="file_collector" href="#file-collector">文件提取</a>
           </div>
           <div class="nav-section">
             <div class="nav-group">翻译辅助</div>
@@ -645,6 +646,26 @@
           <p>在日志中找到本次备份目录，将备份文件按相同相对路径复制回目标目录。每次原位替换有独立备份，放在目标目录的 <code>.qatools-backups</code> 内；软件暂不提供恢复按钮。</p>
           <p>来源文件不修改。另存模式会保留目标树中的未匹配与冲突 Excel 文件，不复制非 Excel 文件。</p>
         </section>
+        <section class="guide-tool" data-tool="file_collector" id="file-collector" aria-labelledby="file-collector-title">
+          <header class="tool-heading">
+            <p class="eyebrow">文件与表格</p>
+            <h2 id="file-collector-title">文件提取</h2>
+            <p class="tool-intro">按文件名清单收集需要的 Excel 文件，先预览，再复制到新目录。</p>
+          </header>
+          <ol class="steps">
+            <li><strong>准备清单</strong><span>选择【来源目录】，在【文件名列表】粘贴 Excel 单列，或【导入 TXT】读取 UTF-8 清单。文件名可以带 Excel 扩展名。</span></li>
+            <li><strong>指定输出</strong><span>填写尚不存在的【新输出目录】，可修改自动建议的位置。按需勾选【保留来源目录结构】或【同时按中英文逗号分隔】。</span></li>
+            <li><strong>预览匹配</strong><span>点击【预览匹配】，核对来源路径、输出路径和状态。需要处理平铺重名时，可改用保留结构，再次预览。</span></li>
+            <li><strong>复制与查看结果</strong><span>点击【复制可用文件】，查看逐文件结果和【查看日志】，完成后可【打开输出目录】。改变输入后需要重新预览。</span></li>
+          </ol>
+          <details class="screenshot-detail">
+            <summary>查看界面截图</summary>
+            <figure class="shot">
+              <img src="assets/file-collector.png" alt="文件提取：来源、输出、文件名清单和匹配预览表。" loading="lazy" width="1260" height="820">
+              <figcaption>文件提取：输入清单后预览匹配，再复制可用文件。</figcaption>
+            </figure>
+          </details>
+        </section>
         <section class="guide-tool" data-tool="french_nbsp" id="french-nbsp" aria-labelledby="french-nbsp-title">
           <header class="tool-heading">
             <p class="eyebrow">翻译辅助</p>
@@ -737,7 +758,7 @@
         <div class="guide-support">
           <section id="operation-logs">
             <h2>运行日志与输出位置</h2>
-            <p>内容同步、兼容性重存、列操作、同名文件替换和未翻译统计的底部“查看日志”打开独立小弹窗。正常文件使用一行摘要，失败或冲突补充必要原因；关闭弹窗不会停止任务，再打开可以继续查看。</p>
+            <p>内容同步、兼容性重存、列操作、同名文件替换、文件提取和未翻译统计的底部“查看日志”打开独立小弹窗。正常文件使用一行摘要，失败或冲突补充必要原因；关闭弹窗不会停止任务，再打开可以继续查看。</p>
             <figure class="shot compact-shot">
               <img src="assets/operation-logs.png" alt="实际临时样本同步的简约运行日志：有效身份、文件结果和最终摘要" loading="lazy" width="740" height="420">
               <figcaption>临时示例的实际运行日志；截图省略含临时目录的两条开头记录。</figcaption>

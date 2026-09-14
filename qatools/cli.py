@@ -117,6 +117,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("columns", "清空、插入或删除工作簿列", "tools.column_tools.cli", "argv"),
     CommandSpec("compatibility", "用 Microsoft Excel 原格式重存工作簿", "tools.excel_compatibility.cli", "argv"),
     CommandSpec("deep-replace", "按文件名替换整个 Excel 文件", "tools.deep_replace.cli", "argv"),
+    CommandSpec("collect-files", "按文件名清单提取 Excel 文件到新目录", "tools.file_collector.cli", "argv"),
     CommandSpec("untranslated-stats", "统计目录内工作簿的未翻译量", "tools.untranslated_stats.cli", "argv"),
 )
 
