@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <meta name="description" content="QAtools 图形界面使用指南：质量检查、PhraseLoom、内容同步、文件与表格及翻译辅助。">
-    <title>QA tools handbook · GUI 使用手册</title>
+    <title>QAtools handbook · GUI 使用手册</title>
     <link rel="stylesheet" href="guide.css">
     <script src="guide.js" defer></script>
   </head>
@@ -13,7 +13,7 @@
     <a class="skip-link" href="#main-content">跳到正文</a>
     <div class="layout">
       <aside class="sidebar" aria-label="工具导航">
-        <a class="brand" href="#main-content">QAtools<small>图形界面使用指南</small></a>
+        <a class="brand" href="#main-content">QAtools<span class="brand-dot" aria-hidden="true">.</span><small>图形界面使用指南</small></a>
         <nav id="tool-navigation" aria-label="与软件一致的工具导航">
           <div class="nav-section">
             <div class="nav-group">常用流程</div>
@@ -42,17 +42,17 @@
       <main id="main-content" tabindex="-1">
         <header class="hero" id="navigation">
           <p class="cover-label">GUI 使用手册</p>
-          <h1 lang="en"><span class="cover-name">QA tools</span> <span class="cover-handbook">handbook</span></h1>
+          <h1 lang="en"><span class="cover-name">QAtools<span class="brand-dot" aria-hidden="true">.</span></span> <span class="cover-handbook">handbook</span></h1>
           <p class="cover-description">本地化质量检查与表格处理。</p>
           <div class="cover-footer">
-            <div class="hero-links"><a href="#workflow">开始阅读 →</a><a href="#operation-logs">日志与输出</a><a href="#troubleshooting">常见问题</a></div>
-            <p class="updated">2026.09.11 · 离线版</p>
+            <div class="hero-links"><a class="primary-link" href="#workflow">开始阅读 →</a><a href="#operation-logs">日志与输出</a><a href="#troubleshooting">常见问题</a></div>
+            <p class="updated">2026.09.15 · 离线版</p>
           </div>
         </header>
         <section class="guide-tool" data-tool="workflow" id="workflow" aria-labelledby="workflow-title">
           <header class="tool-heading">
             <p class="eyebrow">常用流程</p>
-            <h2 id="workflow-title">一键质量检查</h2>
+            <h2 id="workflow-title">一键质量检查<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">选择检查项目，一次生成报告；在报告中填写修订，再回到软件应用。</p>
           </header>
           <nav class="local-toc" aria-label="一键质量检查正文目录"><strong>本节内容</strong><a href="#quick-start">快速上手</a><a href="#input">输入与范围</a><a href="#checks">检查项目</a><a href="#term-settings">术语设置</a><a href="#tag-settings">Tag 设置</a><a href="#target-settings">文本规范</a><a href="#substring-settings">子串设置</a><a href="#report">查看报告</a><a href="#revision">应用修订</a></nav>
@@ -365,7 +365,7 @@
         <section class="guide-tool" data-tool="phraseloom" id="phraseloom" aria-labelledby="phraseloom-title">
           <header class="tool-heading">
             <p class="eyebrow">常用流程</p>
-            <h2 id="phraseloom-title">PhraseLoom</h2>
+            <h2 id="phraseloom-title">PhraseLoom<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">把待翻译内容整理成 Strings 清单，翻译完成后还原到原工作簿结构。</p>
           </header>
           <ol class="steps">
@@ -417,7 +417,7 @@
         <section class="guide-tool" data-tool="content_sync" id="content-sync" aria-labelledby="content-sync-title">
           <header class="tool-heading">
             <p class="eyebrow">常用流程</p>
-            <h2 id="content-sync-title">内容同步</h2>
+            <h2 id="content-sync-title">内容同步<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">按 Key + 原文精确匹配，双向搬运译文；两个方向在同一页面切换 Tab。</p>
           </header>
           <p>在“常用流程 → 内容同步”中切换两个 Tab。二者分别保留配置、结果和日志，切换不会停止后台任务。</p>
@@ -486,7 +486,7 @@
         <section class="guide-tool" data-tool="compatibility" id="compatibility" aria-labelledby="compatibility-title">
           <header class="tool-heading">
             <p class="eyebrow">文件与表格</p>
-            <h2 id="compatibility-title">兼容性重存</h2>
+            <h2 id="compatibility-title">兼容性重存<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">用桌面 Microsoft Excel 打开并重新保存工作簿，供需要 Excel 原生保存的后续流程使用。</p>
           </header>
           <ol class="steps">
@@ -510,7 +510,7 @@
         <section class="guide-tool" data-tool="column_tools" id="columns" aria-labelledby="columns-title">
           <header class="tool-heading">
             <p class="eyebrow">文件与表格</p>
-            <h2 id="columns-title">列操作</h2>
+            <h2 id="columns-title">列操作<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">批量清空列内容、插入一列或删除整列。此工具需要桌面 Microsoft Excel。</p>
           </header>
           <ol class="steps">
@@ -558,7 +558,7 @@
         <section class="guide-tool" data-tool="excel_batcher" id="excel-batcher" aria-labelledby="excel-batcher-title">
           <header class="tool-heading">
             <p class="eyebrow">文件与表格</p>
-            <h2 id="excel-batcher-title">Batch 拆分</h2>
+            <h2 id="excel-batcher-title">Batch 拆分<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">先按数据行数分成小批次，处理完成后再按原始行位复原。</p>
           </header>
           <div class="two-col">
@@ -604,7 +604,7 @@
         <section class="guide-tool" data-tool="excel_merger" id="excel-merger" aria-labelledby="excel-merger-title">
           <header class="tool-heading">
             <p class="eyebrow">文件与表格</p>
-            <h2 id="excel-merger-title">合并表格</h2>
+            <h2 id="excel-merger-title">合并表格<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">将目录内各工作簿当前活动的工作表，汇总到一张新的 MergedData 表。</p>
           </header>
           <ol class="steps">
@@ -625,7 +625,7 @@
         <section class="guide-tool" data-tool="deep_replace" id="deep-replace" aria-labelledby="deep-replace-title">
           <header class="tool-heading">
             <p class="eyebrow">文件与表格</p>
-            <h2 id="deep-replace-title">同名文件替换</h2>
+            <h2 id="deep-replace-title">同名文件替换<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">按完整文件名匹配，将来源文件替换到目标位置；替换的是整个文件。</p>
           </header>
           <ol class="steps">
@@ -649,7 +649,7 @@
         <section class="guide-tool" data-tool="file_collector" id="file-collector" aria-labelledby="file-collector-title">
           <header class="tool-heading">
             <p class="eyebrow">文件与表格</p>
-            <h2 id="file-collector-title">文件提取</h2>
+            <h2 id="file-collector-title">文件提取<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">按文件名清单收集需要的 Excel 文件，先预览，再复制到新目录。</p>
           </header>
           <ol class="steps">
@@ -669,7 +669,7 @@
         <section class="guide-tool" data-tool="french_nbsp" id="french-nbsp" aria-labelledby="french-nbsp-title">
           <header class="tool-heading">
             <p class="eyebrow">翻译辅助</p>
-            <h2 id="french-nbsp-title">法语 NBSP 恢复</h2>
+            <h2 id="french-nbsp-title">法语 NBSP 恢复<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">修复法语标点周围的不换行空格，生成新的 Excel，原文件保持不变。</p>
           </header>
           <ol class="steps">
@@ -693,7 +693,7 @@
         <section class="guide-tool" data-tool="untranslated_stats" id="untranslated-stats" aria-labelledby="untranslated-stats-title">
           <header class="tool-heading">
             <p class="eyebrow">翻译辅助</p>
-            <h2 id="untranslated-stats-title">未翻译统计</h2>
+            <h2 id="untranslated-stats-title">未翻译统计<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">按文件统计未翻译量与总量，汇总为一张 Excel 统计表。</p>
           </header>
           <ol class="steps">
@@ -716,7 +716,7 @@
         <section class="guide-tool" data-tool="xbench_report" id="xbench-report" aria-labelledby="xbench-report-title">
           <header class="tool-heading">
             <p class="eyebrow">翻译辅助</p>
-            <h2 id="xbench-report-title">Xbench QA 转换</h2>
+            <h2 id="xbench-report-title">Xbench QA 转换<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">把 Xbench 导出的 QA Report 整理成便于筛选、修订的五列表格。</p>
           </header>
           <ol class="steps">
@@ -737,7 +737,7 @@
         <section class="guide-tool" data-tool="settings" id="settings" aria-labelledby="settings-title">
           <header class="tool-heading">
             <p class="eyebrow">侧栏底部</p>
-            <h2 id="settings-title">设置</h2>
+            <h2 id="settings-title">设置<span class="brand-dot" aria-hidden="true">.</span></h2>
             <p class="tool-intro">为项目使用的 Source / Target 表头建立别名，减少每次选择文件后的手动配置。</p>
           </header>
           <ol class="steps">
