@@ -26,6 +26,7 @@ qatools gui / toolshub_gui.py
 | CLI 分发、别名、帮助 | [qatools/cli.py](../qatools/cli.py) | `test_qatools_cli.py` |
 | 目录工具 CLI 公共参数、摘要与退出码 | [batch_cli.py](../tools/batch_cli.py)；工具包内 `cli.py` | `test_new_tools_cli.py` |
 | 主窗口、导航、退出保护 | [toolshub_gui.py](../toolshub_gui.py) | `test_toolshub_gui.py` |
+| 应用图标母图与 Windows 图标 | [图标资源与导出](../packaging/ICON.md) | `test_windows_packaging.py`；多尺寸辨识度与 ICO 解码检查 |
 | 页面注册 | [tools/qt_pages.py](../tools/qt_pages.py) | 同上 |
 | 已运行实例的页面跳转 | [qt_navigation.py](../tools/qt_navigation.py) | `test_gui_entries.py` |
 | Qt 主题、输入控件、线程池 | [qt_gui_common.py](../tools/qt_gui_common.py) | GUI 回归 |
