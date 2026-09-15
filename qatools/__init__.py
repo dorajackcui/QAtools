@@ -1,3 +1,3 @@
 """Unified command-line entry point for QAtools."""
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
