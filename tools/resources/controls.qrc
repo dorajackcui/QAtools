@@ -1,0 +1,8 @@
+<RCC>
+  <qresource prefix="/qatools/controls">
+    <file alias="spin-up.svg">spin-up.svg</file>
+    <file alias="spin-down.svg">spin-down.svg</file>
+    <file alias="spin-up-disabled.svg">spin-up-disabled.svg</file>
+    <file alias="spin-down-disabled.svg">spin-down-disabled.svg</file>
+  </qresource>
+</RCC>

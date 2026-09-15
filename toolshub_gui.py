@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 from dataclasses import dataclass
+from html import escape
 import os
 import sys
 
@@ -29,8 +30,10 @@ from PySide6.QtWidgets import (
 from tools.header_aliases import HeaderAliasStore
 from tools.qt_navigation import ToolNavigationServer, send_tool_selection
 from tools.qt_gui_common import (
+    ACCENT_COLOR,
     AsyncPage,
     BORDER_COLOR,
+    NavigationButton,
     SIDEBAR_BACKGROUND,
     create_qt_application,
     show_error,
@@ -165,10 +168,11 @@ class ToolshubApp(QMainWindow):
         workspace = QWidget()
         workspace.setObjectName("toolshubWorkspace")
         workspace_layout = QVBoxLayout(workspace)
-        workspace_layout.setContentsMargins(16, 14, 16, 12)
-        workspace_layout.setSpacing(7)
+        workspace_layout.setContentsMargins(16, 16, 16, 12)
+        workspace_layout.setSpacing(12)
         self.title_label = QLabel()
         self.title_label.setObjectName("pageTitle")
+        self.title_label.setTextFormat(Qt.TextFormat.RichText)
         workspace_layout.addWidget(self.title_label)
         self.page_stack = QStackedWidget()
         self.page_stack.setObjectName("toolPageStack")
@@ -203,7 +207,8 @@ class ToolshubApp(QMainWindow):
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(12, 16, 10, 12)
         layout.setSpacing(2)
-        brand = QLabel("QAtools")
+        brand = QLabel(f'QAtools<span style="color: {ACCENT_COLOR}">.</span>')
+        brand.setAccessibleName("QAtools")
         brand.setObjectName("brandLabel")
         layout.addWidget(brand)
         self.nav_group = QButtonGroup(self)
@@ -230,10 +235,7 @@ class ToolshubApp(QMainWindow):
             category.setContentsMargins(8, 4, 8, 5)
             nav_layout.addWidget(category)
             for tool in group.tools:
-                button = QPushButton(tool.title)
-                button.setProperty("navItem", True)
-                button.setCheckable(True)
-                button.setCursor(Qt.CursorShape.PointingHandCursor)
+                button = NavigationButton(tool.title)
                 button.clicked.connect(lambda _checked=False, key=tool.key: self.select_tool(key))
                 self.nav_group.addButton(button)
                 self.nav_buttons[tool.key] = button
@@ -246,11 +248,8 @@ class ToolshubApp(QMainWindow):
         self.nav_scroll.setStyleSheet(f"QScrollArea {{ background: {SIDEBAR_BACKGROUND}; }}")
         self.nav_scroll.setWidget(navigation)
         layout.addWidget(self.nav_scroll, 1)
-        settings_button = QPushButton("⚙  设置")
+        settings_button = NavigationButton("⚙  设置")
         settings_button.setObjectName("settingsNavButton")
-        settings_button.setProperty("navItem", True)
-        settings_button.setCheckable(True)
-        settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
         settings_button.clicked.connect(
             lambda _checked=False: self.select_tool(SETTINGS_ITEM.key)
         )
@@ -272,7 +271,8 @@ class ToolshubApp(QMainWindow):
         page = self.tool_frames[key]
         self.current_tool_key = key
         self.current_tool_frame = page
-        self.title_label.setText(tool.title)
+        self.title_label.setText(f'{escape(tool.title)}<span style="color: {ACCENT_COLOR}">.</span>')
+        self.title_label.setAccessibleName(tool.title)
         self.nav_buttons[key].setChecked(True)
         self.page_stack.setCurrentWidget(page)
         if key != SETTINGS_ITEM.key:

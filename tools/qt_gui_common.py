@@ -7,10 +7,11 @@ import os
 import sys
 from typing import Any
 
-from PySide6.QtCore import QObject, QPointF, QRunnable, QRectF, Qt, QThreadPool, Signal, Slot
+from PySide6.QtCore import QEvent, QObject, QPointF, QRunnable, QRectF, Qt, QThreadPool, Signal, Slot
 from PySide6.QtGui import QColor, QFontDatabase, QPainter, QPainterPath, QPalette, QPen
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -18,35 +19,92 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProxyStyle,
     QPushButton,
+    QRadioButton,
     QSizePolicy,
     QStyle,
     QStyleOption,
+    QTabBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from tools import qt_control_resources  # noqa: F401 - registers embedded control icons
 
-# Warm, opaque light tokens derived from the user's Codex theme reference. The
-# supplied surface, ink, and accent remain the three anchors; nearby elevations
-# are deliberately subtle so structure is felt without adding visual noise.
-APP_BACKGROUND = "#f9f9f7"
-SIDEBAR_BACKGROUND = "#f1f1ee"
+# YIZHI visual reference 1.1 (2026-09-15), adapted to compact desktop forms.
+# Brand, actions, selection and keyboard focus have separate semantic roles.
+# See docs/gui-conventions.md for the desktop adaptation.
+APP_BACKGROUND = "#ffffff"
+SIDEBAR_BACKGROUND = "#f7f7f5"
 CARD_BACKGROUND = "#ffffff"
-INPUT_BACKGROUND = "#f4f4f1"
-BORDER_COLOR = "#deded8"
-BORDER_STRONG_COLOR = "#c6c6bf"
-TEXT_COLOR = "#2d2d2b"
-MUTED_TEXT_COLOR = "#6f6f6a"
-SUBTLE_TEXT_COLOR = "#989892"
-ACCENT_COLOR = "#cc7d5e"
-ACCENT_HOVER_COLOR = "#b96e51"
-ACCENT_PRESSED_COLOR = "#a86149"
-ACCENT_FOREGROUND_COLOR = "#ffffff"
+INPUT_BACKGROUND = "#f7f7f5"
+BUTTON_BACKGROUND = "#f0f0ed"
+BUTTON_BORDER_COLOR = "#e3e3dd"
+BORDER_COLOR = "#e9e9e5"
+CONTROL_BORDER_COLOR = "#deded8"
+BORDER_STRONG_COLOR = "#b6b6ac"
+INDICATOR_BORDER_COLOR = "#85857c"
+CONTROL_FOCUS_COLOR = "#96968c"
+TEXT_COLOR = "#2f2f2c"
+MUTED_TEXT_COLOR = "#707068"
+SUBTLE_TEXT_COLOR = MUTED_TEXT_COLOR
+ACCENT_COLOR = "#d97757"
+# A deeper brand orange keeps white action labels readable (4.66:1).
+PRIMARY_COLOR = "#b45b3c"
+PRIMARY_FOREGROUND_COLOR = "#ffffff"
+ACCENT_FOREGROUND_COLOR = PRIMARY_FOREGROUND_COLOR  # Compatibility import.
+PRIMARY_HOVER_COLOR = "#a65034"
+PRIMARY_PRESSED_COLOR = "#91442c"
+FOCUS_COLOR = "#2383e2"
+HOVER_BACKGROUND = "#f0f0ed"
+SELECTION_BACKGROUND = "#e9e9e5"
+PROGRESS_COLOR = "#b6b6ac"
+DISABLED_BACKGROUND = "#f7f7f5"
+DISABLED_TEXT_COLOR = "#85857c"
+DISABLED_BORDER_COLOR = "#d5d5ce"
 ERROR_COLOR = "#ff5f38"
 
 
+class NavigationButton(QPushButton):
+    """Keep mouse selection flat and show a focus border for keyboard navigation."""
+
+    def __init__(self, text: str, parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self._keyboard_focus = False
+        self.setProperty("navItem", True)
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def event(self, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.FocusIn:
+            self._keyboard_focus = event.reason() in (
+                Qt.FocusReason.TabFocusReason,
+                Qt.FocusReason.BacktabFocusReason,
+                Qt.FocusReason.ShortcutFocusReason,
+            )
+        elif event.type() == QEvent.Type.KeyPress:
+            self._keyboard_focus = True
+        elif event.type() == QEvent.Type.MouseButtonPress:
+            # A click may keep focus on the same button, with no FocusIn event.
+            self._keyboard_focus = False
+        else:
+            return super().event(event)
+        self.update()
+        return super().event(event)
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        if self.hasFocus() and self._keyboard_focus:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(QPen(QColor(CONTROL_FOCUS_COLOR), 1.0))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), 3, 3)
+            painter.end()
+
+
 class _ToolshubStyle(QProxyStyle):
-    """Draw accessible checkbox/radio indicators consistently on Win and macOS."""
+    """Draw flat, accessible control indicators consistently across platforms."""
 
     def drawPrimitive(
         self,
@@ -55,6 +113,24 @@ class _ToolshubStyle(QProxyStyle):
         painter: QPainter,
         widget: QWidget | None = None,
     ) -> None:
+        if element == QStyle.PrimitiveElement.PE_FrameFocusRect:
+            if isinstance(widget, QPushButton) or (
+                isinstance(widget, QToolButton) and widget.property("settingsButton")
+            ):
+                return  # The stylesheet already outlines the entire button.
+            focus_rect = option.rect
+            if isinstance(widget, (QCheckBox, QRadioButton)):
+                focus_rect = widget.rect()
+            elif isinstance(widget, QTabBar):
+                focus_rect = widget.tabRect(widget.currentIndex())
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            pen = QPen(QColor(CONTROL_FOCUS_COLOR), 1.0, Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QRectF(focus_rect).adjusted(1, 1, -1, -1), 3, 3)
+            painter.restore()
+            return
         if element == QStyle.PrimitiveElement.PE_IndicatorCheckBox:
             self._draw_checkbox(option, painter)
             return
@@ -75,11 +151,11 @@ class _ToolshubStyle(QProxyStyle):
         rect = QRectF(option.rect).adjusted(1.0, 1.0, -1.0, -1.0)
 
         if not enabled:
-            border, fill, mark = "#c8c8c2", "#ecece8", "#a1a19a"
+            border, fill, mark = DISABLED_BORDER_COLOR, DISABLED_BACKGROUND, DISABLED_TEXT_COLOR
         elif checked or partial:
-            border, fill, mark = ACCENT_COLOR, ACCENT_COLOR, ACCENT_FOREGROUND_COLOR
+            border, fill, mark = PRIMARY_COLOR, PRIMARY_COLOR, PRIMARY_FOREGROUND_COLOR
         else:
-            border = ACCENT_COLOR if hovered else "#aaa9a2"
+            border = MUTED_TEXT_COLOR if hovered else INDICATOR_BORDER_COLOR
             fill, mark = INPUT_BACKGROUND, TEXT_COLOR
 
         painter.save()
@@ -112,11 +188,11 @@ class _ToolshubStyle(QProxyStyle):
         rect = QRectF(option.rect).adjusted(1.0, 1.0, -1.0, -1.0)
 
         if not enabled:
-            border, fill, dot = "#c8c8c2", "#ecece8", "#a1a19a"
+            border, fill, dot = DISABLED_BORDER_COLOR, DISABLED_BACKGROUND, DISABLED_TEXT_COLOR
         elif checked:
-            border, fill, dot = ACCENT_COLOR, ACCENT_COLOR, ACCENT_FOREGROUND_COLOR
+            border, fill, dot = PRIMARY_COLOR, PRIMARY_COLOR, PRIMARY_FOREGROUND_COLOR
         else:
-            border = ACCENT_COLOR if hovered else "#aaa9a2"
+            border = MUTED_TEXT_COLOR if hovered else INDICATOR_BORDER_COLOR
             fill, dot = INPUT_BACKGROUND, TEXT_COLOR
 
         painter.save()
@@ -139,7 +215,7 @@ def configure_qt_application(app: QApplication) -> None:
     app.setOrganizationName("QAtools")
     app.setStyle(_ToolshubStyle("Fusion"))
     available_fonts = set(QFontDatabase.families())
-    for preferred_font in ("Geist", "Inter"):
+    for preferred_font in ("Inter",):
         if preferred_font in available_fonts:
             ui_font = app.font()
             ui_font.setFamily(preferred_font)
@@ -153,14 +229,14 @@ def configure_qt_application(app: QApplication) -> None:
     palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(TEXT_COLOR))
     palette.setColor(QPalette.ColorRole.ToolTipText, QColor(APP_BACKGROUND))
     palette.setColor(QPalette.ColorRole.Text, QColor(TEXT_COLOR))
-    palette.setColor(QPalette.ColorRole.Button, QColor(CARD_BACKGROUND))
+    palette.setColor(QPalette.ColorRole.Button, QColor(BUTTON_BACKGROUND))
     palette.setColor(QPalette.ColorRole.ButtonText, QColor(TEXT_COLOR))
-    palette.setColor(QPalette.ColorRole.Highlight, QColor(ACCENT_COLOR))
-    palette.setColor(QPalette.ColorRole.HighlightedText, QColor(ACCENT_FOREGROUND_COLOR))
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(PRIMARY_COLOR))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor(PRIMARY_FOREGROUND_COLOR))
     palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(SUBTLE_TEXT_COLOR))
-    palette.setColor(QPalette.ColorRole.Link, QColor(ACCENT_HOVER_COLOR))
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor("#aaa9a3"))
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor("#aaa9a3"))
+    palette.setColor(QPalette.ColorRole.Link, QColor(TEXT_COLOR))
+    for role in (QPalette.ColorRole.Text, QPalette.ColorRole.WindowText, QPalette.ColorRole.ButtonText):
+        palette.setColor(QPalette.ColorGroup.Disabled, role, QColor(DISABLED_TEXT_COLOR))
     app.setPalette(palette)
     app.setStyleSheet(
         f"""
@@ -181,7 +257,7 @@ def configure_qt_application(app: QApplication) -> None:
         QFrame#sectionCard {{
             background: {CARD_BACKGROUND};
             border: 1px solid {BORDER_COLOR};
-            border-radius: 8px;
+            border-radius: 6px;
         }}
         QDialog#settingsDialog {{
             background: {CARD_BACKGROUND};
@@ -192,181 +268,247 @@ def configure_qt_application(app: QApplication) -> None:
             border-top: 1px solid {BORDER_COLOR};
         }}
         QLabel#sectionTitle {{
-            color: #464642;
+            color: {TEXT_COLOR};
             background: transparent;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 600;
         }}
         QLabel#pageTitle {{
             color: {TEXT_COLOR};
             background: transparent;
-            font-size: 18px;
+            font-size: 24px;
             font-weight: 600;
         }}
         QLabel#brandLabel {{
-            color: #373734;
+            color: {TEXT_COLOR};
             background: transparent;
-            font-size: 16px;
-            font-weight: 650;
+            font-size: 20px;
+            font-weight: 600;
             padding: 0 8px 8px 8px;
         }}
         QLabel[role="navSection"] {{
-            color: #55554f;
+            color: {MUTED_TEXT_COLOR};
             background: transparent;
             font-size: 12px;
-            font-weight: 700;
+            font-weight: 600;
         }}
         QFrame#navSectionDivider {{
-            background: #d6d6d0;
+            background: {BORDER_COLOR};
             border: none;
         }}
         QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {{
             background: {INPUT_BACKGROUND};
-            border: 1px solid #d6d6d0;
-            border-radius: 6px;
+            border: 1px solid {CONTROL_BORDER_COLOR};
+            border-radius: 4px;
             padding: 4px 7px;
-            selection-background-color: {ACCENT_COLOR};
-            selection-color: {ACCENT_FOREGROUND_COLOR};
+            placeholder-text-color: {MUTED_TEXT_COLOR};
+            selection-background-color: {PRIMARY_COLOR};
+            selection-color: {PRIMARY_FOREGROUND_COLOR};
         }}
         QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QPlainTextEdit:hover {{
             border-color: {BORDER_STRONG_COLOR};
         }}
         QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus {{
-            border-color: {ACCENT_COLOR};
+            border: 2px solid {FOCUS_COLOR};
+            padding: 3px 6px;
+            background: {CARD_BACKGROUND};
         }}
         QLineEdit:read-only {{
-            color: #767671;
-            background: #f1f1ee;
+            color: {MUTED_TEXT_COLOR};
+            background: {SIDEBAR_BACKGROUND};
         }}
+        QLineEdit:read-only:focus, QPlainTextEdit:read-only:focus,
+        QSpinBox:read-only:focus, QComboBox:!editable:focus {{
+            border: 1px solid {CONTROL_FOCUS_COLOR};
+            padding: 4px 7px;
+            background: {INPUT_BACKGROUND};
+        }}
+        QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QPlainTextEdit:disabled {{
+            color: {DISABLED_TEXT_COLOR};
+            background: {DISABLED_BACKGROUND};
+            border-color: {DISABLED_BORDER_COLOR};
+        }}
+        QSpinBox {{ padding-right: 24px; }}
+        QSpinBox:focus {{ padding-right: 23px; }}
+        QSpinBox:read-only:focus {{ padding-right: 24px; }}
+        QSpinBox::up-button, QSpinBox::down-button {{
+            subcontrol-origin: padding;
+            width: 20px;
+            border: none;
+            background: transparent;
+            border-radius: 3px;
+        }}
+        QSpinBox::up-button {{ subcontrol-position: top right; }}
+        QSpinBox::down-button {{ subcontrol-position: bottom right; }}
+        QSpinBox::up-button:hover, QSpinBox::down-button:hover {{ background: {HOVER_BACKGROUND}; }}
+        QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {{ background: {SELECTION_BACKGROUND}; }}
+        QSpinBox::up-button:off, QSpinBox::down-button:off,
+        QSpinBox::up-button:disabled, QSpinBox::down-button:disabled {{ background: transparent; }}
+        QSpinBox::up-arrow, QSpinBox::down-arrow {{ width: 10px; height: 6px; }}
+        QSpinBox::up-arrow {{ image: url(:/qatools/controls/spin-up.svg); }}
+        QSpinBox::down-arrow {{ image: url(:/qatools/controls/spin-down.svg); }}
+        QSpinBox::up-arrow:disabled, QSpinBox::up-arrow:off {{ image: url(:/qatools/controls/spin-up-disabled.svg); }}
+        QSpinBox::down-arrow:disabled, QSpinBox::down-arrow:off {{ image: url(:/qatools/controls/spin-down-disabled.svg); }}
         QComboBox::drop-down {{ border: none; width: 24px; }}
         QComboBox QAbstractItemView {{
             background: {INPUT_BACKGROUND};
-            border: 1px solid {BORDER_COLOR};
-            border-radius: 6px;
+            border: 1px solid {CONTROL_BORDER_COLOR};
+            border-radius: 4px;
             outline: none;
-            selection-background-color: #eee1dc;
+            selection-background-color: {SELECTION_BACKGROUND};
             selection-color: {TEXT_COLOR};
         }}
         QPushButton {{
-            color: #444440;
-            background: #f1f1ee;
-            border: 1px solid #d8d8d2;
-            border-radius: 6px;
+            color: {TEXT_COLOR};
+            background: {BUTTON_BACKGROUND};
+            border: 1px solid {BUTTON_BORDER_COLOR};
+            border-radius: 4px;
             padding: 5px 10px;
         }}
-        QPushButton:hover {{ background: #e9e9e5; border-color: {BORDER_STRONG_COLOR}; }}
-        QPushButton:focus {{ border-color: {ACCENT_COLOR}; }}
-        QPushButton:pressed {{ background: #e1e1dc; }}
-        QPushButton:disabled {{ color: #aaa9a3; background: #f4f4f1; border-color: #e5e5df; }}
-        QPushButton[primary="true"] {{
-            background: {ACCENT_COLOR};
-            border-color: {ACCENT_COLOR};
-            color: {ACCENT_FOREGROUND_COLOR};
+        QPushButton:hover {{ background: {SELECTION_BACKGROUND}; border-color: {CONTROL_BORDER_COLOR}; }}
+        QPushButton:focus {{ border-color: {CONTROL_FOCUS_COLOR}; }}
+        QPushButton:pressed {{ background: {SELECTION_BACKGROUND}; }}
+        QPushButton:disabled {{ color: {DISABLED_TEXT_COLOR}; background: {DISABLED_BACKGROUND}; border-color: {DISABLED_BORDER_COLOR}; }}
+        QPushButton[primary="true"], QDialogButtonBox QPushButton:default,
+        QMessageBox QPushButton:default, QInputDialog QPushButton:default {{
+            background: {PRIMARY_COLOR};
+            border-color: {PRIMARY_COLOR};
+            color: {PRIMARY_FOREGROUND_COLOR};
             font-weight: 600;
             padding: 6px 14px;
         }}
-        QPushButton[primary="true"]:hover {{
-            background: {ACCENT_HOVER_COLOR};
-            border-color: {ACCENT_HOVER_COLOR};
+        QPushButton[primary="true"]:hover, QDialogButtonBox QPushButton:default:hover,
+        QMessageBox QPushButton:default:hover, QInputDialog QPushButton:default:hover {{
+            background: {PRIMARY_HOVER_COLOR};
+            border-color: {PRIMARY_HOVER_COLOR};
         }}
-        QPushButton[primary="true"]:pressed {{
-            background: {ACCENT_PRESSED_COLOR};
-            border-color: {ACCENT_PRESSED_COLOR};
+        QPushButton[primary="true"]:pressed, QDialogButtonBox QPushButton:default:pressed,
+        QMessageBox QPushButton:default:pressed, QInputDialog QPushButton:default:pressed {{
+            background: {PRIMARY_PRESSED_COLOR};
+            border-color: {PRIMARY_PRESSED_COLOR};
         }}
-        QPushButton[primary="true"]:disabled {{
-            color: #8a5a47;
-            background: #e6b9a7;
-            border-color: #e6b9a7;
+        QPushButton[primary="true"]:focus, QDialogButtonBox QPushButton:default:focus,
+        QMessageBox QPushButton:default:focus, QInputDialog QPushButton:default:focus {{
+            border-color: {PRIMARY_PRESSED_COLOR};
+        }}
+        QPushButton[primary="true"]:disabled, QDialogButtonBox QPushButton:default:disabled,
+        QMessageBox QPushButton:default:disabled, QInputDialog QPushButton:default:disabled {{
+            color: {DISABLED_TEXT_COLOR};
+            background: {DISABLED_BACKGROUND};
+            border-color: {DISABLED_BORDER_COLOR};
         }}
         QToolButton[settingsButton="true"] {{
-            color: #777771;
+            color: {MUTED_TEXT_COLOR};
             background: transparent;
             border: 1px solid transparent;
-            border-radius: 6px;
+            border-radius: 4px;
             padding: 0;
         }}
         QToolButton[settingsButton="true"]:hover {{
-            color: {ACCENT_HOVER_COLOR};
-            background: #f5e8e2;
-            border-color: #e4cabe;
+            color: {TEXT_COLOR};
+            background: {SIDEBAR_BACKGROUND};
+            border-color: {CONTROL_BORDER_COLOR};
         }}
         QToolButton[settingsButton="true"]:focus {{
-            border-color: {ACCENT_COLOR};
+            border-color: {CONTROL_FOCUS_COLOR};
         }}
         QToolButton[settingsButton="true"]:pressed {{
-            color: {ACCENT_PRESSED_COLOR};
-            background: #ecd9d0;
+            color: {TEXT_COLOR};
+            background: {SELECTION_BACKGROUND};
         }}
         QToolButton[settingsButton="true"]:disabled {{
-            color: #b8b8b2;
+            color: {DISABLED_TEXT_COLOR};
             background: transparent;
             border-color: transparent;
         }}
         QPushButton[navItem="true"] {{
-            color: #73736e;
+            color: {MUTED_TEXT_COLOR};
             text-align: left;
             background: transparent;
-            border: none;
-            border-radius: 6px;
+            border: 1px solid transparent;
+            border-radius: 4px;
             padding: 7px 9px;
         }}
         QPushButton[navItem="true"]:hover {{
-            color: #3e3e3a;
-            background: #e9e9e5;
+            color: {TEXT_COLOR};
+            background: {HOVER_BACKGROUND};
         }}
         QPushButton[navItem="true"]:checked {{
             color: {TEXT_COLOR};
-            background: #e3e3de;
+            background: {SELECTION_BACKGROUND};
             font-weight: 600;
         }}
-        QCheckBox, QRadioButton {{ spacing: 6px; background: transparent; }}
+        QPushButton[navItem="true"]:checked:hover {{ background: {SELECTION_BACKGROUND}; }}
+        QPushButton[navItem="true"]:focus {{ border-color: transparent; }}
+        QCheckBox, QRadioButton {{ spacing: 8px; padding: 2px; background: transparent; }}
         QCheckBox::indicator, QRadioButton::indicator {{ width: 15px; height: 15px; }}
-        QCheckBox:disabled, QRadioButton:disabled {{ color: #9b9b95; }}
+        QCheckBox:disabled, QRadioButton:disabled {{ color: {DISABLED_TEXT_COLOR}; }}
         QFrame#segmentedControl {{
-            background: {INPUT_BACKGROUND};
-            border: 1px solid {BORDER_COLOR};
-            border-radius: 6px;
+            background: {SIDEBAR_BACKGROUND};
+            border: 1px solid {CONTROL_BORDER_COLOR};
+            border-radius: 4px;
         }}
         QPushButton[segmentedMode="true"] {{
             color: {MUTED_TEXT_COLOR};
             background: transparent;
-            border: none;
-            border-radius: 5px;
+            border: 1px solid transparent;
+            border-radius: 4px;
             padding: 5px 12px;
         }}
         QPushButton[segmentedMode="true"]:hover {{
             color: {TEXT_COLOR};
-            background: #eeeeea;
+            background: {SIDEBAR_BACKGROUND};
         }}
         QPushButton[segmentedMode="true"]:checked {{
             color: {TEXT_COLOR};
-            background: #f1ddd5;
+            background: {SELECTION_BACKGROUND};
             font-weight: 600;
         }}
+        QPushButton[segmentedMode="true"]:focus {{ border: 1px dashed {CONTROL_FOCUS_COLOR}; }}
         QTabWidget::pane {{ border: none; background: transparent; }}
         QTabBar {{ background: transparent; }}
         QTabBar::tab {{
-            color: #797974;
+            color: {MUTED_TEXT_COLOR};
             background: transparent;
-            border: none;
-            border-radius: 6px;
+            border: 1px solid transparent;
+            border-radius: 4px;
             margin: 0 2px 4px 0;
             padding: 5px 10px;
         }}
-        QTabBar::tab:hover {{ color: {TEXT_COLOR}; background: #eeeeea; }}
-        QTabBar::tab:selected {{ color: {TEXT_COLOR}; background: #e4e4df; font-weight: 600; }}
+        QTabBar::tab:hover {{ color: {TEXT_COLOR}; background: {SIDEBAR_BACKGROUND}; }}
+        QTabBar::tab:selected {{ color: {TEXT_COLOR}; background: {SELECTION_BACKGROUND}; font-weight: 600; }}
+        QTableView {{
+            background: {CARD_BACKGROUND};
+            alternate-background-color: {SIDEBAR_BACKGROUND};
+            border: 1px solid {BORDER_COLOR};
+            gridline-color: {BORDER_COLOR};
+            selection-background-color: {SELECTION_BACKGROUND};
+            selection-color: {TEXT_COLOR};
+        }}
+        QHeaderView::section {{
+            color: {MUTED_TEXT_COLOR};
+            background: {SIDEBAR_BACKGROUND};
+            border: none;
+            border-right: 1px solid {BORDER_COLOR};
+            border-bottom: 1px solid {BORDER_COLOR};
+            padding: 4px 8px;
+        }}
         QScrollBar:vertical {{ background: transparent; width: 8px; margin: 0; }}
-        QScrollBar::handle:vertical {{ background: #c8c8c2; min-height: 28px; border-radius: 3px; }}
-        QScrollBar::handle:vertical:hover {{ background: #aaa9a2; }}
+        QScrollBar::handle:vertical {{ background: {BORDER_STRONG_COLOR}; min-height: 28px; border-radius: 3px; }}
+        QScrollBar::handle:vertical:hover {{ background: {MUTED_TEXT_COLOR}; }}
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+        QScrollBar:horizontal {{ background: transparent; height: 8px; margin: 0; }}
+        QScrollBar::handle:horizontal {{ background: {BORDER_STRONG_COLOR}; min-width: 28px; border-radius: 3px; }}
+        QScrollBar::handle:horizontal:hover {{ background: {MUTED_TEXT_COLOR}; }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
         QProgressBar {{
-            color: #5f5f5a;
+            color: {TEXT_COLOR};
             border: 1px solid {BORDER_COLOR};
             border-radius: 4px;
-            background: {INPUT_BACKGROUND};
+            background: {SIDEBAR_BACKGROUND};
             text-align: center;
         }}
-        QProgressBar::chunk {{ background: {ACCENT_COLOR}; }}
+        QProgressBar::chunk {{ background: {PROGRESS_COLOR}; }}
         QToolTip {{ color: {APP_BACKGROUND}; background: {TEXT_COLOR}; border: 1px solid {TEXT_COLOR}; }}
         """
     )
@@ -387,15 +529,15 @@ def section(title: str = "") -> tuple[QFrame, QVBoxLayout]:
     box = QFrame()
     box.setObjectName("sectionCard")
     outer = QVBoxLayout(box)
-    outer.setContentsMargins(12, 10, 12, 10)
-    outer.setSpacing(7)
+    outer.setContentsMargins(12, 12, 12, 12)
+    outer.setSpacing(8)
     if title:
         heading = QLabel(title)
         heading.setObjectName("sectionTitle")
         outer.addWidget(heading)
     layout = QVBoxLayout()
     layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(7)
+    layout.setSpacing(8)
     outer.addLayout(layout)
     return box, layout
 
@@ -435,7 +577,7 @@ class PathPicker(QWidget):
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setSpacing(8)
         title = QLabel(label)
         title.setMinimumWidth(112)
         self.line_edit = QLineEdit()
@@ -570,6 +712,7 @@ __all__ = [
     "BORDER_COLOR",
     "CARD_BACKGROUND",
     "MUTED_TEXT_COLOR",
+    "NavigationButton",
     "PathPicker",
     "SIDEBAR_BACKGROUND",
     "TEXT_COLOR",

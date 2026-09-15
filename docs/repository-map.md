@@ -29,6 +29,7 @@ qatools gui / toolshub_gui.py
 | 页面注册 | [tools/qt_pages.py](../tools/qt_pages.py) | 同上 |
 | 已运行实例的页面跳转 | [qt_navigation.py](../tools/qt_navigation.py) | `test_gui_entries.py` |
 | Qt 主题、输入控件、线程池 | [qt_gui_common.py](../tools/qt_gui_common.py) | GUI 回归 |
+| 内嵌数字控件图标 | [controls.qrc](../tools/resources/controls.qrc) 与同目录 SVG → [qt_control_resources.py](../tools/qt_control_resources.py) | GUI 渲染与输入回归 |
 | Qt 页面布局与选择器 | [qt_page_helpers.py](../tools/qt_page_helpers.py) | GUI 回归 |
 | 表头别名编辑页 | [qt_settings_page.py](../tools/qt_settings_page.py) | `test_header_aliases.py`、GUI 回归 |
 | Excel 表头识别、别名 | [excel_metadata.py](../tools/excel_metadata.py)、[header_aliases.py](../tools/header_aliases.py) | 对应同名测试 |
@@ -43,6 +44,10 @@ qatools gui / toolshub_gui.py
 | 历史 TB、项目配置与术语匹配 | [history_tb.py](../tools/history_tb.py)、[tb_projects.py](../tools/tb_projects.py)、[term_matching.py](../tools/term_matching.py) | 对应同名测试 |
 
 测试路径未写前缀时均位于 `tests/`。
+
+数字箭头的 SVG 使用共用主题的次要文字色与禁用边界色。修改图标后运行
+`python -c "from PySide6.scripts.pyside_tool import rcc; rcc()" tools/resources/controls.qrc -o tools/qt_control_resources.py`
+重新生成内嵌资源模块；运行及安装包通过 Python 模块加载图标，无需外部图片路径。
 
 ## 工作流与工具
 

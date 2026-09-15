@@ -37,6 +37,10 @@ from tools.qt_gui_common import (  # noqa: E402
     ACCENT_COLOR,
     ACCENT_FOREGROUND_COLOR,
     APP_BACKGROUND,
+    CONTROL_BORDER_COLOR,
+    FOCUS_COLOR,
+    MUTED_TEXT_COLOR,
+    PRIMARY_COLOR,
     TEXT_COLOR,
     configure_qt_application,
 )
@@ -104,10 +108,14 @@ class ToolshubLayoutTests(unittest.TestCase):
             (1286, 688),
         )
 
-    def test_theme_uses_supplied_surface_ink_and_accent_anchors(self) -> None:
-        self.assertEqual(APP_BACKGROUND, "#f9f9f7")
-        self.assertEqual(TEXT_COLOR, "#2d2d2b")
-        self.assertEqual(ACCENT_COLOR, "#cc7d5e")
+    def test_theme_uses_yizhi_reference_roles(self) -> None:
+        self.assertEqual(APP_BACKGROUND, "#ffffff")
+        self.assertEqual(TEXT_COLOR, "#2f2f2c")
+        self.assertEqual(MUTED_TEXT_COLOR, "#707068")
+        self.assertEqual(ACCENT_COLOR, "#d97757")
+        self.assertEqual(CONTROL_BORDER_COLOR, "#deded8")
+        self.assertEqual(FOCUS_COLOR, "#2383e2")
+        self.assertEqual(PRIMARY_COLOR, "#b45b3c")
         self.assertEqual(ACCENT_FOREGROUND_COLOR, "#ffffff")
 
     def test_smoke_test_builds_complete_app_without_showing_window(self) -> None:
@@ -220,6 +228,24 @@ class ToolshubLayoutTests(unittest.TestCase):
         finally:
             window.close()
 
+    def test_small_window_can_reach_rightmost_form_controls(self) -> None:
+        window = self.make_app()
+        try:
+            window.resize(840, 540)
+            window.show()
+            self.qt_app.processEvents()
+            workflow = window.tool_frames["workflow"]
+            area = workflow.content_scroll
+            button = workflow.input_picker.choose_button
+            area.ensureWidgetVisible(button, 0, 0)
+            self.qt_app.processEvents()
+            corner = button.mapTo(area.viewport(), QPoint(button.width() - 1, 0))
+            self.assertGreaterEqual(corner.x(), 0)
+            self.assertLess(corner.x(), area.viewport().width())
+            self.assertTrue(workflow.action_bar.isVisible())
+        finally:
+            window.close()
+
     def test_selecting_a_tool_reuses_persistent_page(self) -> None:
         window = self.make_app()
         try:
@@ -228,7 +254,7 @@ class ToolshubLayoutTests(unittest.TestCase):
             window.select_tool("workflow")
             window.select_tool("french_nbsp")
             self.assertEqual(window.current_tool_key, "french_nbsp")
-            self.assertEqual(window.title_label.text(), "法语 NBSP 恢复")
+            self.assertEqual(window.title_label.accessibleName(), "法语 NBSP 恢复")
             self.assertIs(window.current_tool_frame, page)
             self.assertIs(window.page_stack.currentWidget(), page)
             self.assertTrue(window.nav_buttons["french_nbsp"].isChecked())
@@ -252,7 +278,7 @@ class ToolshubLayoutTests(unittest.TestCase):
 
             settings_button.click()
             self.assertEqual(window.current_tool_key, "settings")
-            self.assertEqual(window.title_label.text(), "设置")
+            self.assertEqual(window.title_label.accessibleName(), "设置")
             self.assertTrue(settings_button.isChecked())
         finally:
             window.close()
