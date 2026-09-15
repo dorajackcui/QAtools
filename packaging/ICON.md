@@ -2,18 +2,21 @@
 
 ## 当前资源
 
-- [QAtools-icon.png](QAtools-icon.png)：当前图标母图。暖橙纯色方形背景、米白色 Q，字母采用细颗粒哑光纸质浮雕与柔和短投影。
+- [QAtools-icon.png](QAtools-icon.png)：原始图标母图。暖橙纯色方形背景、米白色 Q，字母采用细颗粒哑光纸质浮雕与柔和短投影。
+- [QAtools-icon-rounded.png](QAtools-icon-rounded.png)：正式圆角图标，半径为边长的 18%，四角外侧为真正透明像素；Q、颜色与材质来自原母图。
 - [QAtools.ico](QAtools.ico)：Windows 安装程序与可执行文件使用的图标，含 16、20、24、32、40、48、64、128、256 像素。
 - [QAtools-icon.svg](QAtools-icon.svg)：保留的平面 Q 轮廓参考；不用于生成当前的材质图标。
 
-图标母图由内置 image_gen 生成，使用用户提供的纸质立体插画作为材质参考、原图标作为 Q 轮廓参考。ICO 仅进行缩放和格式导出。构建入口仍为 [build_windows_release.ps1](../scripts/build_windows_release.ps1)；更新源资源后需重新构建安装包，已经安装的旧版本不会自动换图标。
+图标母图由内置 image_gen 生成，使用用户提供的纸质立体插画作为材质参考、原图标作为 Q 轮廓参考。圆角在资源导出时应用透明蒙版，保持母图内部像素不变；没有采用生成器输出的棋盘格模拟透明图。构建入口仍为 [build_windows_release.ps1](../scripts/build_windows_release.ps1)；更新源资源后需重新构建安装包，已经安装的旧版本不会自动换图标。
+
+从 0.1.6 起，安装程序另外安装带版本号的 ICO，桌面、开始菜单快捷方式和卸载列表直接引用它，避免升级后继续沿用原 EXE 路径的图标缓存。EXE 和安装程序自身仍内嵌同一套图标。
 
 ## 导出 ICO
 
 在安装 Pillow 的环境中，从仓库根目录运行：
 
 ```powershell
-python -c "from PIL import Image; im=Image.open('packaging/QAtools-icon.png'); im.save('packaging/QAtools.ico', format='ICO', sizes=[(n,n) for n in (16,20,24,32,40,48,64,128,256)]); im.close()"
+python scripts/export_app_icon.py
 ```
 
 ## 生成提示词

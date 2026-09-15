@@ -17,6 +17,8 @@ QAtools Windows 安装版
 从 0.1.2 起安装包只提供 GUI。覆盖安装会删除安装目录中的旧 QAtools-CLI.exe、
 QAtools-CLI.cmd，以及 _internal 下不再需要的 NumPy/OpenBLAS、PythonWin 和 YAML 组件。
 其他用户文件和配置不会被这项清理删除。
+从 0.1.6 起使用圆角 Q 图标；桌面和开始菜单快捷方式引用带版本号的图标资源，
+降低覆盖升级后仍显示旧图标的缓存问题。
 
 图形界面
 --------

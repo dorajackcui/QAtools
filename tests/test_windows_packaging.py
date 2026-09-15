@@ -90,6 +90,36 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertEqual(image_type, 1)
         self.assertGreaterEqual(image_count, 7)
 
+    def test_every_icon_size_has_transparent_corners(self) -> None:
+        from PySide6.QtGui import QImage
+
+        data = (PROJECT_ROOT / "packaging" / "QAtools.ico").read_bytes()
+        count = struct.unpack_from("<H", data, 4)[0]
+        sizes = set()
+        for index in range(count):
+            length, offset = struct.unpack_from("<II", data, 6 + index * 16 + 8)
+            image = QImage.fromData(data[offset:offset + length])
+            self.assertFalse(image.isNull())
+            size = image.width()
+            sizes.add(size)
+            with self.subTest(size=size):
+                self.assertEqual(image.height(), size)
+                for x, y in ((0, 0), (size - 1, 0), (0, size - 1), (size - 1, size - 1)):
+                    # At 16 px the antialiased arc can partly cover a corner pixel.
+                    self.assertLessEqual(image.pixelColor(x, y).alpha(), 20)
+                self.assertEqual(image.pixelColor(size // 2, size // 2).alpha(), 255)
+                self.assertGreater(image.pixelColor(size // 2, 0).alpha(), 250)
+        self.assertEqual(sizes, {16, 20, 24, 32, 40, 48, 64, 128, 256})
+
+    def test_installer_shortcuts_use_a_versioned_icon_asset(self) -> None:
+        installer = (PROJECT_ROOT / "packaging" / "QAtools.iss").read_text(encoding="utf-8")
+        self.assertIn('DestName: "QAtools-icon-{#AppVersion}.ico"', installer)
+        shortcuts = installer.split("[Icons]\n", 1)[1].split("\n[", 1)[0]
+        entries = [line for line in shortcuts.splitlines() if line.startswith("Name:")]
+        self.assertEqual(len(entries), 2)
+        for entry in entries:
+            self.assertIn('IconFilename: "{app}\\QAtools-icon-{#AppVersion}.ico"', entry)
+
 
 if __name__ == "__main__":
     unittest.main()

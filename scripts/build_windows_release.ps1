@@ -122,6 +122,10 @@ try {
         -Arguments @("-c", "from PIL import Image")
     $innoSetupCompiler = Resolve-InnoSetupCompiler
 
+    Invoke-ProjectPython `
+        -Description "Rounded application icon export" `
+        -Arguments @("scripts/export_app_icon.py")
+
     if (-not $SkipTests) {
         Invoke-ProjectPython `
             -Description "Regression tests" `

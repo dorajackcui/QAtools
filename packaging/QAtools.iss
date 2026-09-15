@@ -22,7 +22,7 @@ Compression=lzma2
 SolidCompression=yes
 CloseApplications=yes
 RestartApplications=no
-UninstallDisplayIcon={app}\QAtools.exe
+UninstallDisplayIcon={app}\QAtools-icon-{#AppVersion}.ico
 WizardStyle=modern
 MinVersion=10.0
 
@@ -31,6 +31,7 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; Flags: unchecked
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "QAtools.ico"; DestDir: "{app}"; DestName: "QAtools-icon-{#AppVersion}.ico"; Flags: ignoreversion
 
 [InstallDelete]
 ; Only obsolete files owned by QAtools; preserve user files and configuration.
@@ -43,8 +44,8 @@ Type: filesandordirs; Name: "{app}\_internal\Pythonwin"
 Type: filesandordirs; Name: "{app}\_internal\yaml"
 
 [Icons]
-Name: "{group}\QAtools"; Filename: "{app}\QAtools.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\QAtools"; Filename: "{app}\QAtools.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\QAtools"; Filename: "{app}\QAtools.exe"; WorkingDir: "{app}"; IconFilename: "{app}\QAtools-icon-{#AppVersion}.ico"
+Name: "{autodesktop}\QAtools"; Filename: "{app}\QAtools.exe"; WorkingDir: "{app}"; IconFilename: "{app}\QAtools-icon-{#AppVersion}.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\QAtools.exe"; Description: "启动 QAtools"; Flags: nowait postinstall skipifsilent
