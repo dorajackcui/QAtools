@@ -21,7 +21,8 @@ from openpyxl.utils import column_index_from_string
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
-    find_last_value_row,
+    existing_cell_value,
+    value_row_numbers,
     join_unique_text,
     load_workbook_for_editing,
     rebuild_output_sheet,
@@ -675,11 +676,10 @@ def process_workbook(
         )
     worksheet = workbook[sheet] if sheet else workbook.active
 
-    last_row = find_last_value_row(
-        worksheet,
-        (source_column, target_column),
-        start_row=start_row,
-    )
+    row_numbers = value_row_numbers(worksheet, (source_column, target_column), start_row=start_row)
+    last_row = row_numbers[-1] if row_numbers else start_row - 1
+    source_index = column_index_from_string(source_column)
+    target_index = column_index_from_string(target_column)
     total_rows_checked = max(0, last_row - start_row + 1)
     rows_with_selected_tokens = 0
     angle_rows = 0
@@ -690,9 +690,9 @@ def process_workbook(
     problem_rows_set: set[int] = set()
     problem_entries: list[tuple[int, str, str, str, str]] = []
 
-    for row_index in range(start_row, last_row + 1):
-        source_text = worksheet[f"{source_column}{row_index}"].value
-        target_text = worksheet[f"{target_column}{row_index}"].value
+    for row_index in row_numbers:
+        source_text = existing_cell_value(worksheet, row_index, source_index)
+        target_text = existing_cell_value(worksheet, row_index, target_index)
         source_tokens = _extract_token_details(
             source_text,
             normalized_token_types,

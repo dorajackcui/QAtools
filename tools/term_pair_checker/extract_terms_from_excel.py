@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Iterable
+from collections import ChainMap
+from collections.abc import Iterable, MutableMapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -28,7 +29,8 @@ from tools.history_tb import (
     iter_history_rows,
 )
 from tools.excel_output import (
-    find_last_value_row,
+    existing_cell_value,
+    value_row_numbers,
     validate_report_output_path,
     load_workbook_for_editing,
     validate_distinct_source_target_columns,
@@ -300,7 +302,7 @@ def build_term_mapping_entries(term_pairs: Iterable[RecordedTermPair]) -> list[T
 
 
 def merge_term_pair(
-    term_mapping: dict[str, RecordedTermPair],
+    term_mapping: MutableMapping[str, RecordedTermPair],
     term_pair: RecordedTermPair,
 ) -> tuple[bool, RecordedTermPair | None]:
     mapping_key = normalize_term_key(term_pair.source_plain_text)
@@ -616,11 +618,9 @@ def process_workbook(
     )
     output_path = Path(output_path).expanduser().resolve()
     worksheet = workbook[sheet] if sheet else workbook.active
-    last_row = find_last_value_row(
-        worksheet,
-        (source_column, target_column),
-        start_row=start_row,
-    )
+    row_numbers = value_row_numbers(worksheet, (source_column, target_column), start_row=start_row)
+    source_index = column_index_from_string(source_column)
+    target_index = column_index_from_string(target_column)
 
     term_mapping = build_initial_term_mapping(history_mapping)
     output_term_mapping: dict[str, RecordedTermPair] = {}
@@ -628,9 +628,9 @@ def process_workbook(
     conflict_source_terms_by_row: dict[int, set[str]] = {}
     problem_entries: list[ProblemEntry] = []
 
-    for row_index in range(start_row, last_row + 1):
-        raw_source_value = worksheet[f"{source_column}{row_index}"].value
-        raw_target_value = worksheet[f"{target_column}{row_index}"].value
+    for row_index in row_numbers:
+        raw_source_value = existing_cell_value(worksheet, row_index, source_index)
+        raw_target_value = existing_cell_value(worksheet, row_index, target_index)
         source_snapshot = build_text_snapshot(raw_source_value)
         target_snapshot = build_text_snapshot(raw_target_value)
 
@@ -660,7 +660,10 @@ def process_workbook(
                 if not term_pair.target_plain_text and existing_term_pair is None:
                     merge_term_pair(output_term_mapping, term_pair)
         else:
-            candidate_term_mapping = dict(term_mapping)
+            # Read the existing mapping through a row-local overlay. A conflict
+            # discards the entire overlay, including upgrades of empty targets.
+            pending_terms: dict[str, RecordedTermPair] = {}
+            candidate_term_mapping = ChainMap(pending_terms, term_mapping)
             row_has_problem = False
             for source_term, target_term in zip(source_terms, target_terms):
                 merged, existing_term_pair = merge_term_pair(
@@ -685,14 +688,14 @@ def process_workbook(
                     )
 
             if not row_has_problem:
-                term_mapping = candidate_term_mapping
+                term_mapping.update(pending_terms)
 
     matcher = None
     mapping_entries = build_term_mapping_entries(term_mapping.values())
     if mapping_entries:
         matcher = build_matcher(mapping_entries)
 
-    for row_index in range(start_row, last_row + 1):
+    for row_index in row_numbers:
         if matcher is None:
             if row_index in count_mismatch_rows:
                 source_terms, target_terms = count_mismatch_rows[row_index]
@@ -706,18 +709,18 @@ def process_workbook(
                         f"术语标记数量不一致：原文 {len(source_terms)} 个，"
                         f"译文 {len(target_terms)} 个"
                     ),
-                    build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
-                    build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
+                    build_text_snapshot(existing_cell_value(worksheet, row_index, source_index)),
+                    build_text_snapshot(existing_cell_value(worksheet, row_index, target_index)),
                     affected_source_terms=(term.plain_text for term in source_terms),
                 )
             continue
 
         source_text = strip_supported_marks(
-            worksheet[f"{source_column}{row_index}"].value,
+            existing_cell_value(worksheet, row_index, source_index),
             exclusion_patterns=effective_exclusion_patterns,
         )
         target_text = strip_supported_marks(
-            worksheet[f"{target_column}{row_index}"].value,
+            existing_cell_value(worksheet, row_index, target_index),
             exclusion_patterns=effective_exclusion_patterns,
         )
         matched_entries = find_row_terms(
@@ -740,8 +743,8 @@ def process_workbook(
                         f"术语标记数量不一致：原文 {len(source_terms)} 个，"
                         f"译文 {len(target_terms)} 个"
                     ),
-                    build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
-                    build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
+                    build_text_snapshot(existing_cell_value(worksheet, row_index, source_index)),
+                    build_text_snapshot(existing_cell_value(worksheet, row_index, target_index)),
                     affected_source_terms=(term.plain_text for term in source_terms),
                 )
             continue
@@ -782,8 +785,8 @@ def process_workbook(
                         f"术语标记数量不一致：原文 {len(source_terms)} 个，"
                         f"译文 {len(target_terms)} 个"
                     ),
-                    build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
-                    build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
+                    build_text_snapshot(existing_cell_value(worksheet, row_index, source_index)),
+                    build_text_snapshot(existing_cell_value(worksheet, row_index, target_index)),
                     affected_source_terms=affected_terms,
                 )
 
@@ -807,8 +810,8 @@ def process_workbook(
                 entry.target_term,
                 lookup_term_source(entry.source_term, term_mapping),
                 "",
-                build_text_snapshot(worksheet[f"{source_column}{row_index}"].value),
-                build_text_snapshot(worksheet[f"{target_column}{row_index}"].value),
+                build_text_snapshot(existing_cell_value(worksheet, row_index, source_index)),
+                build_text_snapshot(existing_cell_value(worksheet, row_index, target_index)),
             )
 
     problem_entries = dedupe_problem_entries(problem_entries)

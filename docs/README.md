@@ -9,6 +9,7 @@
 | 按软件导航查阅全部 GUI 工具及设置 | [GUI 使用指南](qa-workflow-guide/index.html)；[网页维护与验证](qa-workflow-guide/README.md) |
 | 调用 CLI、编写脚本 | [CLI 使用指南](cli-usage.md) |
 | 运行一键检查、理解统一报告 | [workflow README](../tools/workflow/README.md) |
+| 评估 QA 检查性能与优化空间 | [性能评估与复现方法](qa-performance-assessment.md) |
 | 导出或回填 Strings | [PhraseLoom README](../phraseloom/README.md) |
 | 修改代码或文档 | [AGENTS.md](../AGENTS.md)、[仓库地图](repository-map.md) |
 | 扩展工具、查看大文件评估 | [仓库地图](repository-map.md#扩展一个工具) |

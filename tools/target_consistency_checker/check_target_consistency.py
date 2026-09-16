@@ -9,11 +9,12 @@ from pathlib import Path
 from openpyxl.utils import column_index_from_string
 
 from tools.consistency_text import normalize_consistency_text
-from tools.report_text import format_consistency_variants
+from tools.report_text import EXCEL_CELL_TEXT_LIMIT, format_consistency_variants
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
-    find_last_value_row,
+    existing_cell_value,
+    value_row_numbers,
     load_workbook_for_editing,
     validate_distinct_source_target_columns,
     validate_report_output_path,
@@ -110,6 +111,7 @@ def process_workbook(
     sheet: str | None = None,
     start_row: int = 2,
     format_output: bool = True,
+    include_grouped_rows: bool = True,
 ) -> CheckSummary:
     """Run the check against an already-open workbook without saving it."""
     if start_row < 1:
@@ -120,18 +122,17 @@ def process_workbook(
     validate_distinct_source_target_columns(source_column, target_column)
     worksheet = workbook[sheet] if sheet else workbook.active
     occurrences_by_target: dict[str, list[TargetOccurrence]] = {}
-    last_row = find_last_value_row(
-        worksheet,
-        (source_column, target_column),
-        start_row=start_row,
-    )
+    row_numbers = value_row_numbers(worksheet, (source_column, target_column), start_row=start_row)
+    last_row = row_numbers[-1] if row_numbers else start_row - 1
+    source_index = column_index_from_string(source_column)
+    target_index = column_index_from_string(target_column)
 
-    for row_index in range(start_row, last_row + 1):
-        target_text = cell_text(worksheet[f"{target_column}{row_index}"].value)
+    for row_index in row_numbers:
+        target_text = cell_text(existing_cell_value(worksheet, row_index, target_index))
         target_key = normalize_consistency_text(target_text)
         if not target_key:
             continue
-        source_text = cell_text(worksheet[f"{source_column}{row_index}"].value)
+        source_text = cell_text(existing_cell_value(worksheet, row_index, source_index))
         occurrences_by_target.setdefault(target_key, []).append(
             TargetOccurrence(row_index=row_index, source_text=source_text, target_text=target_text)
         )
@@ -151,7 +152,10 @@ def process_workbook(
             continue
 
         inconsistent_target_count += 1
-        grouped_rows = "、".join(str(occurrence.row_index) for occurrence in occurrences)
+        grouped_rows = (
+            "、".join(str(occurrence.row_index) for occurrence in occurrences)[:EXCEL_CELL_TEXT_LIMIT]
+            if include_grouped_rows else ""
+        )
         description = format_consistency_variants(list(source_variants.values()), "原文")
         for occurrence in occurrences:
             problem_entries.append(

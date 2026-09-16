@@ -438,6 +438,7 @@ def run_workflow(
                 sheet=sheet,
                 start_row=start_row,
                 format_output=False,
+                include_grouped_rows=False,
             )
             worksheet_title = source_consistency_summary.worksheet_title
             source_consistency_problem_count = (
@@ -454,6 +455,7 @@ def run_workflow(
                 sheet=sheet,
                 start_row=start_row,
                 format_output=False,
+                include_grouped_rows=False,
             )
             worksheet_title = target_consistency_summary.worksheet_title
             target_consistency_problem_count = (

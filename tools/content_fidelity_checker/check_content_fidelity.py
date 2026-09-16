@@ -15,7 +15,8 @@ from openpyxl.utils import column_index_from_string
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
-    find_last_value_row,
+    existing_cell_value,
+    value_row_numbers,
     load_workbook_for_editing,
     validate_distinct_source_target_columns,
     validate_report_output_path,
@@ -124,6 +125,9 @@ def extract_urls(text: object) -> tuple[str, ...]:
 
 
 def _mask_ranges(text: str, ranges: Iterable[tuple[int, int]]) -> str:
+    ranges = tuple(ranges)
+    if not ranges:
+        return text
     characters = list(text)
     for start, end in ranges:
         for index in range(max(0, start), min(len(characters), end)):
@@ -166,11 +170,11 @@ def _problem_entry(
     source_text: str,
     target_text: str,
     label: str,
-    source_values: tuple[str, ...],
-    target_values: tuple[str, ...],
+    source_values: tuple[str, ...] | Counter[str],
+    target_values: tuple[str, ...] | Counter[str],
 ) -> tuple[int, str, str, str, str, str, str, str]:
-    source_counter = Counter(source_values)
-    target_counter = Counter(target_values)
+    source_counter = source_values if isinstance(source_values, Counter) else Counter(source_values)
+    target_counter = target_values if isinstance(target_values, Counter) else Counter(target_values)
     missing = _format_values(source_counter - target_counter)
     extra = _format_values(target_counter - source_counter)
     description = "；".join(
@@ -252,21 +256,20 @@ def process_workbook(
     validate_distinct_source_target_columns(source_column, target_column)
     selected_rules = normalize_rules(rules)
     worksheet = workbook[sheet] if sheet else workbook.active
-    last_row = find_last_value_row(
-        worksheet,
-        (source_column, target_column),
-        start_row=start_row,
-    )
+    row_numbers = value_row_numbers(worksheet, (source_column, target_column), start_row=start_row)
+    last_row = row_numbers[-1] if row_numbers else start_row - 1
+    source_index = column_index_from_string(source_column)
+    target_index = column_index_from_string(target_column)
     number_entries: list[tuple[object, ...]] = []
     url_entries: list[tuple[object, ...]] = []
 
-    for row_index in range(start_row, last_row + 1):
-        source_text = cell_text(worksheet[f"{source_column}{row_index}"].value)
-        target_text = cell_text(worksheet[f"{target_column}{row_index}"].value)
+    for row_index in row_numbers:
+        source_text = cell_text(existing_cell_value(worksheet, row_index, source_index))
+        target_text = cell_text(existing_cell_value(worksheet, row_index, target_index))
         if NUMBER_RULE in selected_rules:
-            source_numbers = extract_numbers(source_text)
-            target_numbers = extract_numbers(target_text)
-            if Counter(source_numbers) != Counter(target_numbers):
+            source_numbers = Counter(extract_numbers(source_text))
+            target_numbers = Counter(extract_numbers(target_text))
+            if source_numbers != target_numbers:
                 number_entries.append(
                     _problem_entry(
                         row_index=row_index,
@@ -278,9 +281,9 @@ def process_workbook(
                     )
                 )
         if URL_RULE in selected_rules:
-            source_urls = extract_urls(source_text)
-            target_urls = extract_urls(target_text)
-            if Counter(source_urls) != Counter(target_urls):
+            source_urls = Counter(extract_urls(source_text))
+            target_urls = Counter(extract_urls(target_text))
+            if source_urls != target_urls:
                 url_entries.append(
                     _problem_entry(
                         row_index=row_index,

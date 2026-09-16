@@ -91,6 +91,19 @@ def existing_cell_value(worksheet, row: int, column: int) -> object:
     return None if cell is None else cell.value
 
 
+def value_row_numbers(worksheet, columns: Iterable[str], *, start_row: int = 1) -> list[int]:
+    """Return ordered rows with a stored value in either selected column.
+
+    Empty strings, zero, booleans and formulas are values; only None is skipped.
+    The last returned row preserves the existing span-based summary counts.
+    """
+    if start_row < 1:
+        raise ValueError("开始行必须大于等于 1。")
+    indexes = {column_index_from_string(column.strip().upper()) for column in columns}
+    return sorted({cell.row for cell in iter_value_cells(worksheet)
+                   if cell.row >= start_row and cell.column in indexes})
+
+
 def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):
     if current_sheet_name == sheet_name:
         raise ValueError(f"数据工作表名称不能为 {sheet_name}")

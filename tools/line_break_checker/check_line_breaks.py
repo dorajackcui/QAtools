@@ -16,7 +16,8 @@ from openpyxl.utils import column_index_from_string
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
-    find_last_value_row,
+    existing_cell_value,
+    value_row_numbers,
     load_workbook_for_editing,
     validate_distinct_source_target_columns,
     validate_report_output_path,
@@ -139,15 +140,14 @@ def process_workbook(
     validate_distinct_source_target_columns(source_column, target_column)
     worksheet = workbook[sheet] if sheet else workbook.active
     problem_entries: list[tuple[int, str, str, str, int, int, int]] = []
-    last_row = find_last_value_row(
-        worksheet,
-        (source_column, target_column),
-        start_row=start_row,
-    )
+    row_numbers = value_row_numbers(worksheet, (source_column, target_column), start_row=start_row)
+    last_row = row_numbers[-1] if row_numbers else start_row - 1
+    source_index = column_index_from_string(source_column)
+    target_index = column_index_from_string(target_column)
 
-    for row_index in range(start_row, last_row + 1):
-        source_value = worksheet[f"{source_column}{row_index}"].value
-        target_value = worksheet[f"{target_column}{row_index}"].value
+    for row_index in row_numbers:
+        source_value = existing_cell_value(worksheet, row_index, source_index)
+        target_value = existing_cell_value(worksheet, row_index, target_index)
         source_count = count_line_breaks(source_value)
         target_count = count_line_breaks(target_value)
         if source_count == target_count:

@@ -13,7 +13,8 @@ from openpyxl.utils import column_index_from_string
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
-    find_last_value_row,
+    existing_cell_value,
+    value_row_numbers,
     load_workbook_for_editing,
     validate_distinct_source_target_columns,
     validate_report_output_path,
@@ -290,6 +291,11 @@ def find_text_issues(
     rules: Iterable[str] | None = None,
 ) -> tuple[TextIssue, ...]:
     selected_rules = normalize_rules(rules)
+    return _find_selected_text_issues(value, selected_rules)
+
+
+def _find_selected_text_issues(value: object, selected_rules: tuple[str, ...]) -> tuple[TextIssue, ...]:
+    """Evaluate already-validated rules for repeated workbook rows."""
     if not isinstance(value, str) or not value:
         return ()
     return tuple(
@@ -362,19 +368,16 @@ def process_workbook(
     validate_distinct_source_target_columns(source_column, target_column)
     selected_rules = normalize_rules(rules)
     worksheet = workbook[sheet] if sheet else workbook.active
-    processed_count = 0
     problem_rows: set[int] = set()
     problem_entries: list[tuple[object, ...]] = []
-    last_row = find_last_value_row(
-        worksheet,
-        (source_column, target_column),
-        start_row=start_row,
-    )
-    for row_index in range(start_row, last_row + 1):
-        source_value = worksheet[f"{source_column}{row_index}"].value
-        target_value = worksheet[f"{target_column}{row_index}"].value
-        issues = find_text_issues(target_value, rules=selected_rules)
-        processed_count += 1
+    row_numbers = value_row_numbers(worksheet, (source_column, target_column), start_row=start_row)
+    last_row = row_numbers[-1] if row_numbers else start_row - 1
+    source_index = column_index_from_string(source_column)
+    target_index = column_index_from_string(target_column)
+    for row_index in row_numbers:
+        source_value = existing_cell_value(worksheet, row_index, source_index)
+        target_value = existing_cell_value(worksheet, row_index, target_index)
+        issues = _find_selected_text_issues(target_value, selected_rules)
         for issue in issues:
             problem_rows.add(row_index)
             problem_entries.append(
@@ -404,7 +407,7 @@ def process_workbook(
         target_column=target_column,
         start_row=start_row,
         selected_rules=selected_rules,
-        processed_count=processed_count,
+        processed_count=max(0, last_row - start_row + 1),
         problem_count=len(problem_entries),
         problem_rows=len(problem_rows),
     )

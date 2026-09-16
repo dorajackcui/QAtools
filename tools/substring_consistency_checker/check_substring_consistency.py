@@ -12,11 +12,12 @@ from openpyxl.utils import column_index_from_string
 from tools.consistency_text import normalize_consistency_text
 from tools.excel_output import (
     PROBLEM_BASE_HEADERS,
-    find_last_value_row,
+    existing_cell_value,
+    value_row_numbers,
     validate_distinct_source_target_columns,
     write_output_table,
 )
-from tools.term_matching import span_matches_mode
+from tools.term_matching import needs_left_boundary, needs_right_boundary, span_matches_mode
 
 
 PROBLEM_SHEET_NAME = "子串译文一致性"
@@ -25,6 +26,8 @@ EXCERPT_LIMIT = 120
 DEFAULT_MIN_CJK_CHARS = 3
 DEFAULT_MIN_OTHER_CHARS = 2
 MAX_MIN_CHARS = 1_000_000
+MIN_POSITION_BUDGET = 256
+POSITIONS_PER_CHARACTER = 2
 CJK_LETTER = re.compile(
     r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U000323af"
     r"\u3040-\u30ff\u31f0-\u31ff\uff66-\uff9f"
@@ -100,6 +103,45 @@ def _matches(text: str, index):
             yield pattern, start, end
 
 
+def _unique_patterns(text: str, index, boundary_patterns: dict[str, re.Pattern[str]]) -> list[str]:
+    """Keep first valid matches, switching strategy when positions are dense.
+
+    AC yields by end position, longest first at equal ends. The fallback finds
+    each unseen pattern's first boundary-valid occurrence, then restores that
+    exact order so report details (including their first-ten limit) stay stable.
+    The budget limits position enumeration, never the number of checked terms.
+    """
+    if not len(index):
+        return []
+    found: dict[str, int] = {}
+    budget = max(MIN_POSITION_BUDGET, POSITIONS_PER_CHARACTER * len(text))
+    for count, (last, pattern) in enumerate(index.iter(text), 1):
+        if pattern not in found and span_matches_mode(
+            text, last + 1 - len(pattern), last + 1, pattern, "hybrid-boundary"
+        ):
+            found[pattern] = last + 1
+        if count >= budget:
+            for candidate in index.keys():
+                if candidate in found or len(candidate) > len(text):
+                    continue
+                left, right = needs_left_boundary(candidate), needs_right_boundary(candidate)
+                if left or right:
+                    regex = boundary_patterns.get(candidate)
+                    if regex is None:
+                        expression = (r"(?<![A-Za-z0-9_])" if left else "") + re.escape(candidate)
+                        expression += r"(?![A-Za-z0-9_])" if right else ""
+                        regex = boundary_patterns[candidate] = re.compile(expression)
+                    match = regex.search(text)
+                    if match:
+                        found[candidate] = match.end()
+                else:
+                    start = text.find(candidate)
+                    if start >= 0:
+                        found[candidate] = start + len(candidate)
+            return sorted(found, key=lambda item: (found[item], -len(item)))
+    return list(found)
+
+
 def _excerpt(text: str) -> str:
     return text if len(text) <= EXCERPT_LIMIT else text[:EXCERPT_LIMIT] + "…（已截断）"
 
@@ -127,16 +169,19 @@ def process_workbook(
     column_index_from_string(target_column)
     validate_distinct_source_target_columns(source_column, target_column)
     worksheet = workbook[sheet] if sheet else workbook.active
-    last_row = find_last_value_row(worksheet, (source_column, target_column), start_row=start_row)
+    row_numbers = value_row_numbers(worksheet, (source_column, target_column), start_row=start_row)
+    last_row = row_numbers[-1] if row_numbers else start_row - 1
+    source_index = column_index_from_string(source_column)
+    target_index = column_index_from_string(target_column)
     # Only whole Source equality excludes a row. Never remove term spans from
     # otherwise useful sentences. Casefold matches terminology's case policy.
     excluded_sources = {normalize_consistency_text(term).casefold() for term in checked_source_terms}
     groups: dict[str, dict[str, list[Occurrence]]] = {}
-    for row in range(start_row, last_row + 1):
-        source = _cell_text(worksheet[f"{source_column}{row}"].value)
+    for row in row_numbers:
+        source = _cell_text(existing_cell_value(worksheet, row, source_index))
         source_key = normalize_consistency_text(source)
         if source_key and source_key.casefold() not in excluded_sources:
-            target = _cell_text(worksheet[f"{target_column}{row}"].value)
+            target = _cell_text(existing_cell_value(worksheet, row, target_index))
             target_key = normalize_consistency_text(target)
             groups.setdefault(source_key, {}).setdefault(target_key, []).append(
                 Occurrence(row, source, target)
@@ -154,21 +199,20 @@ def process_workbook(
 
     source_index = _build_index(references)
     target_index = _build_index({target.casefold() for target, _ in references.values()})
+    boundary_patterns: dict[str, re.Pattern[str]] = {}
     problem_entries = []
     problem_count = 0
     for source, variants in groups.items():
         # Keep each child once within this parent. No global graph
         # or cross-product of duplicate row numbers is materialized.
-        children: dict[str, None] = {}
-        for child, _, _ in _matches(source, source_index):
-            if len(child) < len(source):
-                children.setdefault(child, None)
+        children = [child for child in _unique_patterns(source, source_index, boundary_patterns)
+                    if len(child) < len(source)]
         if not children:
             continue
         for target, rows in variants.items():
             if not target.strip():
                 continue
-            present = {pattern for pattern, _, _ in _matches(target.casefold(), target_index)}
+            present = set(_unique_patterns(target.casefold(), target_index, boundary_patterns))
             details = []
             missing = 0
             for child in children:

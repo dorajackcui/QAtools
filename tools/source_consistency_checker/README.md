@@ -40,4 +40,6 @@ python3 tools/source_consistency_checker/check_source_consistency_gui.py
 问题描述使用 `2 种译法：1: Astro Boy；2: Atom`，按归一化后的不同译法去重，
 按首次出现顺序编号，每种展示首次出现的原文摘要；归一化后为空时显示 `[空译文]`。
 长文本和过多版本按[报告描述长度规则](../workflow/README.md#描述长度)截断并标注省略。
-独立问题表的版本数和完整同组行号列保持不变。
+独立问题表的版本数和同组行号列保持不变，行号串沿用 Excel 单元格 32,767 字符上限，
+每组只做一次长度处理并共享字符串。组合报告的临时列处理见
+[统一报告](../workflow/README.md#统一报告)。
