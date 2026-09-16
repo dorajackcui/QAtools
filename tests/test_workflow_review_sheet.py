@@ -1,14 +1,62 @@
 from __future__ import annotations
 
 import unittest
+from io import BytesIO
+from pathlib import Path
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 from tools.excel_output import PROBLEM_BASE_HEADERS
-from tools.workflow.review_sheet import collect_review_rows
+from tools.workflow.review_sheet import collect_review_rows, write_review_sheet
 
 
 class ReviewSheetOrderingTests(unittest.TestCase):
+    def test_saved_review_only_unlocks_revision_cells_and_allows_selection_and_filter(self):
+        for has_issue in (False, True):
+            with self.subTest(has_issue=has_issue), BytesIO() as output:
+                workbook = Workbook()
+                try:
+                    workbook.active.title = "Data"
+                    workbook.active.append(["source", "target"])
+                    workbook.active.append(["Hello {name}", "Hello"])
+                    problem = workbook.create_sheet("Tag 问题")
+                    problem.append(PROBLEM_BASE_HEADERS)
+                    if has_issue:
+                        problem.append([2, "Hello {name}", "Hello", "缺少：{name}"])
+                    count = write_review_sheet(
+                        workbook, current_sheet_name="Data", input_file=Path("input.xlsx"),
+                        source_column="A", target_column="B", start_row=2,
+                        problem_sheets=(("Tag 检查", problem.title),),
+                        generated_sheet_names=("问题处理",),
+                    )
+                    self.assertEqual(count, int(has_issue))
+                    workbook.save(output)
+                finally:
+                    workbook.close()
+                output.seek(0)
+                saved = load_workbook(output)
+                try:
+                    sheet = saved["问题处理"]
+                    self.assertTrue(sheet.protection.sheet)
+                    self.assertIsNone(sheet.protection.password)
+                    self.assertFalse(sheet.protection.selectLockedCells)
+                    self.assertFalse(sheet.protection.selectUnlockedCells)
+                    self.assertFalse(sheet.protection.autoFilter)
+                    self.assertEqual(sheet.auto_filter.ref, f"A1:F{count + 1}")
+                    self.assertTrue(all(cell.protection.locked for cell in sheet[1]))
+                    for column in (1, 2, 3, 5, 6):
+                        self.assertTrue(sheet.cell(2, column).protection.locked)
+                    self.assertEqual(sheet["D2"].protection.locked, not has_issue)
+                    self.assertTrue(sheet["D3"].protection.locked)
+                    self.assertFalse(saved["Data"].protection.sheet)
+                    self.assertEqual(saved["Data"]["B2"].value, "Hello")
+                    if has_issue:
+                        self.assertEqual(sheet["A2"].hyperlink.location, "'Data'!B2")
+                        self.assertEqual(sheet["B2"].value, "Hello {name}")
+                        self.assertEqual(sheet["C2"].value, "Hello")
+                finally:
+                    saved.close()
+
     def test_consistency_groups_come_first_without_splitting_multiple_issues(self) -> None:
         workbook = Workbook()
         try:

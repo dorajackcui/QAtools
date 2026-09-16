@@ -60,12 +60,16 @@ class WorkflowMetadataTests(unittest.TestCase):
             self.assertEqual(tuple(next(review.values)), WORKFLOW_REVIEW_HEADERS)
             self.assertEqual(review.max_column, 6)
             self.assertEqual(review.max_row, 4)
-            self.assertFalse(review.protection.sheet)
+            self.assertTrue(review.protection.sheet)
+            self.assertIsNone(review.protection.password)
             metadata_sheet = report[WORKFLOW_METADATA_SHEET_NAME]
             self.assertEqual(metadata_sheet.sheet_state, "veryHidden")
             self.assertTrue(metadata_sheet.protection.sheet)
             metadata = read_review_metadata(report)
             self.assertEqual(metadata["schema_version"], "3")
+            # Row/column cleanup and sorting now require explicitly unprotecting
+            # the review sheet; no password is needed and metadata remains intact.
+            review.protection.disable()
             review.delete_cols(7, 2)
             review.delete_rows(2)
             # Reverse the remaining issues, as with a user sorting the review table.

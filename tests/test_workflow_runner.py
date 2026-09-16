@@ -594,6 +594,9 @@ class WorkflowRunnerTests(unittest.TestCase):
             review_sheet = report_workbook[WORKFLOW_REVIEW_SHEET_NAME]
             self.assertEqual(review_sheet["A2"].value, 4)
             self.assertEqual(review_sheet["A5"].value, 3)
+            self.assertTrue(review_sheet.protection.sheet)
+            self.assertFalse(review_sheet["D2"].protection.locked)
+            self.assertFalse(review_sheet["D5"].protection.locked)
             review_sheet["D2"] = "第四行修订"
             review_sheet["D5"] = "第三行修订"
             review_sheet["Z1000"] = "unrelated tail"

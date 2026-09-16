@@ -84,9 +84,10 @@ class FileCollectorTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), data)
             self.assertEqual((self.output / path.relative_to(self.source)).read_bytes(), data)
 
-    @unittest.skipIf(os.name == "nt", "requires a case-sensitive source filesystem")
     def test_casefolded_file_directory_output_conflicts(self):
         self.file("A.xlsx", b"file")
+        if (self.source / "a.XLSX").exists():
+            self.skipTest("requires a case-sensitive source filesystem")
         self.file("a.XLSX/b.xls", b"nested")
         plan = self.plan("a.xlsx\nb.xls", preserve_tree=True)
         self.assertEqual(plan.conflict_count, 2)

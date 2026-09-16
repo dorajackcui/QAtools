@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from openpyxl.comments import Comment
-from openpyxl.styles import PatternFill
+from openpyxl.styles import PatternFill, Protection
+from openpyxl.worksheet.protection import SheetProtection
 
 from tools.consistency_text import normalize_consistency_text
 from tools.report_text import (
@@ -296,13 +297,24 @@ def write_review_sheet(
         worksheet.column_dimensions[column].width = width
 
     worksheet["D1"].comment = Comment(
-        "在这里填写最终 target。填写后会回填；留空表示忽略该行。",
+        "仅黄色单元格可编辑。填写最终 target 后会回填；留空表示忽略该行。"
+        "其他列可选中和复制。如需编辑其他位置，可取消工作表保护（无密码）。",
         "QAtools",
     )
 
     editable_fill = PatternFill(fill_type="solid", fgColor="FFF2CC")
     for worksheet_row in range(2, len(rows) + 2):
         worksheet.cell(worksheet_row, 4).fill = editable_fill
+        worksheet.cell(worksheet_row, 4).protection = Protection(locked=False)
+
+    # In SheetProtection, False permits the operation. Allow selection/copy
+    # of locked originals and use of the existing filter; only revisions unlock.
+    worksheet.protection = SheetProtection(
+        sheet=True,
+        selectLockedCells=False,
+        selectUnlockedCells=False,
+        autoFilter=False,
+    )
 
     write_review_metadata(
         workbook,

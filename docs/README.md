@@ -43,7 +43,7 @@
   [Xbench QA 转换](../tools/xbench_report_transformer/README.md)
 
 平台说明：[Windows 安装版](../packaging/README-Windows.txt)、
-[macOS Finder 工作流](macos-finder-workflow.md)。
+[macOS GUI 包](../packaging/README-macOS.txt)、[macOS Finder 工作流](macos-finder-workflow.md)。
 
 ## 文档维护
 

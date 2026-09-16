@@ -102,6 +102,17 @@ GUI 表单不显示常驻说明段落，保留输入标签、占位提示、输�
 安装；后续版本直接运行新安装包即可覆盖升级。安装说明见
 [README-Windows.txt](packaging/README-Windows.txt)。
 
+## macOS GUI 包构建
+
+在 Mac 上安装项目依赖、PyInstaller 和 Pillow 后执行：
+
+```bash
+.venv/bin/python scripts/build_macos_release.py
+```
+
+生成仅含 GUI 的 `.app` 与可拖入 Applications 安装的 DMG，架构跟随构建 Python。
+平台限制、安装及签名说明见 [macOS 包说明](packaging/README-macOS.txt)。
+
 ## 开发验证
 
 修改前先阅读 [AGENTS.md](AGENTS.md)。完整验证命令：
