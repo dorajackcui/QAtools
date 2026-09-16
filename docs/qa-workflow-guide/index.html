@@ -198,7 +198,8 @@
             <p>自动识别不到列时，可以手动填写列字母，或到<a href="#settings">设置</a>保存项目使用的表头别名。</p>
           </section>
           <section id="checks">
-            <h3>十项检查一览</h3>
+            <h3>十项可选检查一览</h3>
+            <p>每次还会自动检查 Target 为空，无需勾选。空译文会直接列入报告；清空下面所有选项后仍可运行这项基础检查。</p>
             <div class="group-label">术语与翻译一致性</div>
             <div class="check-grid">
               <article class="card">
@@ -279,7 +280,7 @@
                   <h4>Target 文本规范</h4>
                   <span class="status-pill on">默认开启</span>
                 </div>
-                <p>检查异常标点、连续空格、首尾空格和全半角混用；四条规则可独立开关。</p>
+                <p>检查异常标点、连续空格、首尾空格、全半角混用及括号与引号配对；五条规则可独立开关。</p>
                 <p><a href="#target-settings">查看文本规范配置 ↓</a></p>
               </article>
             </div>
@@ -354,11 +355,12 @@
                 <article class="mini"><strong>连续空格</strong><span>报告任意位置连续 2 个及以上普通 ASCII 空格；NBSP 不计入。</span></article>
                 <article class="mini"><strong>首尾空格</strong><span>报告 Target 开头或结尾的普通 ASCII 空格；NBSP 不计入。</span></article>
                 <article class="mini"><strong>全半角混用</strong><span>仅比较同类字符或标点的半角/全角形式，不把英文与中文标点的正常共存视为问题。</span></article>
+                <article class="mini"><strong>括号与引号配对</strong><span>检查正文括号、双引号和法语引号是否配对；跳过单引号及已识别的 Tag / Placeholder 内部符号。</span></article>
               </div>
               <details class="screenshot-detail"><summary>查看界面截图</summary>
             <figure class="shot">
-                <img src="assets/target-text-settings.png" alt="Target 文本规范设置窗口，四条检查规则均已勾选" width="620" height="151">
-                <figcaption>四条文本规范规则可分别勾选。</figcaption>
+                <img src="assets/target-text-settings.png" alt="Target 文本规范设置窗口，五条检查规则均已勾选" width="620" height="188">
+                <figcaption>五条文本规范规则可分别勾选。</figcaption>
               </figure>
           </details>
             </div>

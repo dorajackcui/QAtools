@@ -21,7 +21,10 @@ from tools.content_fidelity_checker.check_content_fidelity import (
     process_workbook as run_content_fidelity_check_workbook,
 )
 from tools.excel_output import (
+    PROBLEM_BASE_HEADERS,
     build_prefixed_output_path,
+    existing_cell_value,
+    iter_value_cells,
     load_workbook_for_editing,
     validate_distinct_source_target_columns,
     validate_report_output_path,
@@ -66,6 +69,7 @@ from tools.workflow.review_sheet import WORKFLOW_REVIEW_SHEET_NAME, write_review
 
 WORKFLOW_TERM_PROBLEM_SHEET_NAME = "术语问题"
 WORKFLOW_SUMMARY_SHEET_NAME = "质量检查汇总"
+EMPTY_TARGET_CHECK_NAME = "Target 为空"
 
 
 @dataclass(frozen=True)
@@ -124,6 +128,30 @@ def count_unique_problem_rows(worksheet) -> int:
     )
 
 
+def write_empty_target_problems(
+    workbook, worksheet, source_column: str, target_column: str, start_row: int,
+) -> tuple[str, int]:
+    """Build a transient problem sheet without replacing any user worksheet."""
+    source_index = column_index_from_string(source_column)
+    target_index = column_index_from_string(target_column)
+    problem_sheet = workbook.create_sheet(EMPTY_TARGET_CHECK_NAME)
+    problem_sheet.append(PROBLEM_BASE_HEADERS)
+    count = 0
+    # Only issue rows allocate output cells. Review-sheet merging orders them.
+    for cell in iter_value_cells(worksheet):
+        if cell.column != source_index or cell.row < start_row:
+            continue
+        source_text = str(cell.value)
+        if not source_text.strip():
+            continue
+        target_value = existing_cell_value(worksheet, cell.row, target_index)
+        target_text = "" if target_value is None else str(target_value)
+        if not target_text.strip():
+            problem_sheet.append((cell.row, source_text, target_text, "译文为空或仅含空白"))
+            count += 1
+    return problem_sheet.title, count
+
+
 def finalize_workflow_output(
     *,
     output_path: Path,
@@ -178,7 +206,10 @@ def finalize_workflow_output(
         if WORKFLOW_SUMMARY_SHEET_NAME in workbook.sheetnames:
             del workbook[WORKFLOW_SUMMARY_SHEET_NAME]
 
-        problem_sheets = []
+        empty_target_sheet, empty_target_count = write_empty_target_problems(
+            workbook, workbook[worksheet_title], source_column, target_column, start_row,
+        )
+        problem_sheets = [(EMPTY_TARGET_CHECK_NAME, empty_target_sheet)]
         if run_term_pair_check:
             problem_sheets.append(("术语检查", WORKFLOW_TERM_PROBLEM_SHEET_NAME))
         if run_source_consistency_check:
@@ -226,7 +257,7 @@ def finalize_workflow_output(
 
         summary_sheet = workbook.create_sheet(WORKFLOW_SUMMARY_SHEET_NAME)
         summary_sheet.append(["检查项", "问题行数"])
-        summary_rows = []
+        summary_rows = [(EMPTY_TARGET_CHECK_NAME, empty_target_count)]
         if run_term_pair_check:
             summary_rows.append(("术语检查", term_problem_rows))
         if run_source_consistency_check:
@@ -290,22 +321,6 @@ def run_workflow(
     run_target_text_check: bool = True,
     target_text_rules: Iterable[str] | None = None,
 ) -> WorkflowSummary:
-    if not any(
-        (
-            run_term_pair_check,
-            run_tag_check,
-            run_line_break_check,
-            run_source_consistency_check,
-            run_target_consistency_check,
-            run_substring_consistency_check,
-            run_number_check,
-            run_url_check,
-            run_chinese_target_check,
-            run_target_text_check,
-        )
-    ):
-        raise ValueError("请至少选择一个质量检查项目。")
-
     if run_substring_consistency_check:
         validate_minimum_characters(substring_min_cjk_chars, substring_min_other_chars)
 
@@ -355,6 +370,7 @@ def run_workflow(
         # Rebuilding result sheets can change the active sheet's numeric index.
         # Resolve the input once so every checker reads the same business sheet.
         sheet = workflow_workbook[sheet].title if sheet else workflow_workbook.active.title
+        worksheet_title = sheet
         # Each checker sheet is transient: the finalizer merges its values into
         # 问题处理 and deletes it. Skip styling and hyperlinks that cannot survive.
         if run_term_pair_check:

@@ -615,11 +615,13 @@ class ToolshubLayoutTests(unittest.TestCase):
 
             workflow.abnormal_rule.setChecked(False)
             workflow.edge_spaces_rule.setChecked(False)
+            workflow.paired_symbols_rule.setChecked(False)
             workflow.target_settings_dialog.reject()
             self.qt_app.processEvents()
 
             self.assertTrue(workflow.abnormal_rule.isChecked())
             self.assertTrue(workflow.edge_spaces_rule.isChecked())
+            self.assertTrue(workflow.paired_symbols_rule.isChecked())
 
             workflow.target_settings_button.click()
             self.qt_app.processEvents()
@@ -663,7 +665,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                         check.setChecked(checked)
                     workflow.angle_config.set_path(r"C:\configs\tags.json")
                     workflow.tag_check_order.setChecked(True)
-                    rule_checks = (False, True, False, True)
+                    rule_checks = (False, True, False, True, False)
                     for check, checked in zip(workflow.rule_checks.values(), rule_checks, strict=True):
                         check.setChecked(checked)
                     workflow.substring_min_cjk_chars.setValue(5)
@@ -769,6 +771,21 @@ class ToolshubLayoutTests(unittest.TestCase):
         finally:
             window.close()
 
+    def test_legacy_text_settings_enable_pairing_and_keep_existing_selections(self) -> None:
+        window = self.make_app()
+        try:
+            workflow = window.tool_frames["workflow"]
+            options = workflow._capture_options()
+            rules = options["settings"]["target"]["rules"]
+            del rules["paired-symbols"]
+            rules["mixed-width"] = False
+            workflow.options_store.save(options)
+            workflow._restore_options(workflow.options_store.load(workflow._capture_options()))
+            self.assertTrue(workflow.paired_symbols_rule.isChecked())
+            self.assertFalse(workflow.width_rule.isChecked())
+        finally:
+            window.close()
+
     def test_substring_selection_reaches_background_runner(self) -> None:
         window = self.make_app()
         try:
@@ -859,6 +876,12 @@ class ToolshubLayoutTests(unittest.TestCase):
             workflow.tag_check_order.setChecked(True)
             workflow.run_selected_tasks()
             self.assertTrue(workflow.run_in_background.call_args.kwargs["kwargs"]["tag_check_order"])
+            workflow.set_all_tasks(False)
+            workflow.run_in_background.reset_mock()
+            workflow.run_selected_tasks()
+            workflow.run_in_background.assert_called_once()
+            options = workflow.run_in_background.call_args.kwargs["kwargs"]
+            self.assertFalse(any(value for key, value in options.items() if key.startswith("run_")))
         finally:
             window.close()
 

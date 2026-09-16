@@ -28,6 +28,7 @@ from tools.target_text_checker.check_target_text import (
     CONSECUTIVE_SPACES_RULE,
     LEADING_TRAILING_SPACES_RULE,
     MIXED_WIDTH_RULE,
+    PAIRED_SYMBOLS_RULE,
 )
 
 
@@ -202,11 +203,13 @@ class WorkflowSettingsMixin:
         self.spaces_rule = QCheckBox("连续空格（2 个及以上）")
         self.edge_spaces_rule = QCheckBox("首尾空格")
         self.width_rule = QCheckBox("全半角混用")
+        self.paired_symbols_rule = QCheckBox("括号与引号配对")
         self.rule_checks = {
             ABNORMAL_PUNCTUATION_RULE: self.abnormal_rule,
             CONSECUTIVE_SPACES_RULE: self.spaces_rule,
             LEADING_TRAILING_SPACES_RULE: self.edge_spaces_rule,
             MIXED_WIDTH_RULE: self.width_rule,
+            PAIRED_SYMBOLS_RULE: self.paired_symbols_rule,
         }
         for index, check in enumerate(self.rule_checks.values()):
             check.setChecked(True)

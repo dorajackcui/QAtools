@@ -120,7 +120,8 @@ qatools collect-files "D:\project" --names-file "D:\list.txt" -o "D:\delivery" -
 
 ## 一键质量检查
 
-默认运行八项常用检查；“同 Target 不同 Source”因合理复用较常见而默认关闭。
+固定执行 [Target 为空基础检查](../tools/workflow/README.md#target-为空)，无需参数配置；
+此外默认运行八项常用检查；“同 Target 不同 Source”因合理复用较常见而默认关闭。
 组合运行时，所有检查共用一次主工作簿读取和一次保存：
 
 ```bash
@@ -147,7 +148,7 @@ qatools qa ./input.xlsx \
 | `chinese` | Target 中文 | 开 | [Target 中文](../tools/chinese_target_checker/README.md) |
 | `text` | Target 文本规范 | 开 | [Target 文本规范](../tools/target_text_checker/README.md) |
 
-一旦传入 `--check`，只运行显式选择的项目；该参数可以重复：
+一旦传入 `--check`，可选检查只运行显式选择的项目，Target 为空基础检查仍会执行；该参数可以重复：
 
 ```bash
 qatools qa ./input.xlsx -c A -t B \
@@ -156,7 +157,7 @@ qatools qa ./input.xlsx -c A -t B \
   --check consistency
 ```
 
-仅运行子串译文一致性检查：
+选择子串译文一致性检查：
 
 ```bash
 qatools qa ./input.xlsx -c A -t B --check substring-consistency
@@ -180,7 +181,7 @@ qatools qa ./input.xlsx -c A -t B \
   --check target-consistency
 ```
 
-Target 文本规范检查支持单独选择规则；不传 `--text-rule` 时默认运行全部四项：
+Target 文本规范检查支持单独选择规则；不传 `--text-rule` 时默认运行全部五项：
 
 ```bash
 qatools qa ./input.xlsx -c A -t B \
@@ -188,7 +189,8 @@ qatools qa ./input.xlsx -c A -t B \
   --text-rule abnormal-punctuation \
   --text-rule consecutive-spaces \
   --text-rule leading-trailing-spaces \
-  --text-rule mixed-width
+  --text-rule mixed-width \
+  --text-rule paired-symbols
 ```
 
 术语和 Tag 的高级参数：

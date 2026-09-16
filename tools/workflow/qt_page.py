@@ -556,7 +556,6 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
         input_file = self.input_picker.path()
         source_column = self.source_column.text().strip()
         target_column = self.target_column.text().strip()
-        task_values = tuple(check.isChecked() for check in self.task_checks)
         term_marks = self.selected_term_marks()
         tag_types = self.selected_tag_types()
         target_rules = self.selected_target_rules()
@@ -566,9 +565,6 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
             return
         if not source_column or not target_column:
             show_error(self, "缺少列信息", "请填写 source 列和 target 列。")
-            return
-        if not any(task_values):
-            show_error(self, "缺少任务", "请至少选择一个质量检查项目。")
             return
         if self.term_check.isChecked() and not term_marks and not history_file:
             show_error(self, "缺少术语来源", "术语检查至少需要一种术语 mark，或一个历史 TB。")

@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import sys
+from bisect import bisect_right
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -195,21 +196,29 @@ def _character_is_escaped(text: str, index: int) -> bool:
 
 def _iter_angle_token_candidates(text: str) -> Iterator[tuple[int, int, str, str]]:
     search_index = 0
+    quote_ends = None
     while True:
         start = text.find("<", search_index)
         if start < 0:
             return
 
         cursor = start + 1
-        quote = ""
         end = -1
         while cursor < len(text):
             character = text[cursor]
-            if quote:
-                if character == quote and not _character_is_escaped(text, cursor):
-                    quote = ""
-            elif character in {'"', "'"}:
-                quote = character
+            if character in {'"', "'"}:
+                # Index closing quotes once, so malformed quoted tags do not
+                # rescan the same suffix for every '<' inside that suffix.
+                if quote_ends is None:
+                    quote_ends = {'"': [], "'": []}
+                    for match in re.finditer(r'''["']''', text):
+                        if not _character_is_escaped(text, match.start()):
+                            quote_ends[match.group()].append(match.start())
+                positions = quote_ends[character]
+                next_quote = bisect_right(positions, cursor)
+                if next_quote == len(positions):
+                    break
+                cursor = positions[next_quote]
             elif character == "<":
                 break
             elif character == ">":

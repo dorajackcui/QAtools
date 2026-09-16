@@ -155,7 +155,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                 self.assertIn("参考原表第 2 行", review["E2"].value)
                 self.assertEqual(review["F2"].value, "子串译文一致性")
                 self.assertEqual(list(report["质量检查汇总"].values), [
-                    ("检查项", "问题行数"), ("子串译文一致性", 1),
+                    ("检查项", "问题行数"), ("Target 为空", 0), ("子串译文一致性", 1),
                 ])
                 review["D2"] = "Save changes?"
                 report.save(summary.output_path)
@@ -260,6 +260,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                 list(summary_sheet.values),
                 [
                     ("检查项", "问题行数"),
+                    ("Target 为空", 0),
                     ("术语检查", 1),
                     ("同 Source 不同 Target", 2),
                     ("Tag 检查", 1),
@@ -499,6 +500,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                     list(output_workbook[WORKFLOW_SUMMARY_SHEET_NAME].values),
                     [
                         ("检查项", "问题行数"),
+                        ("Target 为空", 0),
                         ("同 Target 不同 Source", 2),
                         ("数字一致性", 1),
                         ("URL 一致性", 1),
@@ -868,26 +870,32 @@ class WorkflowRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "前四列必须为"):
             collect_review_rows(workbook, (("测试检查", "旧问题表"),))
 
-    def test_run_workflow_requires_at_least_one_task(self) -> None:
+    def test_run_workflow_all_optional_checks_disabled_still_writes_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.xlsx"
             self.create_workbook(input_path)
 
-            with self.assertRaisesRegex(ValueError, "请至少选择一个质量检查项目"):
-                run_workflow(
-                    input_file=input_path,
-                    source_column="A",
-                    target_column="B",
-                    run_term_pair_check=False,
-                    run_tag_check=False,
-                    run_line_break_check=False,
-                    run_source_consistency_check=False,
-                    run_target_consistency_check=False,
-                    run_number_check=False,
-                    run_url_check=False,
-                    run_chinese_target_check=False,
-                    run_target_text_check=False,
-                )
+            summary = run_workflow(
+                input_file=input_path,
+                source_column="A",
+                target_column="B",
+                run_term_pair_check=False,
+                run_tag_check=False,
+                run_line_break_check=False,
+                run_source_consistency_check=False,
+                run_target_consistency_check=False,
+                run_number_check=False,
+                run_url_check=False,
+                run_chinese_target_check=False,
+                run_target_text_check=False,
+            )
+            report = load_workbook(summary.output_path)
+            try:
+                self.assertEqual(summary.worksheet_title, "Data")
+                self.assertEqual(list(report[WORKFLOW_SUMMARY_SHEET_NAME].values),
+                                 [("检查项", "问题行数"), ("Target 为空", 0)])
+            finally:
+                report.close()
 
     def test_run_workflow_passes_history_tb_to_term_pair_check(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -1075,6 +1083,7 @@ class WorkflowRunnerTests(unittest.TestCase):
                 list(output_workbook[WORKFLOW_SUMMARY_SHEET_NAME].values),
                 [
                     ("检查项", "问题行数"),
+                    ("Target 为空", 0),
                     ("Target 文本规范检查", 1),
                 ],
             )

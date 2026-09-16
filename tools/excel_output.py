@@ -84,6 +84,13 @@ def iter_value_cells(worksheet) -> Iterator[object]:
             yield cell
 
 
+def existing_cell_value(worksheet, row: int, column: int) -> object:
+    """Read a sparse editable sheet without creating a missing cell."""
+    # Same pinned openpyxl 3.x sparse storage contract as iter_value_cells.
+    cell = worksheet._cells.get((row, column))
+    return None if cell is None else cell.value
+
+
 def rebuild_output_sheet(workbook, current_sheet_name: str, sheet_name: str):
     if current_sheet_name == sheet_name:
         raise ValueError(f"数据工作表名称不能为 {sheet_name}")

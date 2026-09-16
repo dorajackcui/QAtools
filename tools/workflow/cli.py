@@ -67,7 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--check",
         action="append",
         choices=CHECKS,
-        help="只运行指定检查；可重复传入。不传时运行全部常用检查。",
+        help="选择可选检查；可重复传入。不传时运行全部常用检查。Target 为空始终检查。",
     )
 
     parser.add_argument(

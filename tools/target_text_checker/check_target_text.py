@@ -19,6 +19,7 @@ from tools.excel_output import (
     validate_report_output_path,
     write_output_table,
 )
+from tools.tag_placeholder_checker.check_tags_and_placeholders import extract_token_details
 
 
 PROBLEM_SHEET_NAME = "Target文本规范问题"
@@ -31,11 +32,13 @@ LEGACY_ABNORMAL_ELLIPSIS_RULE = "abnormal-ellipsis"
 CONSECUTIVE_SPACES_RULE = "consecutive-spaces"
 LEADING_TRAILING_SPACES_RULE = "leading-trailing-spaces"
 MIXED_WIDTH_RULE = "mixed-width"
+PAIRED_SYMBOLS_RULE = "paired-symbols"
 SUPPORTED_RULES = (
     ABNORMAL_PUNCTUATION_RULE,
     CONSECUTIVE_SPACES_RULE,
     LEADING_TRAILING_SPACES_RULE,
     MIXED_WIDTH_RULE,
+    PAIRED_SYMBOLS_RULE,
 )
 RULE_ALIASES = {
     LEGACY_ABNORMAL_ELLIPSIS_RULE: ABNORMAL_PUNCTUATION_RULE,
@@ -46,7 +49,12 @@ RULE_LABELS = {
     CONSECUTIVE_SPACES_RULE: "连续空格",
     LEADING_TRAILING_SPACES_RULE: "首尾空格",
     MIXED_WIDTH_RULE: "全半角混用",
+    PAIRED_SYMBOLS_RULE: "括号与引号配对",
 }
+
+_SYMBOL_PAIRS = dict(zip("(（[［【{｛“«", ")）]］】}｝”»"))
+_CLOSING_SYMBOLS = frozenset(_SYMBOL_PAIRS.values())
+_PAIRING_SYMBOL_PATTERN = re.compile("[" + re.escape(''.join(_SYMBOL_PAIRS) + ''.join(_CLOSING_SYMBOLS) + '"') + "]")
 
 _REPEATED_PUNCTUATION_PATTERN = re.compile(
     r"[.．。]{2,}|[,，、]{2,}|[:：]{2,}|[;；]{2,}"
@@ -216,11 +224,63 @@ def _find_mixed_width(text: str) -> TextIssue | None:
     )
 
 
+def _pairing_text(text: str) -> str:
+    """Mask recognized tokens while preserving original character positions."""
+    # Mask memoQ markers first: a brace token must not swallow their prose.
+    for token_types in (("memoq",), ("angle", "square_color", "brace")):
+        if not any(marker in text for marker in ("<", "{", "[")):
+            break
+        tokens = extract_token_details(text, token_types=token_types)
+        if tokens:
+            characters = list(text)
+            for token in tokens:
+                characters[token.start:token.end] = " " * (token.end - token.start)
+            text = "".join(characters)
+    return text
+
+
+def _find_unpaired_symbols(text: str) -> TextIssue | None:
+    if not _PAIRING_SYMBOL_PATTERN.search(text):
+        return None
+    stack: list[tuple[str, str, int]] = []
+    problems: list[str] = []
+    for match in _PAIRING_SYMBOL_PATTERN.finditer(_pairing_text(text)):
+        position, character = match.start() + 1, match.group()
+        if character == '"':
+            if stack and stack[-1][0] == '"':
+                stack.pop()
+            else:
+                stack.append((character, character, position))
+        elif character in _SYMBOL_PAIRS:
+            stack.append((character, _SYMBOL_PAIRS[character], position))
+        elif character in _CLOSING_SYMBOLS:
+            if not stack:
+                problems.append(f"第 {position} 字符 {character} 缺少左侧配对符号")
+            else:
+                opening, expected, opening_position = stack.pop()
+                if character != expected:
+                    problems.append(
+                        f"第 {position} 字符 {character} 与第 {opening_position} 字符 {opening} 不匹配（应为 {expected}）"
+                    )
+    for opening, expected, position in stack:
+        problems.append(f"第 {position} 字符 {opening} 未闭合（缺少 {expected}）")
+    if not problems:
+        return None
+    details = "；".join(problems)
+    return TextIssue(
+        rule=PAIRED_SYMBOLS_RULE,
+        issue_type=RULE_LABELS[PAIRED_SYMBOLS_RULE],
+        description="括号与引号配对：" + details,
+        matched_content=details,
+    )
+
+
 _RULE_CHECKERS = {
     ABNORMAL_PUNCTUATION_RULE: _find_abnormal_punctuation,
     CONSECUTIVE_SPACES_RULE: _find_consecutive_spaces,
     LEADING_TRAILING_SPACES_RULE: _find_leading_trailing_spaces,
     MIXED_WIDTH_RULE: _find_mixed_width,
+    PAIRED_SYMBOLS_RULE: _find_unpaired_symbols,
 }
 
 
@@ -356,6 +416,7 @@ __all__ = [
     "CONSECUTIVE_SPACES_RULE",
     "LEADING_TRAILING_SPACES_RULE",
     "MIXED_WIDTH_RULE",
+    "PAIRED_SYMBOLS_RULE",
     "PROBLEM_SHEET_NAME",
     "RULE_LABELS",
     "SUPPORTED_RULE_INPUTS",

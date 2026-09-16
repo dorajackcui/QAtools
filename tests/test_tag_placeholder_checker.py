@@ -10,6 +10,7 @@ from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
 
 from tools.tag_placeholder_checker.check_tags_and_placeholders import (
+    _character_is_escaped,
     extract_tokens,
     load_angle_patterns_from_file,
     main,
@@ -18,6 +19,15 @@ from tools.tag_placeholder_checker.check_tags_and_placeholders import (
 
 
 class ExtractTokensTests(unittest.TestCase):
+    def test_malformed_quoted_tags_do_not_rescan_escaped_quotes_quadratically(self) -> None:
+        text = '<a x=\\"' * 500
+        with patch(
+            "tools.tag_placeholder_checker.check_tags_and_placeholders._character_is_escaped",
+            wraps=_character_is_escaped,
+        ) as escaped:
+            self.assertEqual(extract_tokens(text, token_types=("angle",)), [])
+        self.assertLessEqual(escaped.call_count, text.count('"'))
+
     def test_extract_tokens_supports_mixed_token_types_in_text_order(self) -> None:
         text = r"前缀</text>{name}\n中间<color=red>后缀"
         self.assertEqual(
