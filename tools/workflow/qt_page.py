@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -90,8 +91,13 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
 
         self.run_button = primary_button("开始检查")
         self.revision_button = QPushButton("应用修订")
+        self.open_report_button = QPushButton("打开报告")
+        self.open_report_button.setEnabled(False)
+        self.open_report_button.setToolTip("使用系统默认应用打开本次检查报告。")
         self.run_button.clicked.connect(self.run_selected_tasks)
         self.revision_button.clicked.connect(self.apply_revisions)
+        self.open_report_button.clicked.connect(self.open_report)
+        self.input_picker.path_changed.connect(self._reset_workflow_report)
         self.output_preview = muted_label()
         self.status = muted_label()
         self.content_layout.addWidget(self.output_preview)
@@ -101,6 +107,7 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
         outer.addWidget(self.content_scroll, 1)
         self.action_bar = _add_action_bar(
             outer,
+            self.open_report_button,
             self.revision_button,
             self.run_button,
         )
@@ -349,7 +356,6 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
 
     def load_input_file(self, path: str, *, show_error: bool = True) -> None:
         self.input_picker.set_path(path)
-        self.last_workflow_output_path = ""
         self.output_preview.setText(f"输出文件：{build_workflow_output_path(path).name}")
         try:
             choices = list_workbook_sheets(path)
@@ -574,6 +580,7 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
             show_error(self, "缺少检查规则", "Target 文本规范检查至少需要选择一项规则。")
             return
 
+        self._reset_workflow_report()
         self.run_button.setEnabled(False)
         self.revision_button.setEnabled(False)
         self.status.setText("正在执行质量检查…")
@@ -609,15 +616,18 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
                 "run_target_text_check": self.target_text_check.isChecked(),
                 "target_text_rules": target_rules,
             },
-            on_success=lambda summary: self._finish_workflow(summary, history_file),
+            on_success=lambda summary: self._finish_workflow(summary, history_file, input_file),
             on_error=self._fail_workflow,
         )
 
-    def _finish_workflow(self, summary: object, history_file: str) -> None:
+    def _finish_workflow(self, summary: object, history_file: str, input_file: str) -> None:
         self.run_button.setEnabled(True)
         self.revision_button.setEnabled(True)
         self.status.clear()
-        self.last_workflow_output_path = str(summary.output_path)
+        if self.input_picker.path() == input_file:
+            self.last_workflow_output_path = str(summary.output_path)
+            self.open_report_button.setEnabled(True)
+            self.open_report_button.setToolTip(self.last_workflow_output_path)
         lines = [
             "一键质量检查完成。",
             f"检查工作表: {summary.worksheet_title}",
@@ -660,6 +670,31 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
         self.revision_button.setEnabled(True)
         self.status.clear()
         show_error(self, "处理失败", message)
+
+    def _reset_workflow_report(self) -> None:
+        self.last_workflow_output_path = ""
+        self.open_report_button.setEnabled(False)
+        self.open_report_button.setToolTip("检查成功后可打开报告。")
+
+    def open_report(self) -> None:
+        if not self.last_workflow_output_path:
+            return
+        report_path = Path(self.last_workflow_output_path).expanduser()
+        try:
+            if not report_path.is_file():
+                self._reset_workflow_report()
+                show_warning(self, "报告不存在", f"报告可能已被移动或删除，请重新检查。\n{report_path}")
+                return
+            opened = QDesktopServices.openUrl(QUrl.fromLocalFile(str(report_path)))
+        except OSError as exc:
+            show_error(self, "无法打开报告", f"{exc}\n报告：{report_path}")
+            return
+        if not opened:
+            show_error(
+                self,
+                "无法打开报告",
+                f"请尝试从文件管理器打开，或检查 Excel / WPS 的默认打开设置。\n报告：{report_path}",
+            )
 
     def apply_revisions(self) -> None:
         candidate_text = self.last_workflow_output_path or self.input_picker.path()

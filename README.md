@@ -87,9 +87,15 @@ GUI 表单不显示常驻说明段落，保留输入标签、占位提示、输�
 
 ## Windows 安装包构建
 
+在仓库根目录运行：
+
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build_windows_release.ps1
+.\build.cmd
 ```
+
+也可以双击根目录的 [build.cmd](build.cmd)。该入口调用
+[构建脚本](scripts/build_windows_release.ps1)，可直接透传原脚本参数，例如
+`.\build.cmd -Version 0.1.7` 指定安装包版本；不传参数时读取项目当前版本。
 
 脚本会运行回归测试，并在 `dist/` 生成仅含 GUI 的 Windows 安装包。源码仍提供 CLI。
 安装程序按当前用户
