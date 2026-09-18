@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
 from pathlib import Path
 import tempfile
@@ -161,6 +162,74 @@ class ExcelBatcherTests(unittest.TestCase):
             finally:
                 original.close()
                 restored.close()
+
+    def test_split_preserves_equals_prefixed_text_at_batch_four_row_73(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            source_path = Path(tmp_dir) / "project.xlsx"
+            source_text = "=͟͟͞͞( •̀д•́)诶？！气球飞走啦！！"
+            workbook = Workbook()
+            try:
+                worksheet = workbook.active
+                worksheet.append(["key", "source"])
+                worksheet["A3073"] = "storyMain*storyMain*txt*23043"
+                worksheet["B3073"] = source_text
+                worksheet["B3073"].data_type = "s"
+                workbook.save(source_path)
+            finally:
+                workbook.close()
+
+            summary = split_workbook(source_path, batch_size=1000)
+            self.assertEqual(summary.batch_count, 4)
+            for data_only in (False, True):
+                with self.subTest(data_only=data_only):
+                    batch = load_workbook(summary.batch_files[3], data_only=data_only)
+                    try:
+                        self.assertEqual(
+                            batch.active["A73"].value,
+                            "storyMain*storyMain*txt*23043",
+                        )
+                        self.assertEqual(batch.active["B73"].value, source_text)
+                        self.assertEqual(batch.active["B73"].data_type, "s")
+                    finally:
+                        batch.close()
+
+    def test_split_and_restore_preserve_header_and_data_cell_types(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            source_path = Path(tmp_dir) / "types.xlsx"
+            expected = (
+                ("=literal text", "s"),
+                ("#N/A", "s"),
+                ("#N/A", "e"),
+                ("=1+2", "f"),
+                (42, "n"),
+                (True, "b"),
+                (datetime(2026, 1, 2), "d"),
+                ("  Text\nwith whitespace  ", "s"),
+            )
+            workbook = Workbook()
+            try:
+                for row_index in range(1, 4):
+                    for column_index, (value, data_type) in enumerate(expected, 1):
+                        cell = workbook.active.cell(row_index, column_index, value)
+                        cell.data_type = data_type
+                workbook.save(source_path)
+            finally:
+                workbook.close()
+
+            summary = split_workbook(source_path, batch_size=1)
+            restored_path = Path(tmp_dir) / "restored.xlsx"
+            restore_batches(summary.output_dir, output_file=restored_path)
+            for path in (*summary.batch_files, restored_path):
+                with self.subTest(file=path.name):
+                    workbook = load_workbook(path, data_only=False)
+                    try:
+                        for row in workbook.active.iter_rows():
+                            self.assertEqual(
+                                tuple((cell.value, cell.data_type) for cell in row),
+                                expected,
+                            )
+                    finally:
+                        workbook.close()
 
     def test_restore_applies_batch_edits_to_their_original_rows_and_new_columns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

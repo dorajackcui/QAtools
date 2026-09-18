@@ -95,6 +95,7 @@ class _Manifest:
 @dataclass(frozen=True)
 class _CellSnapshot:
     value: object
+    data_type: str
     style_array: object | None
 
 
@@ -138,6 +139,7 @@ def _snapshot_read_only_row(row) -> tuple[_CellSnapshot, ...]:
         snapshots.append(
             _CellSnapshot(
                 value=getattr(cell, "value", None),
+                data_type=cell.data_type,
                 style_array=style_array,
             )
         )
@@ -181,6 +183,7 @@ def _write_snapshot_row(worksheet, row_index: int, snapshots) -> None:
             continue
         cell = worksheet.cell(row_index, column_index)
         cell.value = snapshot.value
+        cell.data_type = snapshot.data_type
         if snapshot.style_array is not None:
             cell._style = copy(snapshot.style_array)
 
@@ -193,6 +196,9 @@ def _write_read_only_row(worksheet, row_index: int, source_row) -> None:
             continue
         cell = worksheet.cell(row_index, column_index)
         cell.value = value
+        # Value assignment infers formulas/errors from text such as '=' or '#N/A'.
+        # Copy the source type afterwards so literal text remains literal text.
+        cell.data_type = source_cell.data_type
         if has_style:
             style_array = copy(source_cell.style_array)
             style_array.xfId = 0
