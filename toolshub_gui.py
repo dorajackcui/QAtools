@@ -8,6 +8,7 @@ import ctypes
 from dataclasses import dataclass
 from html import escape
 import os
+from pathlib import Path
 import sys
 
 from PySide6.QtCore import QLockFile, QStandardPaths, Qt, QTimer
@@ -28,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from tools.header_aliases import HeaderAliasStore
-from tools.qt_navigation import ToolNavigationServer, send_tool_selection
+from tools.qt_navigation import ToolNavigationServer, send_path_request, send_tool_selection
 from tools.qt_gui_common import (
     ACCENT_COLOR,
     AsyncPage,
@@ -46,7 +47,6 @@ from tools.workflow.file_receiver import (
     ToolFileRequest,
     WorkflowFileReceiver,
     normalize_excel_input_file,
-    send_tool_input_file,
 )
 
 
@@ -58,6 +58,11 @@ SIDEBAR_WIDTH = 184
 WINDOW_HORIZONTAL_BREATHING_ROOM = 16
 WINDOW_VERTICAL_BREATHING_ROOM = 16
 GUI_INSTANCE_LOCK_NAME = "qatools-toolshub-gui.lock"
+DIRECTORY_ACTIONS = {
+    "compatibility": "compatibility_dir",
+    "excel_merger": "merge_dir",
+    "untranslated_stats": "untranslated_dir",
+}
 QA_CHECK_WIDGETS = {
     "term": "term_check",
     "tag": "tag_check",
@@ -144,6 +149,7 @@ class ToolshubApp(QMainWindow):
         self._receiver: WorkflowFileReceiver | None = None
         self._poll_timer: QTimer | None = None
         self._navigation: ToolNavigationServer | None = None
+        self._opening_path = False
         self._build_ui()
         self._fit_window_to_screen()
         self.select_tool(self.tool_groups[0].tools[0].key)
@@ -283,6 +289,7 @@ class ToolshubApp(QMainWindow):
         page = self.tool_frames["workflow"]
         if not isinstance(page, WorkflowPage):
             raise RuntimeError("一键质量检查页面未正确加载。")
+        self._ensure_page_idle("workflow")
         self.select_tool("workflow")
         page.load_input_file(str(normalized))
         self._bring_window_to_front()
@@ -308,11 +315,37 @@ class ToolshubApp(QMainWindow):
         page = self.tool_frames["french_nbsp"]
         if not isinstance(page, FrenchNbspPage):
             raise RuntimeError("法语 NBSP 恢复页面未正确加载。")
+        self._ensure_page_idle("french_nbsp")
         self.select_tool("french_nbsp")
-        page.load_input_file(str(normalized), reset_options=True)
         self._bring_window_to_front()
-        if run_immediately:
-            QTimer.singleShot(0, page.run_restore)
+        loaded = page.load_input_file(str(normalized), reset_options=True)
+        if run_immediately and loaded:
+            page.run_restore()
+
+    def _ensure_page_idle(self, key: str) -> None:
+        page = self.tool_frames[key]
+        if isinstance(page, AsyncPage) and (page.has_running_tasks() or not page.run_button.isEnabled()):
+            raise ValueError(f"{self.tools_by_key[key].title}正在处理文件，请等待完成后再从右键菜单打开。")
+
+    def open_tool_directory(self, key: str, directory: str) -> None:
+        if key not in DIRECTORY_ACTIONS:
+            raise ValueError("不支持的目录操作。")
+        path = Path(directory).expanduser().absolute()
+        if not path.is_dir():
+            raise ValueError(f"文件目录不存在：{path}")
+        self._ensure_page_idle(key)
+        page = self.tool_frames[key]
+        picker = page.input_dir if key == "excel_merger" else page.input_picker
+        picker.set_path(str(path))
+        self.select_tool(key)
+        self._bring_window_to_front()
+
+    def _open_forwarded_path(self, action: str, path: str) -> None:
+        try:
+            self.handle_file_request(ToolFileRequest(action=action, file_path=path))
+        except Exception as exc:  # noqa: BLE001
+            self._bring_window_to_front()
+            show_error(self, "无法打开右键操作", str(exc))
 
     def _bring_window_to_front(self) -> None:
         if self.isMinimized():
@@ -366,10 +399,20 @@ class ToolshubApp(QMainWindow):
                 show_error(self, "无法载入 Excel", str(exc))
 
     def handle_file_request(self, request: ToolFileRequest) -> None:
-        if request.action == FRENCH_NBSP_RESTORE_ACTION:
-            self.open_french_nbsp_restore_file(request.file_path)
-        else:
-            self.open_qa_workflow_file(request.file_path)
+        if self._opening_path:
+            raise ValueError("正在载入文件，请完成当前操作后重试。")
+        self._opening_path = True
+        try:
+            if request.action == FRENCH_NBSP_RESTORE_ACTION:
+                self.open_french_nbsp_restore_file(request.file_path)
+            elif request.action == QA_WORKFLOW_ACTION:
+                self.open_qa_workflow_file(request.file_path)
+            elif request.action in DIRECTORY_ACTIONS:
+                self.open_tool_directory(request.action, request.file_path)
+            else:
+                raise ValueError("不支持的右键操作。")
+        finally:
+            self._opening_path = False
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt API
         running_tools = [
@@ -424,12 +467,22 @@ def build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--qa-workflow", metavar="EXCEL_FILE", help="把 Excel 文件载入一键质量检查页面。")
     action_group.add_argument("--nbsp-restore", metavar="EXCEL_FILE", help="对 Excel 自动执行法语 NBSP 恢复。")
     action_group.add_argument("--tool", choices=tuple(PAGE_FACTORIES), help="启动时打开指定的 PySide6 工具页面。")
+    action_group.add_argument("--compatibility-dir", metavar="DIRECTORY", help="打开兼容性重存并填入目录。")
+    action_group.add_argument("--merge-dir", metavar="DIRECTORY", help="打开合并表格并填入目录。")
+    action_group.add_argument("--untranslated-dir", metavar="DIRECTORY", help="打开未翻译统计并填入目录。")
     parser.add_argument("--check", action="append", choices=tuple(QA_CHECK_WIDGETS), help="配合 --tool workflow 预选检查项，可重复；不会自动运行。")
     parser.add_argument("--smoke-test", action="store_true", help=argparse.SUPPRESS)
     return parser
 
 
 def _initial_request(args: argparse.Namespace) -> ToolFileRequest | None:
+    for action, argument in DIRECTORY_ACTIONS.items():
+        directory = getattr(args, argument)
+        if directory:
+            path = Path(directory).expanduser().absolute()
+            if not path.is_dir():
+                raise ValueError(f"文件目录不存在：{path}")
+            return ToolFileRequest(action=action, file_path=str(path))
     if args.qa_workflow:
         return ToolFileRequest(
             action=QA_WORKFLOW_ACTION,
@@ -460,20 +513,24 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--check 必须配合 --tool workflow 使用。")
     if args.smoke_test:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    app, owns_app = create_qt_application([sys.argv[0]])
     try:
         initial_request = _initial_request(args)
     except ValueError as exc:
-        print(str(exc), file=sys.stderr)
+        if args.smoke_test:
+            print(str(exc), file=sys.stderr)
+        else:
+            show_error(None, "无法打开右键操作", str(exc))
         return 2
-
-    if initial_request and send_tool_input_file(initial_request.action, initial_request.file_path):
-        return 0
-
-    app, owns_app = create_qt_application([sys.argv[0]])
     instance_lock: QLockFile | None = None
     if not args.smoke_test:
         instance_lock = _acquire_gui_instance_lock()
         if instance_lock is None:
+            if initial_request:
+                if send_path_request(initial_request.action, initial_request.file_path):
+                    return 0
+                show_error(None, "无法打开右键操作", "工具箱未能接收路径，请等待其启动完成后重试；如果刚升级，请重启工具箱。")
+                return 1
             if args.tool and not send_tool_selection(args.tool, args.check):
                 print("工具箱正在启动或当前实例不支持页面切换，请稍后重试或重启工具箱。", file=sys.stderr)
                 return 1
@@ -481,16 +538,12 @@ def main(argv: list[str] | None = None) -> int:
 
     receiver = WorkflowFileReceiver()
     receiver_started = receiver.start()
-    if initial_request and not receiver_started and send_tool_input_file(initial_request.action, initial_request.file_path):
-        receiver.close()
-        if instance_lock is not None:
-            instance_lock.unlock()
-        return 0
 
     window = ToolshubApp(show_window=not args.smoke_test)
     if not args.smoke_test:
         window._navigation = ToolNavigationServer(window)
         window._navigation.requested.connect(window._open_forwarded_tool)
+        window._navigation.path_requested.connect(window._open_forwarded_path)
         window._navigation.start()
     if args.tool:
         window.open_tool(args.tool, args.check)

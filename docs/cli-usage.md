@@ -466,6 +466,20 @@ qatools gui --tool workflow --check tag
 `--tool workflow`。`qatools phraseloom gui` 和 `phraseloom-gui` 同样打开工具箱中的 PhraseLoom 页面。
 工具箱已运行时，页面选择请求会转交给当前实例并将窗口置前。
 
+右键菜单使用以下 GUI 启动参数，也可以从源码调用；每次只指定其中一项：
+
+```bash
+qatools gui --qa-workflow "input.xlsx"
+qatools gui --nbsp-restore "input.xlsx"
+qatools gui --compatibility-dir "excel-folder"
+qatools gui --merge-dir "excel-folder"
+qatools gui --untranslated-dir "excel-folder"
+```
+
+文件和目录路径会转交给已运行的工具箱。`--nbsp-restore` 识别成功后直接执行
+[法语 NBSP 修复](../tools/french_nbsp_restorer/README.md)，其他参数只打开页面并载入输入。
+安装版由 `QAtools.exe` 接收这些 GUI 参数，不提供业务 CLI。
+
 ## 参数速查
 
 以下表格补充前文示例；执行环境中的完整参数和可选值始终以 `qatools help <命令>` 为准。

@@ -91,11 +91,12 @@ class FrenchNbspPage(AsyncPage):
         if path := _choose_excel(self, "选择 Excel 文件"):
             self.load_input_file(path)
 
-    def load_input_file(self, path: str, *, reset_options: bool = False, show_error: bool = True) -> None:
+    def load_input_file(self, path: str, *, reset_options: bool = False, show_error: bool = True) -> bool:
         if reset_options:
-            self.target_column.setText("B")
             self.result_column.clear()
             self.start_row.setValue(2)
+        self.target_column.clear()
+        self.preview.clear()
         self.input_picker.set_path(path)
         try:
             choices = list_workbook_sheets(path)
@@ -103,15 +104,19 @@ class FrenchNbspPage(AsyncPage):
             _set_combo_values(self.sheet, ())
             if show_error:
                 _show_error(self, "读取失败", str(exc))
-            return
+            return False
         chosen = choices.default_sheet or (choices.sheet_names[0] if choices.sheet_names else "")
         _set_combo_values(self.sheet, choices.sheet_names, chosen)
-        self.detect_columns(chosen, show_error=show_error)
+        detected = self.detect_columns(chosen, show_error=show_error)
         self.preview.setText(f"输出文件：{build_nbsp_output_path(path).name}")
+        if detected is False and reset_options and show_error and self.sheet.currentText():
+            _show_error(self, "缺少列信息", "无法唯一识别 Target 列，请在页面填写列字母后点击开始恢复。")
+        return bool(detected)
 
-    def detect_columns(self, _sheet: str = "", *, show_error: bool = False) -> None:
+    def detect_columns(self, _sheet: str = "", *, show_error: bool = False) -> bool | None:
+        self.target_column.clear()
         if not self.input_picker.path() or not self.sheet.currentText():
-            return
+            return False
         try:
             columns = detect_source_target_columns(
                 self.input_picker.path(),
@@ -121,10 +126,13 @@ class FrenchNbspPage(AsyncPage):
         except Exception as exc:  # noqa: BLE001
             if show_error:
                 _show_error(self, "读取失败", str(exc))
-            return
+            return None
         self.target_column.setText(columns.detected_target_column or "")
+        return bool(columns.detected_target_column)
 
     def run_restore(self) -> None:
+        if self.has_running_tasks():
+            return
         if not self.input_picker.path():
             show_error(self, "缺少文件", "请先选择输入 Excel 文件。")
             return

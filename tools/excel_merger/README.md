@@ -23,6 +23,9 @@
 
 GUI：打开 QAtools，在“文件与表格”区域选择“合并表格”。
 
+Windows 文件夹右键“合并表格”可打开该页面并填入所选目录，确认表头选项后点击运行。
+菜单安装方式见 [Windows 安装说明](../../packaging/README-Windows.txt)。
+
 CLI 示例和兼容参数见 [CLI 手册](../../docs/cli-usage.md#文本修复与转换)。
 
 ## 实现位置

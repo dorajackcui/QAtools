@@ -34,6 +34,12 @@ qatools gui
 统一 GUI 会自动识别工作表首行的 Target 列；匹配优先级、冲突处理及自定义配置见
 [GUI 表头别名设置](../../README.md#自定义表头识别)。
 
+Windows 文件右键“法语 NBSP 修复”会打开该页面并直接执行：使用工作簿默认选中的
+可见工作表，识别首行 Target 列，从第 2 行开始处理，结果列留空，不沿用上次手动设置的范围。
+结果保存在同目录的 `french_nbsp_restore_<原文件名>`，原文件保持不变。
+无法读取工作簿或唯一识别 Target 列时不自动执行，停留在页面提示手动处理；
+该工具正在运行时拒绝新的右键请求。菜单安装方式见 [Windows 安装说明](../../packaging/README-Windows.txt)。
+
 ## 实现位置
 
 统一 PySide6 页面在同目录 `qt_page.py`；页面注册、共享控件和对应测试见[仓库地图](../../docs/repository-map.md)。

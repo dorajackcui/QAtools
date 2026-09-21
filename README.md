@@ -6,6 +6,7 @@ QAtools 是面向本地化团队的本地 Excel 工具箱，提供统一的 Wind
 ## 最快开始
 
 Windows 安装版无需安装 Python：运行安装包后，从开始菜单打开 QAtools。
+也可使用 Excel 文件和文件夹的[右键菜单](packaging/README-Windows.txt)，自动带入所选路径。
 
 源码运行要求 Python 3.11 或更高版本：
 

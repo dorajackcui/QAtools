@@ -7,6 +7,9 @@ CLI 为 `qatools compatibility`，参数见[CLI 手册](../../docs/cli-usage.md#
 选择文件目录，点击【兼容性重存】。新输出目录默认留空，直接重存原文件；
 填写尚不存在的新输出目录时按相对路径另存副本。输出可手动清空，更换输入不会自动填充输出。
 
+Windows 文件夹右键“兼容性重存”可打开该页面并填入所选目录，确认配置后点击运行。
+菜单安装方式见 [Windows 安装说明](../../packaging/README-Windows.txt)。
+
 ## 环境
 
 - 需要 Windows、已安装且可以正常启动的桌面 Microsoft Excel，以及 pywin32。

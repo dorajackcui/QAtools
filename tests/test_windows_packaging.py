@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import struct
 import os
+import re
 import subprocess
 import sys
 import unittest
@@ -12,6 +13,42 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class WindowsPackagingTests(unittest.TestCase):
+    def test_shell_menu_commands_are_per_user_quoted_single_selection_and_removable(self) -> None:
+        installer = (PROJECT_ROOT / "packaging" / "QAtools.iss").read_text(encoding="utf-8")
+        self.assertIn("ChangesAssociations=yes", installer)
+        task = next(line for line in installer.splitlines() if line.startswith('Name: "shellmenu";'))
+        self.assertNotIn("unchecked", task)
+        entries = []
+        section = installer.split("[Registry]\n", 1)[1].split("\n[", 1)[0]
+        for line in section.splitlines():
+            if line.startswith("Root:"):
+                values = dict(re.findall(r'(\w+): "((?:[^"]|"")*)"', line))
+                entries.append((line, values))
+                self.assertTrue(line.startswith("Root: HKCU;"))
+                self.assertIn("\\shell\\QAtools.", values["Subkey"])
+        expected = {
+            "QAtools.Workflow": ("一键质量检查", "--qa-workflow"),
+            "QAtools.FrenchNbsp": ("法语 NBSP 修复", "--nbsp-restore"),
+            "QAtools.Compatibility": ("兼容性重存", "--compatibility-dir"),
+            "QAtools.Merge": ("合并表格", "--merge-dir"),
+            "QAtools.Untranslated": ("统计未翻译", "--untranslated-dir"),
+        }
+        commands = [(line, values) for line, values in entries if values["Subkey"].endswith("\\command")]
+        self.assertEqual(len(commands), 7)  # Two file actions for each of xlsx/xlsm, three directory actions.
+        for line, values in commands:
+            key = values["Subkey"].removesuffix("\\command")
+            verb = key.rsplit("\\", 1)[1]
+            label, flag = expected[verb]
+            self.assertEqual(values["ValueData"], f'""{{app}}\\QAtools.exe"" {flag} ""%1""')
+            self.assertIn("Tasks: shellmenu", line)
+            root_entries = [(raw, item) for raw, item in entries if item["Subkey"] == key]
+            self.assertTrue(any(item.get("ValueData") == label and "uninsdeletekey" in raw for raw, item in root_entries))
+            self.assertTrue(any(item.get("ValueName") == "MultiSelectModel" and item.get("ValueData") == "Single" for _, item in root_entries))
+            self.assertTrue(any("Flags: deletekey; Tasks: not shellmenu" in raw for raw, _ in root_entries))
+            base = key.split("\\shell\\", 1)[0]
+            allowed = {r"Software\Classes\SystemFileAssociations\.xlsx", r"Software\Classes\SystemFileAssociations\.xlsm"} if verb in {"QAtools.Workflow", "QAtools.FrenchNbsp"} else {r"Software\Classes\Directory"}
+            self.assertIn(base, allowed)
+
     def test_icon_source_uses_the_application_theme_colors(self) -> None:
         icon_source = (
             PROJECT_ROOT / "packaging" / "QAtools-icon.svg"
