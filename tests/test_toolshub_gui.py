@@ -138,10 +138,13 @@ class ToolshubLayoutTests(unittest.TestCase):
             ["法语 NBSP 恢复", "未翻译统计", "Xbench QA 转换"],
         )
 
-    def test_all_qt_pages_are_created_once_and_kept_in_stack(self) -> None:
+    def test_qt_pages_are_created_on_first_access_and_kept_in_stack(self) -> None:
         window = self.make_app()
         try:
             self.assertIsInstance(window.page_stack, QStackedWidget)
+            self.assertEqual(set(window.tool_frames), {"workflow"})
+            self.assertEqual(window.page_stack.count(), 1)
+            window.preload_pages()
             self.assertEqual(
                 set(window.tool_frames),
                 {

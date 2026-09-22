@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import QLockFile, QStandardPaths, Qt, QTimer
+from PySide6.QtCore import QEventLoop, QLockFile, QStandardPaths, Qt, QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -40,7 +40,7 @@ from tools.qt_gui_common import (
     show_error,
     show_warning,
 )
-from tools.qt_pages import FrenchNbspPage, PAGE_FACTORIES, SettingsPage, WorkflowPage
+from tools.qt_pages import PAGE_FACTORIES
 from tools.workflow.file_receiver import (
     FRENCH_NBSP_RESTORE_ACTION,
     QA_WORKFLOW_ACTION,
@@ -121,6 +121,19 @@ TOOL_GROUPS = (
 SETTINGS_ITEM = ToolItem(key="settings", title="设置")
 
 
+class _PageCache(dict[str, QWidget]):
+    """Indexing creates a page once; get/items inspect only existing pages."""
+
+    def __init__(self, create_page) -> None:
+        super().__init__()
+        self._create_page = create_page
+
+    def __missing__(self, key: str) -> QWidget:
+        page = self._create_page(key)
+        self[key] = page
+        return page
+
+
 class ToolshubApp(QMainWindow):
     """One native Qt window with persistent pages in a QStackedWidget."""
 
@@ -129,6 +142,7 @@ class ToolshubApp(QMainWindow):
         *,
         show_window: bool = True,
         header_alias_store: HeaderAliasStore | None = None,
+        initial_tool: str = "workflow",
     ) -> None:
         super().__init__()
         self.setWindowTitle("Toolshub")
@@ -142,7 +156,7 @@ class ToolshubApp(QMainWindow):
             for tool in group.tools
         }
         self.tools_by_key[SETTINGS_ITEM.key] = SETTINGS_ITEM
-        self.tool_frames: dict[str, QWidget] = {}
+        self.tool_frames: dict[str, QWidget] = _PageCache(self._create_page)
         self.nav_buttons: dict[str, QPushButton] = {}
         self.current_tool_key = ""
         self.current_tool_frame: QWidget | None = None
@@ -152,9 +166,11 @@ class ToolshubApp(QMainWindow):
         self._opening_path = False
         self._build_ui()
         self._fit_window_to_screen()
-        self.select_tool(self.tool_groups[0].tools[0].key)
         if show_window:
             self.show()
+            # Paint confirmation of the click before importing workbook code.
+            QApplication.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+        self.select_tool(initial_tool)
 
     def _build_ui(self) -> None:
         shell = QWidget()
@@ -179,31 +195,34 @@ class ToolshubApp(QMainWindow):
         self.title_label = QLabel()
         self.title_label.setObjectName("pageTitle")
         self.title_label.setTextFormat(Qt.TextFormat.RichText)
+        self.title_label.setText(f'QAtools<span style="color: {ACCENT_COLOR}">.</span>')
         workspace_layout.addWidget(self.title_label)
         self.page_stack = QStackedWidget()
         self.page_stack.setObjectName("toolPageStack")
+        self.loading_page = QLabel("正在启动 QAtools…")
+        self.loading_page.setObjectName("startupStatus")
+        self.loading_page.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.page_stack.addWidget(self.loading_page)
         workspace_layout.addWidget(self.page_stack, 1)
         shell_layout.addWidget(workspace, 1)
         self.setCentralWidget(shell)
 
-        for group in self.tool_groups:
-            for tool in group.tools:
-                page_factory = PAGE_FACTORIES[tool.key]
-                if tool.key in {"workflow", "french_nbsp"}:
-                    page = page_factory(header_alias_store=self.header_alias_store)
-                else:
-                    page = page_factory()
-                page.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-                self.page_stack.addWidget(page)
-                self.tool_frames[tool.key] = page
-        settings_page = PAGE_FACTORIES[SETTINGS_ITEM.key](
-            header_alias_store=self.header_alias_store
-        )
-        settings_page.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.page_stack.addWidget(settings_page)
-        self.tool_frames[SETTINGS_ITEM.key] = settings_page
-        if isinstance(settings_page, SettingsPage):
-            settings_page.settings_saved.connect(self._refresh_header_detection)
+    def _create_page(self, key: str) -> QWidget:
+        factory = PAGE_FACTORIES[key]
+        if key in {"workflow", "french_nbsp", "settings"}:
+            page = factory(header_alias_store=self.header_alias_store)
+        else:
+            page = factory()
+        page.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.page_stack.addWidget(page)
+        if key == "settings":
+            page.settings_saved.connect(self._refresh_header_detection)
+        return page
+
+    def preload_pages(self) -> None:
+        """Exercise all lazy factories in packaging smoke tests."""
+        for key in PAGE_FACTORIES:
+            self.tool_frames[key]
 
     def _build_sidebar(self) -> QWidget:
         sidebar = QWidget()
@@ -266,15 +285,31 @@ class ToolshubApp(QMainWindow):
 
     def _refresh_header_detection(self) -> None:
         workflow_page = self.tool_frames.get("workflow")
-        if isinstance(workflow_page, WorkflowPage):
+        if workflow_page is not None:
             workflow_page.detect_main_columns()
         french_page = self.tool_frames.get("french_nbsp")
-        if isinstance(french_page, FrenchNbspPage):
+        if french_page is not None:
             french_page.detect_columns()
 
     def select_tool(self, key: str) -> None:
         tool = self.tools_by_key[key]
-        page = self.tool_frames[key]
+        previous_key = self.current_tool_key
+        if key not in self.tool_frames:
+            self.loading_page.setText(f"正在打开{tool.title}…")
+            self.page_stack.addWidget(self.loading_page)
+            self.page_stack.setCurrentWidget(self.loading_page)
+            if self.isVisible():
+                self.repaint()
+        try:
+            page = self.tool_frames[key]
+        except Exception:
+            if previous_key:
+                self.page_stack.setCurrentWidget(self.tool_frames[previous_key])
+                self.nav_buttons[previous_key].setChecked(True)
+            raise
+        finally:
+            if previous_key or key in self.tool_frames:
+                self.page_stack.removeWidget(self.loading_page)
         self.current_tool_key = key
         self.current_tool_frame = page
         self.title_label.setText(f'{escape(tool.title)}<span style="color: {ACCENT_COLOR}">.</span>')
@@ -287,8 +322,6 @@ class ToolshubApp(QMainWindow):
     def open_qa_workflow_file(self, file_path: str) -> None:
         normalized = normalize_excel_input_file(file_path, action_name="QA workflow")
         page = self.tool_frames["workflow"]
-        if not isinstance(page, WorkflowPage):
-            raise RuntimeError("一键质量检查页面未正确加载。")
         self._ensure_page_idle("workflow")
         self.select_tool("workflow")
         page.load_input_file(str(normalized))
@@ -313,8 +346,6 @@ class ToolshubApp(QMainWindow):
     def open_french_nbsp_restore_file(self, file_path: str, *, run_immediately: bool = True) -> None:
         normalized = normalize_excel_input_file(file_path, action_name="NBSP restore")
         page = self.tool_frames["french_nbsp"]
-        if not isinstance(page, FrenchNbspPage):
-            raise RuntimeError("法语 NBSP 恢复页面未正确加载。")
         self._ensure_page_idle("french_nbsp")
         self.select_tool("french_nbsp")
         self._bring_window_to_front()
@@ -539,7 +570,12 @@ def main(argv: list[str] | None = None) -> int:
     receiver = WorkflowFileReceiver()
     receiver_started = receiver.start()
 
-    window = ToolshubApp(show_window=not args.smoke_test)
+    requested_tool = args.tool or "workflow"
+    if initial_request:
+        requested_tool = {
+            QA_WORKFLOW_ACTION: "workflow", FRENCH_NBSP_RESTORE_ACTION: "french_nbsp",
+        }.get(initial_request.action, initial_request.action)
+    window = ToolshubApp(show_window=not args.smoke_test, initial_tool=requested_tool)
     if not args.smoke_test:
         window._navigation = ToolNavigationServer(window)
         window._navigation.requested.connect(window._open_forwarded_tool)
@@ -561,6 +597,7 @@ def main(argv: list[str] | None = None) -> int:
             show_error(window, "无法载入 Excel", str(exc))
 
     if args.smoke_test:
+        window.preload_pages()
         app.processEvents()
         receiver.close()
         window.close()
