@@ -113,6 +113,31 @@ class GuiFunctionalTests(unittest.TestCase):
         self.assertEqual(self.read(output)[row - 1][2], "Corrected translation")
         self.assertEqual(source.read_bytes(), original)
 
+    def test_qa_pipe_option_checks_default_memoq_and_disabled_runs(self):
+        source = self.workbook("pipe.xlsx", [
+            ["source", "target"], ["A||B", "AB"],
+        ])
+        original = source.read_bytes()
+        page = self.window.tool_frames["workflow"]
+        page.load_input_file(str(source))
+        page.set_all_tasks(False)
+        page.tag_check.setChecked(True)
+        self.assertTrue(page.pipe_tag.isChecked())
+        for memoq, enabled in ((False, True), (True, True), (True, False), (False, False)):
+            with self.subTest(memoq=memoq, enabled=enabled):
+                page.memoq_mode.setChecked(memoq)
+                page.standard_mode.setChecked(not memoq)
+                page.pipe_tag.setChecked(enabled)
+                self.run_button(page, page.run_button)
+                problems = self.read(Path(page.last_workflow_output_path), "问题处理")
+                issues = [row for row in problems[1:] if isinstance(row[0], int)]
+                self.assertEqual(len(issues), int(enabled))
+                if enabled:
+                    self.assertEqual(issues[0][0], 2)
+                    self.assertEqual(issues[0][4], "【Tag 检查】缺少：| x2")
+                    self.assertEqual(issues[0][5], "Tag 检查")
+        self.assertEqual(source.read_bytes(), original)
+
     def test_phraseloom_export_and_restore(self):
         source = self.workbook("strings-source.xlsx", [
             ["key", "source", "target"], ["a", "Hello Alice", None],

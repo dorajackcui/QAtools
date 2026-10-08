@@ -490,7 +490,7 @@ qatools gui --untranslated-dir "excel-folder"
 | `qa` 术语 | `--term-mark-style` 可重复，与 `--no-term-mark` 互斥；后者需要 `--history-tb`；历史 TB 范围用 `--history-sheet`、`--history-source-column`、`--history-target-column`、`--history-start-row` |
 | `qa` Tag / 文本 | `--tag-token-type` 可重复；`--tag-angle-config` 为过滤 JSON；`--tag-check-order` 开启 Tag 顺序检查（默认关闭）；`--text-rule` 可重复。`numeric`、`abnormal-ellipsis` 分别为兼容别名 |
 | `term-check` | 输入/范围/输出参数同检查器习惯；mark 参数名为 `--mark-style`，不是 QA 的 `--term-mark-style`；支持上述 `--history-*` 和 `--no-term-mark`，另有 `--exclusion-config` 候选排除 JSON |
-| `tag-check` | 输入/范围/输出参数同检查器习惯；使用 `--token-type`、`--angle-config`、`--check-order`（顺序检查默认关闭），不带 QA 的 `tag-` 前缀；token 可选 `angle`、`square_color`、`brace`、`newline`、`memoq`（旧别名 `numeric`） |
+| `tag-check` | 输入/范围/输出参数同检查器习惯；使用 `--token-type`、`--angle-config`、`--check-order`（顺序检查默认关闭），不带 QA 的 `tag-` 前缀；token 可选 `angle`、`square_color`、`brace`、`newline`、`memoq`、`pipe`（旧别名 `numeric`） |
 | `line-break-check` / `consistency-check` / `chinese-check` | `input_file`、`-s/--sheet`、`-c/--source-column`、`-t/--target-column`、`--start-row`、`-o/--output` |
 | `french-nbsp` | `input_file`、`-s/--sheet`、`-t/--target-column`、`--start-row`、`-o/--output`；`-r/--result-column` 可选，未指定则在输出副本的 Target 列修复 |
 | `xbench` | `input_file`、`-s/--sheet`、`-o/--output`；输入是 Xbench 报告，不能套用 `-c/-t` |
@@ -502,6 +502,15 @@ qatools gui --untranslated-dir "excel-folder"
 
 部分兼容检查器缺少参数时会发起终端输入；脚本应显式传入参数，尤其是输入路径和列。
 历史 TB 可以按表头自动识别，和 GUI 自定义别名是不同机制，见[术语规则](../tools/term_pair_checker/README.md)。
+
+Tag 类型在 `qa` 与 `tag-check` 中共用；默认选择及竖线规则见
+[Tag README](../tools/tag_placeholder_checker/README.md#规则)。
+显式指定类型时只检查列出的类型；仅检查竖线可用：
+
+```bash
+qatools qa input.xlsx -c A -t B --check tag --tag-token-type pipe
+qatools tag-check input.xlsx -c A -t B --token-type pipe
+```
 
 Tag 过滤示例：
 

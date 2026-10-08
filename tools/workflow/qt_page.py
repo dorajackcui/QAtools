@@ -447,13 +447,15 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
 
     def selected_tag_types(self) -> tuple[str, ...]:
         if self.memoq_mode.isChecked():
-            return ("memoq",)
-        return tuple(name for name, check in (
-            ("angle", self.angle_tag),
-            ("square_color", self.color_tag),
-            ("brace", self.brace_tag),
-            ("newline", self.newline_tag),
-        ) if check.isChecked())
+            types = ("memoq",)
+        else:
+            types = tuple(name for name, check in (
+                ("angle", self.angle_tag),
+                ("square_color", self.color_tag),
+                ("brace", self.brace_tag),
+                ("newline", self.newline_tag),
+            ) if check.isChecked())
+        return types + (("pipe",) if self.pipe_tag.isChecked() else ())
 
     def selected_target_rules(self) -> tuple[str, ...]:
         return tuple(rule for rule, check in self.rule_checks.items() if check.isChecked())

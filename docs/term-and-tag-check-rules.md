@@ -5,7 +5,7 @@
 | 对象 | 负责工具 | 权威规则 |
 |---|---|---|
 | `【术语】`、`[术语]` / `［术语］` 的术语对与历史 TB 回扫 | 术语检查 | [术语 README](../tools/term_pair_checker/README.md#规则) |
-| 尖括号 Tag、color Tag、花括号 Placeholder、字面换行标记、memoQ Marker | Tag 检查 | [Tag README](../tools/tag_placeholder_checker/README.md#规则) |
+| 尖括号 Tag、color Tag、花括号 Placeholder、字面换行标记、memoQ Marker、竖线 | Tag 检查 | [Tag README](../tools/tag_placeholder_checker/README.md#规则) |
 | 多检查器组合、统一问题表与修订回填 | Workflow | [workflow README](../tools/workflow/README.md) |
 
 - `<...>` 和 `{...}` 不作为术语 mark；`[color=...]`、`[/color]` 不进入术语表。

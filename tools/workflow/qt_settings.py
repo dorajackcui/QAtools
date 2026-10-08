@@ -183,6 +183,9 @@ class WorkflowSettingsMixin:
         for column in range(2):
             type_grid.setColumnStretch(column, 1)
         layout.addLayout(type_grid)
+        self.pipe_tag = QCheckBox("检查竖线 |")
+        self.pipe_tag.setChecked(True)
+        layout.addWidget(self.pipe_tag)
         self.tag_check_order = QCheckBox("检查 Tag 顺序（类型、内容、数量逐一对应）")
         self.tag_check_order.setChecked(False)
         layout.addWidget(self.tag_check_order)
@@ -281,6 +284,7 @@ class WorkflowSettingsMixin:
                 ),
                 "angle_config": self.angle_config.path(),
                 "check_order": self.tag_check_order.isChecked(),
+                "pipe": self.pipe_tag.isChecked(),
             }
         if name == "target":
             return {
@@ -340,6 +344,7 @@ class WorkflowSettingsMixin:
                 check.setChecked(checked)
             self.angle_config.set_path(snapshot["angle_config"])
             self.tag_check_order.setChecked(snapshot["check_order"])
+            self.pipe_tag.setChecked(snapshot["pipe"])
             self.update_tag_mode(not snapshot["memoq_mode"])
             return
         if name == "target":

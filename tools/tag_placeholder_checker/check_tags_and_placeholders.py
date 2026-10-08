@@ -34,16 +34,17 @@ from tools.excel_output import (
 
 PROBLEM_SHEET_NAME = "标签占位问题"
 SUMMARY_SHEET_NAME = "检查汇总"
-CANONICAL_TOKEN_TYPES = ("angle", "square_color", "brace", "newline", "memoq")
+CANONICAL_TOKEN_TYPES = ("angle", "square_color", "brace", "newline", "memoq", "pipe")
 STANDARD_TOKEN_TYPES = ("angle", "square_color", "brace", "newline")
 LEGACY_TOKEN_TYPE_ALIASES = {"numeric": "memoq"}
 SUPPORTED_TOKEN_TYPES = CANONICAL_TOKEN_TYPES + tuple(LEGACY_TOKEN_TYPE_ALIASES)
-DEFAULT_TOKEN_TYPES = STANDARD_TOKEN_TYPES
+DEFAULT_TOKEN_TYPES = STANDARD_TOKEN_TYPES + ("pipe",)
 TOKEN_LABELS = {
     "angle": "尖括号tag",
     "square_color": "方括号color tag",
     "brace": "花括号placeholder",
     "newline": r"\n mark",
+    "pipe": "竖线 |",
     "memoq": "memoQ marker",
     "numeric": "memoQ marker",
 }
@@ -52,6 +53,7 @@ TOKEN_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
     "square_color": (re.compile(r"\[/color\]|\[color\s*=\s*[^\[\]]+\]", re.IGNORECASE),),
     "brace": (),
     "newline": (re.compile(r"\\n"),),
+    "pipe": (re.compile(r"\|"),),
     "memoq": (
         re.compile(r"(?<!\{)\{\d+>|<\d+\}(?!\})|(?<!\{)\{\d+\}(?!\})"),
     ),
@@ -86,6 +88,7 @@ class CheckSummary:
     problem_rows: int
     problem_count: int
     selected_token_types: tuple[str, ...]
+    pipe_rows: int = 0
 
     @property
     def numeric_rows(self) -> int:
@@ -520,6 +523,8 @@ def write_summary_sheet(
         ("问题行数", summary.problem_rows),
         ("问题条数", summary.problem_count),
     ]
+    if "pipe" in summary.selected_token_types:
+        summary_rows.append(("含竖线 | 行数", summary.pipe_rows))
     for row_index, (label, value) in enumerate(summary_rows, start=2):
         summary_sheet.cell(row_index, 1, label)
         summary_sheet.cell(row_index, 2, value)
@@ -687,6 +692,7 @@ def process_workbook(
     brace_rows = 0
     newline_rows = 0
     memoq_rows = 0
+    pipe_rows = 0
     problem_rows_set: set[int] = set()
     problem_entries: list[tuple[int, str, str, str, str]] = []
 
@@ -721,6 +727,8 @@ def process_workbook(
             newline_rows += 1
         if any(token.token_type == "memoq" for token in combined_tokens):
             memoq_rows += 1
+        if any(token.token_type == "pipe" for token in combined_tokens):
+            pipe_rows += 1
 
         for token_type in normalized_token_types:
             source_counter = Counter(
@@ -791,6 +799,7 @@ def process_workbook(
         problem_rows=len(problem_rows_set),
         problem_count=len(problem_entries),
         selected_token_types=normalized_token_types,
+        pipe_rows=pipe_rows,
     )
 
     write_problem_sheet(
@@ -835,6 +844,8 @@ def main() -> None:
     print(f"含花括号placeholder行数: {summary.brace_rows}")
     print(rf"含\n mark行数: {summary.newline_rows}")
     print(f"含memoQ marker行数: {summary.memoq_rows}")
+    if "pipe" in summary.selected_token_types:
+        print(f"含竖线 | 行数: {summary.pipe_rows}")
     print(f"问题行数: {summary.problem_rows}")
     print(f"问题条数: {summary.problem_count}")
     print(f"输出文件: {summary.output_path}")

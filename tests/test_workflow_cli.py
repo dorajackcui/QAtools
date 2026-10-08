@@ -133,6 +133,8 @@ class WorkflowCliTests(unittest.TestCase):
                     ABNORMAL_PUNCTUATION_RULE,
                     "--tag-token-type",
                     "angle",
+                    "--tag-token-type",
+                    "pipe",
                     "--tag-check-order",
                     "-o",
                     "output.xlsx",
@@ -155,7 +157,7 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertTrue(kwargs["run_chinese_target_check"])
         self.assertTrue(kwargs["run_target_text_check"])
         self.assertEqual(kwargs["target_text_rules"], [ABNORMAL_PUNCTUATION_RULE])
-        self.assertEqual(kwargs["tag_token_types"], ["angle"])
+        self.assertEqual(kwargs["tag_token_types"], ["angle", "pipe"])
         self.assertTrue(kwargs["tag_check_order"])
         self.assertIn("质量检查完成", output.getvalue())
 

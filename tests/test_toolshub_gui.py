@@ -526,6 +526,9 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertEqual(workflow.standard_mode.property("segmentedMode"), True)
             self.assertEqual(workflow.memoq_mode.property("segmentedMode"), True)
             self.assertEqual(workflow.tag_mode_group.checkedId(), 0)
+            self.assertTrue(workflow.pipe_tag.isChecked())
+            self.assertTrue(workflow.pipe_tag.isEnabled())
+            self.assertIn("pipe", workflow.selected_tag_types())
             self.assertFalse(workflow.tag_check_order.isChecked())
             self.assertTrue(workflow.tag_check_order.isEnabled())
 
@@ -535,6 +538,11 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertFalse(workflow.standard_mode.isChecked())
             self.assertTrue(workflow.memoq_mode.isChecked())
             self.assertEqual(workflow.tag_mode_group.checkedId(), 1)
+            self.assertTrue(workflow.pipe_tag.isEnabled())
+            self.assertEqual(workflow.selected_tag_types(), ("memoq", "pipe"))
+            workflow.pipe_tag.setChecked(False)
+            self.assertEqual(workflow.selected_tag_types(), ("memoq",))
+            workflow.pipe_tag.setChecked(True)
             self.assertTrue(workflow.tag_check_order.isEnabled())
             self.assertTrue(
                 all(not check.isEnabled() for check in workflow.standard_tag_checks)
@@ -606,13 +614,17 @@ class ToolshubLayoutTests(unittest.TestCase):
             workflow.tag_settings_button.click()
             self.qt_app.processEvents()
             workflow.tag_check_order.setChecked(True)
+            workflow.pipe_tag.setChecked(False)
             workflow.tag_settings_dialog.reject()
             self.assertFalse(workflow.tag_check_order.isChecked())
+            self.assertTrue(workflow.pipe_tag.isChecked())
             workflow.tag_settings_button.click()
             self.qt_app.processEvents()
             workflow.tag_check_order.setChecked(True)
+            workflow.pipe_tag.setChecked(False)
             workflow.tag_settings_dialog.accept()
             self.assertTrue(workflow.tag_check_order.isChecked())
+            self.assertFalse(workflow.pipe_tag.isChecked())
             workflow.target_settings_button.click()
             self.qt_app.processEvents()
 
@@ -663,6 +675,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                     workflow.history_start_row.setValue(5)
                     workflow.memoq_mode.setChecked(memoq)
                     workflow.standard_mode.setChecked(not memoq)
+                    workflow.pipe_tag.setChecked(memoq)
                     tag_checks = (True, False, True, False)
                     for check, checked in zip(workflow.standard_tag_checks, tag_checks, strict=True):
                         check.setChecked(checked)
@@ -719,6 +732,7 @@ class ToolshubLayoutTests(unittest.TestCase):
                     self.assertEqual(restored.angle_config.path(), r"C:\configs\tags.json")
                     self.assertEqual(restored.angle_config.isEnabled(), not memoq)
                     self.assertTrue(restored.tag_check_order.isChecked())
+                    self.assertEqual(restored.pipe_tag.isChecked(), memoq)
                     self.assertEqual(tuple(check.isChecked() for check in restored.rule_checks.values()), rule_checks)
                     for check, button in (
                         (restored.term_check, restored.term_settings_button),
@@ -742,6 +756,27 @@ class ToolshubLayoutTests(unittest.TestCase):
                     self.assertEqual(restored.target_column.text(), "C")
                 finally:
                     restored_window.close()
+
+    def test_saved_options_without_pipe_setting_keep_choices_and_enable_pipe(self) -> None:
+        window = self.make_app()
+        try:
+            workflow = window.tool_frames["workflow"]
+            workflow.angle_tag.setChecked(False)
+            workflow.memoq_mode.setChecked(True)
+            options = workflow._capture_options()
+            del options["settings"]["tag"]["pipe"]
+            workflow.options_store.save(options)
+        finally:
+            window.close()
+        restored_window = self.make_app()
+        try:
+            restored = restored_window.tool_frames["workflow"]
+            self.assertTrue(restored.pipe_tag.isChecked())
+            self.assertFalse(restored.angle_tag.isChecked())
+            self.assertTrue(restored.memoq_mode.isChecked())
+            self.assertEqual(restored.selected_tag_types(), ("memoq", "pipe"))
+        finally:
+            restored_window.close()
 
     def test_saved_options_without_order_setting_restore_with_order_disabled(self) -> None:
         window = self.make_app()
@@ -873,12 +908,15 @@ class ToolshubLayoutTests(unittest.TestCase):
             self.assertEqual(call_kwargs["kwargs"]["term_mark_styles"], ("【】", "[]"))
             self.assertEqual(
                 call_kwargs["kwargs"]["tag_token_types"],
-                ("angle", "square_color", "brace", "newline"),
+                ("angle", "square_color", "brace", "newline", "pipe"),
             )
             self.assertFalse(call_kwargs["kwargs"]["tag_check_order"])
             workflow.tag_check_order.setChecked(True)
             workflow.run_selected_tasks()
             self.assertTrue(workflow.run_in_background.call_args.kwargs["kwargs"]["tag_check_order"])
+            workflow.pipe_tag.setChecked(False)
+            workflow.run_selected_tasks()
+            self.assertNotIn("pipe", workflow.run_in_background.call_args.kwargs["kwargs"]["tag_token_types"])
             workflow.set_all_tasks(False)
             workflow.run_in_background.reset_mock()
             workflow.run_selected_tasks()

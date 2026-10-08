@@ -35,6 +35,18 @@ class ExtractTokensTests(unittest.TestCase):
             ["</text>", "{name}", r"\n", "<color=red>"],
         )
 
+    def test_pipe_tokens_are_literal_ascii_characters_and_keep_text_order(self) -> None:
+        self.assertEqual(
+            extract_tokens(r"left||right \| ｜ ¦ |", token_types=("pipe",)),
+            ["|", "|", "|", "|"],
+        )
+        self.assertEqual(
+            extract_tokens("{name}|{count}", token_types=("brace", "pipe")),
+            ["{name}", "|", "{count}"],
+        )
+        self.assertEqual(extract_tokens("a|b"), ["|"])
+        self.assertEqual(extract_tokens("a|b", token_types=("brace",)), [])
+
     def test_extract_tokens_requires_at_least_one_type(self) -> None:
         with self.assertRaisesRegex(ValueError, "请至少选择一种检查类型"):
             extract_tokens("任意文本", token_types=())
@@ -144,6 +156,71 @@ class ExtractTokensTests(unittest.TestCase):
 
 
 class ProcessExcelTests(unittest.TestCase):
+    def test_pipe_check_defaults_on_and_reports_counts_with_existing_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            try:
+                workbook.active.append(["source", "target"])
+                for row in (
+                    ("A|B", "甲|乙"), ("A||B", "甲"), ("AB", "甲|乙"),
+                    ("A|B", "甲｜乙"), (None, "|"), ("plain", "普通"), ("|", "|"),
+                ):
+                    workbook.active.append(row)
+                workbook.save(input_path)
+            finally:
+                workbook.close()
+            summary = process_excel(input_path, "A", "B")
+            self.assertIn("pipe", summary.selected_token_types)
+            self.assertEqual(summary.total_rows_checked, 7)
+            self.assertEqual(summary.rows_with_selected_tokens, 6)
+            self.assertEqual(summary.pipe_rows, 6)
+            self.assertEqual(summary.problem_rows, 4)
+            self.assertEqual(summary.problem_count, 4)
+            result = load_workbook(summary.output_path)
+            try:
+                problems = list(result["标签占位问题"].iter_rows(min_row=2, values_only=True))
+                self.assertEqual([row[0] for row in problems], [3, 4, 5, 6])
+                self.assertEqual([row[3] for row in problems], [
+                    "缺少：| x2", "多出：|", "缺少：|", "多出：|",
+                ])
+                self.assertTrue(all(row[4] == "竖线 |不一致" for row in problems))
+                statistics = dict(result["检查汇总"].iter_rows(min_row=2, values_only=True))
+                self.assertEqual(statistics["含竖线 | 行数"], 6)
+            finally:
+                result.close()
+
+            disabled = process_excel(input_path, "A", "B", token_types=("brace",))
+            self.assertEqual(disabled.problem_rows, 0)
+            self.assertEqual(disabled.pipe_rows, 0)
+            result = load_workbook(disabled.output_path)
+            try:
+                statistics = dict(result["检查汇总"].iter_rows(min_row=2, values_only=True))
+                self.assertNotIn("含竖线 | 行数", statistics)
+            finally:
+                result.close()
+
+    def test_cli_pipe_check_defaults_on_and_can_be_selected_or_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.xlsx"
+            workbook = Workbook()
+            try:
+                workbook.active.append(["source", "target"])
+                workbook.active.append(["A|B", "AB"])
+                workbook.save(input_path)
+            finally:
+                workbook.close()
+            for flags, expected in (
+                ([], "问题行数: 1"),
+                (["--token-type", "pipe"], "问题行数: 1"),
+                (["--token-type", "brace"], "问题行数: 0"),
+            ):
+                with self.subTest(flags=flags), patch(
+                    "sys.argv", ["tag-check", str(input_path), "-c", "A", "-t", "B", *flags]
+                ), redirect_stdout(io.StringIO()) as output:
+                    main()
+                    self.assertIn(expected, output.getvalue())
+
     def test_optional_order_check_compares_the_whole_selected_sequence(self) -> None:
         cases = (
             ("siblings", "<b>A</b><i>B</i>", "<i>乙</i><b>甲</b>", ("angle",), None, 0, "Tag顺序不一致"),
@@ -152,6 +229,8 @@ class ProcessExcelTests(unittest.TestCase):
             ("newline", r"{name}\n", r"\n{name}", ("brace", "newline"), None, 0, "Tag顺序不一致"),
             ("color", "[color=red]A[/color]", "[/color]甲[color=red]", ("square_color",), None, 0, "Tag顺序不一致"),
             ("memoq", "{1}{2>Text<3}", "{2>译文<3}{1}", ("memoq",), None, 0, "Tag顺序不一致"),
+            ("pipe", "{name}|", "|{name}", ("brace", "pipe"), None, 0, "Tag顺序不一致"),
+            ("memoq_pipe", "{1}|", "|{1}", ("memoq", "pipe"), None, 0, "Tag顺序不一致"),
             ("same", "<b>Hello {name}</b>", "<b>你好 {name}</b>", ("angle", "brace"), None, 0, None),
             ("empty", None, "无标记", ("angle", "brace"), None, 0, None),
             ("unselected", "<br/>{name}", "{name}<br/>", ("brace",), None, 0, None),
@@ -422,7 +501,7 @@ class ProcessExcelTests(unittest.TestCase):
 
             self.assertEqual(
                 summary.selected_token_types,
-                ("angle", "square_color", "brace", "newline"),
+                ("angle", "square_color", "brace", "newline", "pipe"),
             )
             self.assertEqual(summary.brace_rows, 2)
             self.assertEqual(summary.memoq_rows, 0)
