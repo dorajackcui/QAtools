@@ -72,6 +72,8 @@ def scan_merged_table(input_file: str | Path, *, filename_column: str = "A",
     records, issues, matched, row_count = {}, [], False, 0
     try:
         for sheet_index, sheet in enumerate(workbook.worksheets, 1):
+            # Use stored cells rather than a possibly inflated or stale Excel range.
+            sheet.reset_dimensions()
             rows = sheet.iter_rows()
             headers = next(rows, ())
             try:
@@ -123,6 +125,7 @@ def _check_input(result):
 
 def _copy_row(row, sheet, styles):
     from openpyxl.cell import WriteOnlyCell
+    from openpyxl.cell.rich_text import CellRichText
 
     copied = []
     for cell in row:
@@ -130,7 +133,9 @@ def _copy_row(row, sheet, styles):
         if cell.value is None and not has_style:
             copied.append(None)
             continue
-        new_cell = WriteOnlyCell(sheet, value=cell.value)
+        # Plain '' is omitted by openpyxl; an explicit text run preserves it.
+        value = CellRichText([""]) if cell.value == "" and cell.data_type == "s" else cell.value
+        new_cell = WriteOnlyCell(sheet, value=value)
         new_cell.data_type = cell.data_type  # Preserve literal text beginning with '='.
         if has_style:
             key = tuple(cell.style_array)
@@ -186,6 +191,7 @@ def export_merged_groups(result: MergedGroupingResult, output_dir: str | Path,
         # Reserve before writing; each workbook is published only after a complete save.
         create_output_directory(output)
         for sheet in workbook.worksheets:
+            sheet.reset_dimensions()
             rows = sheet.iter_rows()
             headers = next(rows, ())
             if _header_columns(headers, result.source_header, result.target_header, sheet.title) is None:

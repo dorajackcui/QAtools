@@ -1,10 +1,14 @@
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
+from zipfile import ZipFile
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.cell.rich_text import CellRichText
 from openpyxl.styles import Font, PatternFill
 
 from tools.file_grouping.merged import export_merged_groups, scan_merged_table
@@ -42,6 +46,17 @@ class MergedGroupingTests(unittest.TestCase):
                     for sheet in book.worksheets}
         finally:
             book.close()
+
+    def set_dimension(self, dimension):
+        contents = BytesIO()
+        with ZipFile(self.input) as source, ZipFile(contents, "w") as target:
+            for entry in source.infolist():
+                data = source.read(entry.filename)
+                if entry.filename == "xl/worksheets/sheet1.xml":
+                    data = re.sub(rb'<dimension ref="[^"]+"',
+                                  f'<dimension ref="{dimension}"'.encode(), data)
+                target.writestr(entry, data)
+        self.input.write_bytes(contents.getvalue())
 
     def test_groups_use_pending_sources_but_exports_keep_all_rows_columns_and_order(self):
         date = datetime(2026, 10, 12)
@@ -110,6 +125,43 @@ class MergedGroupingTests(unittest.TestCase):
         rows = self.read(self.output / "文件群1.xlsx")["Data"]
         self.assertEqual(rows[1], (None, "a.xlsx", "共同", "outside header"))
 
+    def test_stale_dimensions_do_not_expand_rows_or_hide_data(self):
+        for dimension in ("A1:XFD1048576", "A1:A1"):
+            with self.subTest(dimension=dimension):
+                self.book([["a.xlsx", "共同", None],
+                           ["b.xlsx", "共同", None, "note", "outside header"],
+                           ["c.xlsx", "独立", None]])
+                self.set_dimension(dimension)
+                before = self.input.read_bytes()
+                result = scan_merged_table(self.input)
+                self.assertTrue(result.can_export, result.issues)
+                self.assertEqual(result.row_count, 3)
+                self.assertEqual([len(group.files) for group in result.groups], [2, 1])
+                from tools.file_grouping import merged
+                widths = []
+                copy_row = merged._copy_row
+
+                def observe_row(row, sheet, styles):
+                    widths.append(len(row))
+                    return copy_row(row, sheet, styles)
+
+                output = self.root / dimension.replace(":", "-")
+                with patch.object(merged, "_copy_row", side_effect=observe_row):
+                    export_merged_groups(result, output)
+                self.assertEqual(max(widths), 5)
+                rows = self.read(output / "文件群1.xlsx")["Data"]
+                self.assertEqual(rows[2], ("b.xlsx", "共同", None, "note", "outside header"))
+                self.assertEqual(self.input.read_bytes(), before)
+
+    def test_formula_outside_stale_dimensions_still_blocks_export(self):
+        self.book([["a.xlsx", "原文", None], ["b.xlsx", "原文", None, "=A2"]])
+        self.set_dimension("A1:C2")
+        result = scan_merged_table(self.input)
+        self.assertFalse(result.can_export)
+        self.assertIn("D3", result.issues[0].message)
+        with self.assertRaises(ValueError):
+            export_merged_groups(result, self.output)
+
     def test_multiple_matching_sheets_share_file_identity(self):
         self.book([["a.xlsx", "共同", None]], extra=(
             ("OtherData", [["File", "MsgStr", "fr"], ["b.xlsx", "共同", None], ["a.xlsx", "old", "done"]]),
@@ -153,6 +205,28 @@ class MergedGroupingTests(unittest.TestCase):
             self.assertEqual(book.active["B2"].data_type, "s")
             self.assertEqual(book.active["B4"].value, 0)
             self.assertIs(book.active["B5"].value, False)
+        finally:
+            book.close()
+
+    def test_empty_strings_remain_text_in_all_columns(self):
+        self.book([["a.xlsx", "原文", CellRichText([""]), CellRichText([""])],
+                   ["a.xlsx", CellRichText([""]), "done", CellRichText([""])]])
+        book = load_workbook(self.input, read_only=True)
+        try:
+            self.assertEqual(book.active["C2"].value, "")
+            self.assertEqual(book.active["C2"].data_type, "s")
+        finally:
+            book.close()
+        result = scan_merged_table(self.input)
+        self.assertTrue(result.can_export)
+        self.assertEqual(result.row_count, 2)
+        self.assertEqual(result.files[0].pending_rows, 1)
+        export_merged_groups(result, self.output)
+        book = load_workbook(self.output / "其他.xlsx", read_only=True)
+        try:
+            for coordinate in ("C2", "D2", "B3", "D3"):
+                self.assertEqual(book.active[coordinate].value, "", coordinate)
+                self.assertEqual(book.active[coordinate].data_type, "s", coordinate)
         finally:
             book.close()
 
