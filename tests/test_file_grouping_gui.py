@@ -149,6 +149,44 @@ class FileGroupingGuiTests(unittest.TestCase):
         finally:
             self.page._workers.clear()
 
+    def test_merged_input_mode_scans_and_exports_all_rows_per_group(self):
+        path = self.book("merged.xlsx", [["a.xlsx", "共同", None, "pending"],
+                        ["b.xlsx", "共同", None, "pending"], ["a.xlsx", "已译", "done", "keep"],
+                        ["c.xlsx", "独立", None, "other"]], headers=("File", "MsgStr", "fr", "Note"))
+        self.page.input_kind.setCurrentIndex(1)
+        self.assertEqual(self.page.source_picker.path(), "")
+        self.assertFalse(self.page.filename_column.isHidden())
+        self.page.source_picker.set_path(str(path))
+        self.click(self.page.scan_button)
+        self.assertEqual(self.page.counts.text(), "3 个文件，2 个分组")
+        self.assertTrue(self.page.export_button.isEnabled())
+        with patch("tools.file_grouping.qt_page.QFileDialog.getExistingDirectory", return_value=str(self.root)):
+            self.click(self.page.export_button)
+        output = self.page.exported.output_dir
+        from openpyxl import load_workbook
+        book = load_workbook(output / "文件群1.xlsx", read_only=True)
+        try:
+            rows = list(book.active.iter_rows(values_only=True))
+            self.assertEqual(len(rows), 4)
+            self.assertEqual(rows[-1][2], "done")
+        finally:
+            book.close()
+        self.assertIn("已导出 2 个工作簿", self.page.status.text())
+        self.page.filename_column.setText("B")
+        self.assertIsNone(self.page.result)
+        self.assertFalse(self.page.export_button.isEnabled())
+        self.page.input_kind.setCurrentIndex(0)
+        self.assertTrue(self.page.filename_column.isHidden())
+        self.assertEqual(self.page.source_picker.path(), "")
+        self.errors.assert_not_called()
+
+    def test_merged_mode_uses_excel_picker_without_loading_on_selection(self):
+        self.page.input_kind.setCurrentIndex(1)
+        with patch("tools.file_grouping.qt_page.QFileDialog.getOpenFileName", return_value=("merged.xlsx", "")):
+            self.page.choose_source()
+        self.assertEqual(self.page.source_picker.path(), "merged.xlsx")
+        self.assertIsNone(self.page.result)
+
 
 if __name__ == "__main__":
     unittest.main()

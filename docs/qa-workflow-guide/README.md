@@ -46,7 +46,7 @@ python scripts/capture_gui_guide.py
 python scripts/check_docs.py
 ```
 
-只更新文件分组截图可运行 `python scripts/capture_gui_guide.py --tool file_grouping`。
+只更新文件分组的文件夹、合并表两种界面截图可运行 `python scripts/capture_gui_guide.py --tool file_grouping`。
 
 [截图脚本](../../scripts/capture_gui_guide.py)直接构造当前 Qt 页面，通过离屏渲染生成截图，
 隔离表头别名、QA 记住选项和 TB 项目配置，不读取或保存用户配置。

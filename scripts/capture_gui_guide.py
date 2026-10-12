@@ -57,6 +57,8 @@ def main(tool=None):
 
         if tool == "file_grouping":
             capture(window, "file-grouping.png")
+            window.tool_frames["file_grouping"].input_kind.setCurrentIndex(1)
+            capture(window, "file-grouping-merged.png")
             window.close()
             app.processEvents()
             return
@@ -78,6 +80,10 @@ def main(tool=None):
                           ("untranslated_stats", "untranslated-stats"), ("settings", "header-aliases")):
             window.select_tool(key)
             capture(window, name + ".png")
+            if key == "file_grouping":
+                window.tool_frames[key].input_kind.setCurrentIndex(1)
+                capture(window, "file-grouping-merged.png")
+                window.tool_frames[key].input_kind.setCurrentIndex(0)
         window.select_tool("excel_batcher")
         window.tool_frames["excel_batcher"].tabs.setCurrentIndex(1)
         capture(window, "batch-restore.png")

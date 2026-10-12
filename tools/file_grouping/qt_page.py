@@ -5,12 +5,12 @@ from pathlib import Path
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHeaderView, QLabel, QLineEdit,
+    QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QPlainTextEdit, QProgressBar, QPushButton, QTableView, QVBoxLayout,
 )
 
 from tools.qt_gui_common import AsyncPage, PathPicker, muted_label, primary_button, section, show_error
-from tools.qt_page_helpers import _add_action_bar
+from tools.qt_page_helpers import EXCEL_FILTER, _add_action_bar
 
 
 class GroupModel(QAbstractTableModel):
@@ -65,7 +65,16 @@ class FileGroupingPage(AsyncPage):
         outer.setContentsMargins(2, 2, 6, 2)
         outer.setSpacing(8)
         self.inputs, inputs = section()
-        self.source_picker = PathPicker("来源目录", choose_text="选择目录")
+        kind_row = QHBoxLayout()
+        kind_label = QLabel("输入方式")
+        kind_label.setMinimumWidth(112)
+        self.input_kind = QComboBox()
+        self.input_kind.addItem("文件夹", "folder")
+        self.input_kind.addItem("合并表", "merged")
+        kind_row.addWidget(kind_label)
+        kind_row.addWidget(self.input_kind, 1)
+        inputs.addLayout(kind_row)
+        self.source_picker = PathPicker("来源", choose_text="选择目录")
         self.source_picker.line_edit.setReadOnly(False)
         self.source_picker.line_edit.setClearButtonEnabled(True)
         self.source_picker.line_edit.setPlaceholderText("递归扫描 .xlsx / .xlsm")
@@ -74,16 +83,22 @@ class FileGroupingPage(AsyncPage):
         inputs.addWidget(self.source_picker)
         form = QFormLayout()
         form.setHorizontalSpacing(8)
+        self.input_form = form
+        self.filename_column = QLineEdit("A")
+        self.filename_column.setMaximumWidth(120)
+        form.addRow("文件名列", self.filename_column)
+        form.setRowVisible(self.filename_column, False)
         self.source_header = QLineEdit("MsgStr")
         self.target_header = QLineEdit("fr")
         form.addRow("原文表头", self.source_header)
         form.addRow("译文表头", self.target_header)
-        for field in (self.source_header, self.target_header):
+        for field in (self.filename_column, self.source_header, self.target_header):
             form.labelForField(field).setMinimumWidth(112)
         inputs.addLayout(form)
         outer.addWidget(self.inputs)
-        for field in (self.source_picker.line_edit, self.source_header, self.target_header):
+        for field in (self.source_picker.line_edit, self.filename_column, self.source_header, self.target_header):
             field.textChanged.connect(self._invalidate)
+        self.input_kind.currentIndexChanged.connect(self._kind_changed)
 
         self.counts = muted_label("尚未扫描")
         outer.addWidget(self.counts)
@@ -145,9 +160,20 @@ class FileGroupingPage(AsyncPage):
         self.details_dialog.reject()
 
     def choose_source(self):
-        path = QFileDialog.getExistingDirectory(self, "选择来源目录", self.source_picker.path())
+        if self.input_kind.currentData() == "merged":
+            path, _ = QFileDialog.getOpenFileName(self, "选择合并表", self.source_picker.path(), EXCEL_FILTER)
+        else:
+            path = QFileDialog.getExistingDirectory(self, "选择来源目录", self.source_picker.path())
         if path:
             self.source_picker.set_path(path)
+
+    def _kind_changed(self, *_):
+        merged = self.input_kind.currentData() == "merged"
+        self.input_form.setRowVisible(self.filename_column, merged)
+        self.source_picker.choose_button.setText("选择表格" if merged else "选择目录")
+        self.source_picker.line_edit.setPlaceholderText("选择 .xlsx / .xlsm 合并表" if merged else "递归扫描 .xlsx / .xlsm")
+        self.source_picker.clear()
+        self._invalidate()
 
     def _busy(self, busy):
         self._running = busy
@@ -162,7 +188,11 @@ class FileGroupingPage(AsyncPage):
     def scan(self):
         if self._running:
             return
-        from .grouping import scan_file_groups
+        kind = self.input_kind.currentData()
+        if kind == "merged":
+            from .merged import scan_merged_table as scan_function
+        else:
+            from .grouping import scan_file_groups as scan_function
         self._invalidate()
         generation = self._generation
         self._busy(True)
@@ -173,13 +203,16 @@ class FileGroupingPage(AsyncPage):
                 self.result = result
                 self.model.set_result(result)
                 self.counts.setText(f"{len(result.files)} 个文件，{len(result.groups)} 个分组")
-                self.status.setText(f'扫描不完整，{len(result.issues)} 个文件未扫描。<a href="issues">查看问题</a>'
+                self.status.setText(f'扫描不完整，{len(result.issues)} 处问题。<a href="issues">查看问题</a>'
                                     if result.issues else "扫描完成，点击组名查看文件。")
             self._busy(False)
 
-        self.run_in_background(scan_file_groups, args=(self.source_picker.path(),), kwargs={
-            "source_header": self.source_header.text(), "target_header": self.target_header.text(),
-            "progress_callback": self.progress_changed.emit}, on_success=ready, on_error=self._failed)
+        options = {"source_header": self.source_header.text(), "target_header": self.target_header.text(),
+                   "progress_callback": self.progress_changed.emit}
+        if kind == "merged":
+            options["filename_column"] = self.filename_column.text()
+        self.run_in_background(scan_function, args=(self.source_picker.path(),), kwargs=options,
+                               on_success=ready, on_error=self._failed)
 
     def show_group(self, index):
         if self.result is None or not index.isValid():
@@ -192,7 +225,7 @@ class FileGroupingPage(AsyncPage):
 
     def _open_status(self, link):
         if link == "issues" and self.result:
-            self.details_dialog.setWindowTitle("未扫描文件")
+            self.details_dialog.setWindowTitle("合并表问题" if self.input_kind.currentData() == "merged" else "未扫描文件")
             self.details_note.setText("请修正问题后重新扫描，再导出分组。")
             self.details_text.setPlainText("\n\n".join(f"{issue.path.as_posix()}\n{issue.message}" for issue in self.result.issues))
             self.details_dialog.open()
@@ -202,11 +235,17 @@ class FileGroupingPage(AsyncPage):
     def export_groups(self):
         if self._running or self.result is None or not self.result.can_export:
             return
-        from .grouping import export_file_groups
-        parent = QFileDialog.getExistingDirectory(self, "选择保存位置（将在其中新建分组目录）", str(self.result.source_dir.parent))
+        kind = self.input_kind.currentData()
+        if kind == "merged":
+            from .merged import export_merged_groups as export_function
+            initial_dir, name = self.result.input_file.parent, self.result.input_file.stem
+        else:
+            from .grouping import export_file_groups as export_function
+            initial_dir, name = self.result.source_dir.parent, self.result.source_dir.name
+        parent = QFileDialog.getExistingDirectory(self, "选择保存位置（将在其中新建分组目录）", str(initial_dir))
         if not parent:
             return
-        output = Path(parent) / f"{self.result.source_dir.name}_文件分组_{datetime.now():%Y%m%d_%H%M%S_%f}"
+        output = Path(parent) / f"{name}_文件分组_{datetime.now():%Y%m%d_%H%M%S_%f}"
         result, generation = self.result, self._generation
         self._busy(True)
         self.status.setText("正在复核并导出分组…")
@@ -214,11 +253,12 @@ class FileGroupingPage(AsyncPage):
         def exported(summary):
             if generation == self._generation:
                 self.exported = summary
-                self.status.setText(f'已导出 {summary.file_count} 个文件。<a href="output">打开输出目录</a>')
+                unit = "工作簿" if kind == "merged" else "文件"
+                self.status.setText(f'已导出 {summary.file_count} 个{unit}。<a href="output">打开输出目录</a>')
                 self.status.setToolTip(str(summary.output_dir))
             self._busy(False)
 
-        self.run_in_background(export_file_groups, args=(result, output), kwargs={
+        self.run_in_background(export_function, args=(result, output), kwargs={
             "progress_callback": self.progress_changed.emit}, on_success=exported, on_error=self._failed)
 
     def _failed(self, message):

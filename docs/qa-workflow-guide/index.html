@@ -706,16 +706,20 @@
           </header>
           <h3>操作步骤</h3>
           <ol class="steps">
-            <li><strong>扫描目录</strong><span>选择【来源目录】，填写【原文表头】与【译文表头】，点击【扫描分组】。默认表头为 MsgStr / fr。</span></li>
+            <li><strong>选择输入</strong><span>【输入方式】可选“文件夹”或“合并表”，选择对应来源。合并表按【文件名列】区分原文件，默认 A；【原文表头】与【译文表头】默认 MsgStr / fr，然后点击【扫描分组】。</span></li>
             <li><strong>查看文件群</strong><span>表格显示每群文件数与去重中文字数。点击组名或选中后按回车查看文件。同群建议一起分配，“其他”中的文件可以分别分配。</span></li>
-            <li><strong>保存分组</strong><span>点击【导出分组…】，选择保存位置；工具新建分组目录，复制完整文件并保留相对路径。完成后点击状态栏【打开输出目录】。</span></li>
+            <li><strong>保存分组</strong><span>点击【导出分组…】，选择保存位置。文件夹模式复制完整文件并保留相对路径；合并表模式每群生成一份 Excel，保留该群文件的全部行和全部列，包括已翻译行。完成后点击状态栏【打开输出目录】。</span></li>
           </ol>
           <p>扫描不完整时从状态栏【查看问题】，修正后重新扫描。</p>
           <details class="screenshot-detail">
             <summary>查看界面截图</summary>
             <figure class="shot">
-              <img src="assets/file-grouping.png" alt="文件分组：来源目录、原文和译文表头、三列分组清单，以及扫描和导出按钮。" loading="lazy" width="1260" height="820">
+              <img src="assets/file-grouping.png" alt="文件分组：文件夹输入方式、来源、原文和译文表头、三列分组清单，以及扫描和导出按钮。" loading="lazy" width="1260" height="820">
               <figcaption>文件分组：扫描后查看文件群，再导出完整文件。</figcaption>
+            </figure>
+            <figure class="shot">
+              <img src="assets/file-grouping-merged.png" alt="文件分组的合并表模式：选择一份 Excel，文件名列默认 A，按文件名查看和导出文件群。" loading="lazy" width="1260" height="820">
+              <figcaption>合并表：每个文件群导出一份 Excel，包含该群文件的全部行。</figcaption>
             </figure>
           </details>
         </section>

@@ -87,6 +87,8 @@ class GuiStartupTests(unittest.TestCase):
             "window = ToolshubApp(show_window=False, initial_tool='file_grouping')\n"
             "assert set(window.tool_frames) == {'file_grouping'}\n"
             "assert 'tools.file_grouping.grouping' not in sys.modules\n"
+            "window.tool_frames['file_grouping'].input_kind.setCurrentIndex(1)\n"
+            "assert 'tools.file_grouping.merged' not in sys.modules\n"
             "assert 'openpyxl' not in sys.modules\n"
             "window.close()\n"
         )

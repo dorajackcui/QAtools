@@ -14,10 +14,14 @@ from tools.excel_file_ops import create_output_directory, excel_files
 
 
 @dataclass(frozen=True)
-class ScannedFile:
-    path: Path  # Relative to the scan root.
+class FileTexts:
+    path: Path  # Source-relative path, or a filename label in a merged table.
     sources: frozenset[str]
     pending_rows: int
+
+
+@dataclass(frozen=True)
+class ScannedFile(FileTexts):
     fingerprint: tuple[int, ...]
     digest: str
 
@@ -70,6 +74,18 @@ def _empty(value: object) -> bool:
             or isinstance(value, float) and math.isnan(value))
 
 
+def _header_columns(headers, source_header: str, target_header: str, sheet_title: str):
+    source_cols = [index for index, cell in enumerate(headers)
+                   if str(cell.value or "").strip() == source_header]
+    target_cols = [index for index, cell in enumerate(headers)
+                   if str(cell.value or "").strip() == target_header]
+    if not source_cols and not target_cols:
+        return None
+    if len(source_cols) != 1 or len(target_cols) != 1:
+        raise ValueError(f"工作表 {sheet_title} 的首行缺少或重复表头：{source_header} / {target_header}")
+    return source_cols[0], target_cols[0]
+
+
 def _read_file(path: Path, root: Path, source_header: str, target_header: str) -> ScannedFile:
     from openpyxl import load_workbook
 
@@ -79,16 +95,11 @@ def _read_file(path: Path, root: Path, source_header: str, target_header: str) -
         sources, pending, matched = set(), 0, False
         for sheet in workbook.worksheets:
             headers = next(sheet.iter_rows(min_row=1, max_row=1), ())
-            source_cols = [index for index, cell in enumerate(headers)
-                           if str(cell.value or "").strip() == source_header]
-            target_cols = [index for index, cell in enumerate(headers)
-                           if str(cell.value or "").strip() == target_header]
-            if not source_cols and not target_cols:
+            columns = _header_columns(headers, source_header, target_header, sheet.title)
+            if columns is None:
                 continue
-            if len(source_cols) != 1 or len(target_cols) != 1:
-                raise ValueError(f"工作表 {sheet.title} 的首行缺少或重复表头：{source_header} / {target_header}")
             matched = True
-            source_col, target_col = source_cols[0], target_cols[0]
+            source_col, target_col = columns
             start, end = min(source_col, target_col), max(source_col, target_col)
             # Explicit bounds let openpyxl pad omitted cells even without sheet dimensions.
             for row in sheet.iter_rows(min_row=2, min_col=start + 1, max_col=end + 1):
@@ -108,7 +119,7 @@ def _read_file(path: Path, root: Path, source_header: str, target_header: str) -
     return ScannedFile(path.relative_to(root), frozenset(sources), pending, before, digest)
 
 
-def _groups(files: tuple[ScannedFile, ...]) -> tuple[FileGroup, ...]:
+def _groups(files: tuple[FileTexts, ...]) -> tuple[FileGroup, ...]:
     # An inverted index joins file owners directly; no quadratic file-pair graph.
     parents = list(range(len(files)))
 
