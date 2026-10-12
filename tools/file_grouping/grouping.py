@@ -78,8 +78,7 @@ def _read_file(path: Path, root: Path, source_header: str, target_header: str) -
     try:
         sources, pending, matched = set(), 0, False
         for sheet in workbook.worksheets:
-            rows = sheet.iter_rows()
-            headers = next(rows, ())
+            headers = next(sheet.iter_rows(min_row=1, max_row=1), ())
             source_cols = [index for index, cell in enumerate(headers)
                            if str(cell.value or "").strip() == source_header]
             target_cols = [index for index, cell in enumerate(headers)
@@ -90,10 +89,10 @@ def _read_file(path: Path, root: Path, source_header: str, target_header: str) -
                 raise ValueError(f"工作表 {sheet.title} 的首行缺少或重复表头：{source_header} / {target_header}")
             matched = True
             source_col, target_col = source_cols[0], target_cols[0]
-            for row in rows:
-                if max(source_col, target_col) >= len(row):
-                    continue
-                source, target = row[source_col], row[target_col]
+            start, end = min(source_col, target_col), max(source_col, target_col)
+            # Explicit bounds let openpyxl pad omitted cells even without sheet dimensions.
+            for row in sheet.iter_rows(min_row=2, min_col=start + 1, max_col=end + 1):
+                source, target = row[source_col - start], row[target_col - start]
                 if _empty(source.value) or not _empty(target.value):
                     continue
                 if source.data_type == "f":

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 from tools.file_grouping.grouping import export_file_groups, scan_file_groups
 
@@ -17,14 +17,15 @@ class FileGroupingTests(unittest.TestCase):
         self.source.mkdir()
         self.output = self.root / "output"
 
-    def book(self, name, rows, *, headers=("MsgStr", "fr"), extra_sheets=()):
+    def book(self, name, rows, *, headers=("MsgStr", "fr"), extra_sheets=(), write_only=False):
         path = self.source / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        workbook = Workbook()
+        workbook = Workbook(write_only=write_only)
         try:
-            workbook.active.append(headers)
+            worksheet = workbook.create_sheet("Sheet1") if write_only else workbook.active
+            worksheet.append(headers)
             for row in rows:
-                workbook.active.append(row)
+                worksheet.append(row)
             for title, other_rows in extra_sheets:
                 sheet = workbook.create_sheet(title)
                 for row in other_rows:
@@ -77,6 +78,58 @@ class FileGroupingTests(unittest.TestCase):
         self.assertEqual(len(result.groups[0].files), 2)
         self.assertEqual(result.groups[0].unique_chars, 4)
         self.assertFalse(result.issues)
+
+    def test_dimensionless_sparse_rows_are_scanned_and_exported(self):
+        for index, headers in enumerate((
+            ("MsgStr", "fr"),
+            ("Ignored", "MsgStr", "Note", "fr", "Trailing"),
+            ("fr", "Note", "MsgStr", "Trailing"),
+        )):
+            with self.subTest(headers=headers):
+                def row(source, target):
+                    values = [None] * len(headers)
+                    values[headers.index("MsgStr")] = source
+                    values[headers.index("fr")] = target
+                    if "Note" in headers:
+                        values[headers.index("Note")] = "context"
+                    return values
+
+                rows = [row("共同原文", None), row("共同原文", " \t"),
+                        row("已翻译", "translated"), row(None, "译文"),
+                        row(None, None), row(" ", None), row(0, None),
+                        row(False, None), row("公式译文", "=A2")]
+                paths = [self.book(f"case_{index}/a.xlsx", rows, headers=headers, write_only=True),
+                         self.book(f"case_{index}/b.xlsx", [row("共同原文", None)], headers=headers, write_only=True)]
+                original = {path.name: path.read_bytes() for path in paths}
+                workbook = load_workbook(paths[0], read_only=True)
+                try:
+                    self.assertIsNone(workbook.active.max_row)
+                    self.assertIsNone(workbook.active.max_column)
+                finally:
+                    workbook.close()
+                result = scan_file_groups(paths[0].parent)
+                self.assertFalse(result.issues)
+                self.assertTrue(result.can_export)
+                self.assertEqual([(group.name, len(group.files), group.unique_chars) for group in result.groups],
+                                 [("文件群 1", 2, 4)])
+                self.assertEqual([file.pending_rows for file in result.files], [4, 1])
+                self.assertEqual(result.files[0].sources, {"共同原文", "0", "False"})
+                self.assertEqual(result.files[1].sources, {"共同原文"})
+                output = self.root / f"export_{index}"
+                summary = export_file_groups(result, output)
+                self.assertEqual(summary.file_count, 2)
+                for path in paths:
+                    self.assertEqual(path.read_bytes(), original[path.name])
+                    self.assertEqual((output / "文件群1" / path.name).read_bytes(), original[path.name])
+
+    def test_dimensionless_pending_formulas_still_report_the_original_row(self):
+        self.book("formula.xlsx", [[None, "=B3", None, None]],
+                  headers=("Ignored", "MsgStr", "Note", "fr"), write_only=True)
+        result = self.scan()
+        self.assertFalse(result.can_export)
+        self.assertEqual(len(result.issues), 1)
+        self.assertIn("第 2 行", result.issues[0].message)
+        self.assertIn("公式", result.issues[0].message)
 
     def test_missing_duplicate_headers_and_pending_source_formulas_block_export(self):
         self.book("good.xlsx", [("文本", None)])
