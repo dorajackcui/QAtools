@@ -107,6 +107,7 @@ TOOL_GROUPS = (
             ToolItem(key="excel_merger", title="合并表格"),
             ToolItem(key="deep_replace", title="同名文件替换"),
             ToolItem(key="file_collector", title="文件提取"),
+            ToolItem(key="file_grouping", title="文件分组"),
         ),
     ),
     ToolGroup(

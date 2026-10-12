@@ -1,6 +1,7 @@
 """Render the real Qt pages for the offline guide, using isolated configuration."""
 from __future__ import annotations
 
+import argparse
 import os
 from pathlib import Path
 import stat
@@ -13,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 
-def main():
+def main(tool=None):
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
     from PySide6.QtGui import QFont, QFontDatabase
@@ -41,7 +42,8 @@ def main():
         temporary = Path(directory)
         with patch("tools.tb_projects.default_tb_projects_path", return_value=temporary / "tb.json"), \
              patch("tools.workflow.gui_options.default_header_aliases_path", return_value=temporary / "aliases.json"):
-            window = ToolshubApp(show_window=False, header_alias_store=HeaderAliasStore(temporary / "aliases.json"))
+            window = ToolshubApp(show_window=False, initial_tool=tool or "workflow",
+                                  header_alias_store=HeaderAliasStore(temporary / "aliases.json"))
         window.resize(1260, 820)
         window.show()
 
@@ -52,6 +54,12 @@ def main():
             if not widget.grab().save(str(assets / name)):
                 raise RuntimeError(f"Could not save {name}")
             print(name)
+
+        if tool == "file_grouping":
+            capture(window, "file-grouping.png")
+            window.close()
+            app.processEvents()
+            return
 
         capture(window, "workflow-main.png")
         workflow = window.tool_frames["workflow"]
@@ -64,6 +72,7 @@ def main():
         for key, name in (("phraseloom", "phraseloom"), ("content_sync", "sync-master-to-target"), ("compatibility", "compatibility"),
                           ("column_tools", "columns"), ("deep_replace", "deep-replace"),
                           ("file_collector", "file-collector"),
+                          ("file_grouping", "file-grouping"),
                           ("excel_batcher", "batch-split"), ("excel_merger", "merge-sheets"),
                           ("french_nbsp", "french-nbsp"), ("xbench_report", "xbench"),
                           ("untranslated_stats", "untranslated-stats"), ("settings", "header-aliases")):
@@ -131,4 +140,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tool", choices=("file_grouping",), help="仅更新指定新增页面的截图")
+    main(parser.parse_args().tool)

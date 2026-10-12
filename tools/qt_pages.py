@@ -32,6 +32,9 @@ def _load_class(name: str):
     if name == "FileCollectorPage":
         from tools.file_collector.qt_page import FileCollectorPage
         return FileCollectorPage
+    if name == "FileGroupingPage":
+        from tools.file_grouping.qt_page import FileGroupingPage
+        return FileGroupingPage
     if name in {"ColumnToolsPage", "CompatibilityPage", "DeepReplacePage", "UntranslatedStatsPage"}:
         from tools.excel_utilities_pages import (
             ColumnToolsPage, CompatibilityPage, DeepReplacePage, UntranslatedStatsPage,
@@ -61,6 +64,7 @@ PAGE_FACTORIES = {
         ("compatibility", "CompatibilityPage"),
         ("deep_replace", "DeepReplacePage"),
         ("file_collector", "FileCollectorPage"),
+        ("file_grouping", "FileGroupingPage"),
         ("untranslated_stats", "UntranslatedStatsPage"),
         ("workflow", "WorkflowPage"),
         ("phraseloom", "PhraseLoomPage"),

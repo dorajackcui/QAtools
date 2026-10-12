@@ -20,6 +20,7 @@
 | 用 Excel 重新保存工作簿 | [兼容性重存](../tools/excel_compatibility/README.md) |
 | 按文件名替换整个工作簿 | [同名文件替换](../tools/deep_replace/README.md) |
 | 按文件名清单收集工作簿 | [文件提取](../tools/file_collector/README.md) |
+| 按共同待翻译原文划分文件群 | [文件分组](../tools/file_grouping/README.md) |
 | 汇总待翻译字数/词数和行数 | [未翻译统计](../tools/untranslated_stats/README.md) |
 | 查看目录工具的实时处理详情 | [运行日志](tool-logs.md) |
 | 追溯导入来源 | [归档索引](archive/README.md) |

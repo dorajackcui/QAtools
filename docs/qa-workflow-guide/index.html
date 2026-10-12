@@ -29,6 +29,7 @@
             <a data-tool="excel_merger" href="#excel-merger">合并表格</a>
             <a data-tool="deep_replace" href="#deep-replace">同名文件替换</a>
             <a data-tool="file_collector" href="#file-collector">文件提取</a>
+            <a data-tool="file_grouping" href="#file-grouping">文件分组</a>
           </div>
           <div class="nav-section">
             <div class="nav-group">翻译辅助</div>
@@ -695,6 +696,26 @@
             <figure class="shot">
               <img src="assets/file-collector.png" alt="文件提取：来源、输出、文件名清单和匹配预览表。" loading="lazy" width="1260" height="820">
               <figcaption>文件提取：输入清单后预览匹配，再复制可用文件。</figcaption>
+            </figure>
+          </details>
+        </section>
+        <section class="guide-tool" data-tool="file_grouping" id="file-grouping" aria-labelledby="file-grouping-title">
+          <header class="tool-heading">
+            <h2 id="file-grouping-title">文件分组<span class="brand-dot" aria-hidden="true">.</span></h2>
+            <p class="tool-intro">把存在共同待翻译原文的完整文件归为一群，便于一起派发。</p>
+          </header>
+          <h3>操作步骤</h3>
+          <ol class="steps">
+            <li><strong>扫描目录</strong><span>选择【来源目录】，填写【原文表头】与【译文表头】，点击【扫描分组】。默认表头为 MsgStr / fr。</span></li>
+            <li><strong>查看文件群</strong><span>表格显示每群文件数与去重中文字数。点击组名或选中后按回车查看文件。同群建议一起分配，“其他”中的文件可以分别分配。</span></li>
+            <li><strong>保存分组</strong><span>点击【导出分组…】，选择保存位置；工具新建分组目录，复制完整文件并保留相对路径。完成后点击状态栏【打开输出目录】。</span></li>
+          </ol>
+          <p>扫描不完整时从状态栏【查看问题】，修正后重新扫描。</p>
+          <details class="screenshot-detail">
+            <summary>查看界面截图</summary>
+            <figure class="shot">
+              <img src="assets/file-grouping.png" alt="文件分组：来源目录、原文和译文表头、三列分组清单，以及扫描和导出按钮。" loading="lazy" width="1260" height="820">
+              <figcaption>文件分组：扫描后查看文件群，再导出完整文件。</figcaption>
             </figure>
           </details>
         </section>

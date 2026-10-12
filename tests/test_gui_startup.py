@@ -79,6 +79,18 @@ class GuiStartupTests(unittest.TestCase):
             "window.close()\n"
         )
 
+    def test_file_grouping_page_constructs_without_loading_workbooks(self):
+        self.run_fresh(
+            "import sys\n"
+            "from toolshub_gui import ToolshubApp, create_qt_application\n"
+            "app, _ = create_qt_application([])\n"
+            "window = ToolshubApp(show_window=False, initial_tool='file_grouping')\n"
+            "assert set(window.tool_frames) == {'file_grouping'}\n"
+            "assert 'tools.file_grouping.grouping' not in sys.modules\n"
+            "assert 'openpyxl' not in sys.modules\n"
+            "window.close()\n"
+        )
+
     def test_navigation_caches_pages_and_close_does_not_create_unused_pages(self):
         calls = []
 

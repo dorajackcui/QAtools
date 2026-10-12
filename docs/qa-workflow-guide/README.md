@@ -4,7 +4,7 @@
 `assets/` 保存实际 Qt 页面截图。保留这四部分即可独立阅读，不依赖网络或仓库其他目录；
 禁用 JavaScript 后，导航锚点、正文和可展开截图仍然可用。
 
-2026-09-14 已覆盖软件的 12 项工具与设置页。侧栏与 `toolshub_gui.py` 的
+现覆盖软件的 13 项工具与设置页。侧栏与 `toolshub_gui.py` 的
 `TOOL_GROUPS`、`SETTINGS_ITEM` 保持相同分组、名称和顺序；每项导航只对应一个
 带 `data-tool` 的正文区块。一键质量检查的小节目录放在正文内，日志与常见问题作为公共补充。
 
@@ -46,6 +46,8 @@ python scripts/capture_gui_guide.py
 python scripts/check_docs.py
 ```
 
+只更新文件分组截图可运行 `python scripts/capture_gui_guide.py --tool file_grouping`。
+
 [截图脚本](../../scripts/capture_gui_guide.py)直接构造当前 Qt 页面，通过离屏渲染生成截图，
 隔离表头别名、QA 记住选项和 TB 项目配置，不读取或保存用户配置。
 日志截图来自临时样本的实际同步，省略开头两条含临时路径的记录；不带入用户文件。
@@ -59,7 +61,7 @@ python scripts/check_docs.py
 ## 网页验证
 
 - `python scripts/check_docs.py`：相对链接、锚点、图片和样式表路径。
-- 静态核对：侧栏与软件的分组、名称、顺序一致，13 个导航项均有对应正文；全部资源本地化、HTML 标签与 ID、图片完整性及脚本语法。
+- 静态核对：侧栏与软件的分组、名称、顺序一致，14 个导航项均有对应正文；全部资源本地化、HTML 标签与 ID、图片完整性及脚本语法。
 - 布局断点：940px 下导航移到正文上方，640px 下正文卡片切换单列；宽表格在内部横向滚动。
 - 浏览器复核：离线打开 `index.html`，在桌面宽度和 390px 左右窄窗口检查溢出、丢图、导航锚点、当前工具高亮、可展开截图与 FAQ；禁用脚本后仍可正常阅读。
 
