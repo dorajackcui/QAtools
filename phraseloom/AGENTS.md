@@ -15,6 +15,7 @@ PhraseLoom 是确定性的 Excel Strings 预处理与回填工具，只有两个
 
 - `strings_workflow.py`：导出与回填编排。
 - `strings_package.py`：Strings 工作簿格式、元数据与样式。
+- `workbook_backup.py`：原文件分块备份与完整性校验，避免原表范围暴露给外部导入工具。
 - `workbook_io.py`：源工作簿读取。
 - `cleaning.py`：去重与模板压缩。
 - `tag_engine.py`、`tag_rules.py`：保护内容的提取、校验与恢复。

@@ -37,6 +37,7 @@ qatools gui / toolshub_gui.py
 | 旧 GUI 脚本转接与 Qt 表单行为 | 各工具 `*_gui.py` → `toolshub_gui.py` | `test_gui_entries.py`、`test_gui_excel_selection.py` |
 | GUI 按钮到实际文件输出、双向流程和失败重试 | Qt 页面 → 真实后台任务 → 工作簿校验 | `test_gui_functional.py`；真实 Excel 用例沿用[COM 验证开关](../tools/excel_compatibility/README.md#原生操作的共同规则) |
 | 工作簿编辑、保留 VBA | [excel_output.py](../tools/excel_output.py) | `test_excel_output_paths.py` |
+| 保留坐标的稀疏 Excel 读取、无格式空单元格清理 | [excel_rows.py](../tools/excel_rows.py) | `test_excel_sparse_io.py`、`phraseloom_tests/test_sparse_workbooks.py` |
 | 新工具扫描、输出路径、原子复制 | [excel_file_ops.py](../tools/excel_file_ops.py) | `test_content_sync.py`、`test_momotools_utilities.py` |
 | Excel COM 原生操作 | [excel_com.py](../tools/excel_com.py) | `test_momotools_utilities.py` |
 | 日志文本与有界 GUI 队列 | [operation_logs.py](../tools/operation_logs.py)、[qt_operation_logs.py](../tools/qt_operation_logs.py) | `test_operation_logs.py` |
@@ -58,6 +59,7 @@ qatools gui / toolshub_gui.py
 | QA 详细设置与取消恢复 | `tools/workflow/gui_options.py` 保存选项 | `tools/workflow/qt_settings.py` | `test_toolshub_gui.py` |
 | QA 汇总 / 修订回填 | `tools/workflow/review_sheet.py`、`revision_applier.py` | 同上 | `test_workflow_review_sheet.py` |
 | PhraseLoom | `phraseloom/strings_workflow.py` | `phraseloom/qt_page.py` | [专项地图](../phraseloom/AGENTS.md)、`tests/phraseloom_tests/` |
+| Strings 原文件备份与范围隔离 | `phraseloom/workbook_backup.py` | 同上 | [包格式与回填规则](../phraseloom/README.md)、`phraseloom_tests/test_workbook_backup.py` |
 | 内容同步 | `tools/content_sync/master_to_target.py`、`target_to_master.py` | 同包 `qt_page.py` | [README](../tools/content_sync/README.md)、`test_content_sync*.py`、`test_momotools_utilities.py` |
 | 列操作 / 兼容性重存 | `tools/column_tools/processor.py`、`tools/excel_compatibility/processor.py` | `tools/excel_utilities_pages.py` | [列操作](../tools/column_tools/README.md)、[重存](../tools/excel_compatibility/README.md)、`test_momotools_utilities.py` |
 | 同名文件替换 / 未翻译统计 | `tools/deep_replace/replacer.py`、`tools/untranslated_stats/stats.py` | 同上 | [替换](../tools/deep_replace/README.md)、[统计](../tools/untranslated_stats/README.md)、`test_momotools_utilities.py` |

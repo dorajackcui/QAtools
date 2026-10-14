@@ -8,8 +8,10 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from tools.excel_rows import iter_stored_rows
+
 from . import workbook_schema as schema
-from .errors import ColumnNotFoundError, ConfigError, WorkbookFormatError
+from .errors import ColumnNotFoundError, WorkbookFormatError
 from .models import RowItem
 from .tag_rules import (
     TagRules,
@@ -23,6 +25,7 @@ from .workbook_io import (
     resolve_column,
     workbook_metadata,
 )
+from .workbook_backup import write_original_file
 
 
 EXISTING_TARGET_STATUS = "existing_target"
@@ -62,23 +65,10 @@ def write_strings_package(
     group_similar: bool,
     min_group_size: int,
 ) -> None:
-    workbook = load_workbook(input_path)
+    workbook = Workbook()
     try:
-        conflicts = sorted(_reserved_sheets() & set(workbook.sheetnames))
-        if conflicts:
-            raise ConfigError(
-                "Source workbook uses reserved PhraseLoom sheet names: "
-                + ", ".join(conflicts)
-            )
-        original_states = {
-            worksheet.title: worksheet.sheet_state
-            for worksheet in workbook.worksheets
-        }
-        original_active_sheet = workbook.active.title
-        for worksheet in workbook.worksheets:
-            worksheet.sheet_state = "hidden"
-
-        strings = workbook.create_sheet(schema.STRINGS_SHEET)
+        strings = workbook.active
+        strings.title = schema.STRINGS_SHEET
         strings.append(schema.STRINGS_COLUMNS)
         for unit in units:
             strings.append(
@@ -158,11 +148,7 @@ def write_strings_package(
             schema.SCHEMA_VERSION_KEY: schema.SCHEMA_VERSION,
             schema.WORKBOOK_KIND_KEY: schema.STRINGS_PACKAGE_KIND,
             schema.ORIGINAL_FILENAME_KEY: input_path.name,
-            schema.ORIGINAL_SHEET_STATES_KEY: json.dumps(
-                original_states,
-                ensure_ascii=False,
-            ),
-            schema.ORIGINAL_ACTIVE_SHEET_KEY: original_active_sheet,
+            **write_original_file(workbook, input_path),
             schema.SOURCE_COLUMN_KEY: json.dumps(source_column, ensure_ascii=False),
             schema.TARGET_COLUMN_KEY: json.dumps(target_column, ensure_ascii=False),
             schema.CONTEXT_COLUMN_KEY: json.dumps(context_column, ensure_ascii=False),
@@ -192,12 +178,18 @@ def load_strings_metadata(path: Path) -> dict[str, object]:
             schema.STRINGS_SHEET,
             schema.COMPLETED_STRINGS_SHEET,
             schema.STRINGS_MAP_SHEET,
+            schema.ORIGINAL_FILE_SHEET,
         } - set(workbook.sheetnames)
     finally:
         workbook.close()
     if metadata.get(schema.WORKBOOK_KIND_KEY) != schema.STRINGS_PACKAGE_KIND:
         raise WorkbookFormatError(
             f"Workbook {path} is not a PhraseLoom Strings workbook."
+        )
+    if metadata.get(schema.SCHEMA_VERSION_KEY) != schema.SCHEMA_VERSION:
+        raise WorkbookFormatError(
+            f"Unsupported Strings workbook schema: {metadata.get(schema.SCHEMA_VERSION_KEY)!r}. "
+            f"Export the original workbook again with schema {schema.SCHEMA_VERSION}."
         )
     if missing_sheets:
         raise WorkbookFormatError(
@@ -245,12 +237,9 @@ def read_strings_rows(worksheet) -> dict[str, dict[str, object]]:
         )
 
     rows: dict[str, dict[str, object]] = {}
-    for row_number, values in enumerate(
-        worksheet.iter_rows(min_row=2, values_only=True),
-        start=2,
-    ):
+    for row_number, cells in iter_stored_rows(worksheet, min_row=2, max_col=len(headers)):
         row = {
-            header: values[index] if index < len(values) else None
+            header: cells[index + 1].value if index + 1 in cells else None
             for index, header in enumerate(headers)
             if header
         }
@@ -271,15 +260,15 @@ def read_strings_rows(worksheet) -> dict[str, dict[str, object]]:
 
 def read_mapping_rows(worksheet) -> list[dict[str, object]]:
     headers = header_values(worksheet)
-    missing = set(schema.LEGACY_STRINGS_MAP_COLUMNS) - set(headers)
+    missing = set(schema.STRINGS_MAP_COLUMNS) - set(headers)
     if missing:
         raise WorkbookFormatError(
             f"Strings mapping is missing columns: {', '.join(sorted(missing))}"
         )
     rows = []
-    for values in worksheet.iter_rows(min_row=2, values_only=True):
+    for _, cells in iter_stored_rows(worksheet, min_row=2, max_col=len(headers)):
         row = {
-            header: values[index] if index < len(values) else None
+            header: cells[index + 1].value if index + 1 in cells else None
             for index, header in enumerate(headers)
         }
         if row[schema.ROW_NUMBER_COLUMN] is not None:
@@ -302,51 +291,16 @@ def mapping_variables(map_row: dict[str, object]) -> dict[str, str]:
     return {str(key): str(value) for key, value in values.items()}
 
 
-def original_worksheet(workbook):
-    for worksheet in workbook.worksheets:
-        if worksheet.title not in _reserved_sheets():
-            return worksheet
-    raise WorkbookFormatError(
-        "Strings workbook does not contain the original worksheet."
-    )
-
-
-def restore_original_sheets(
-    workbook,
-    metadata: dict[str, object],
-) -> None:
-    try:
-        original_states = json.loads(
-            str(metadata.get(schema.ORIGINAL_SHEET_STATES_KEY) or "{}")
-        )
-    except json.JSONDecodeError as exc:
-        raise WorkbookFormatError(
-            "Strings workbook has invalid sheet-state metadata."
-        ) from exc
-    for sheet_name in _reserved_sheets():
-        if sheet_name in workbook.sheetnames:
-            workbook.remove(workbook[sheet_name])
-    for worksheet in workbook.worksheets:
-        worksheet.sheet_state = str(
-            original_states.get(worksheet.title, "visible")
-        )
-    if not any(
-        worksheet.sheet_state == "visible"
-        for worksheet in workbook.worksheets
-    ):
-        workbook.worksheets[0].sheet_state = "visible"
-    active_sheet = str(metadata.get(schema.ORIGINAL_ACTIVE_SHEET_KEY) or "")
-    if active_sheet in workbook.sheetnames:
-        workbook.active = workbook.index(workbook[active_sheet])
-
-
 def resolve_or_create_column(worksheet, column: str | int) -> int:
     try:
         return resolve_column(worksheet, column)
     except ColumnNotFoundError:
         if isinstance(column, int) or str(column).isdigit():
             raise
-        index = worksheet.max_column + 1
+        index = max((cell.column for cell in worksheet._cells.values()
+                     if cell.value is not None), default=0) + 1
+        if index > 16384:
+            raise WorkbookFormatError("Cannot add Target beyond the Excel column limit.")
         worksheet.cell(row=1, column=index).value = str(column)
         return index
 
@@ -366,15 +320,6 @@ def write_restore_issues(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)
     workbook.close()
-
-
-def _reserved_sheets() -> set[str]:
-    return {
-        schema.STRINGS_SHEET,
-        schema.COMPLETED_STRINGS_SHEET,
-        schema.STRINGS_MAP_SHEET,
-        schema.METADATA_SHEET,
-    }
 
 
 def _style_strings_sheet(worksheet) -> None:
@@ -470,11 +415,9 @@ __all__ = [
     "load_strings_metadata",
     "mapping_variables",
     "metadata_column",
-    "original_worksheet",
     "read_mapping_rows",
     "read_strings_rows",
     "resolve_or_create_column",
-    "restore_original_sheets",
     "write_restore_issues",
     "write_strings_package",
 ]

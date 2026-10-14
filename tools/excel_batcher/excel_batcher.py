@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+from bisect import bisect_left, bisect_right
 from collections.abc import Callable
+from contextlib import closing
 from copy import copy, deepcopy
 from dataclasses import dataclass
 import hashlib
@@ -26,10 +28,11 @@ if __package__ in {None, ""}:
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell.cell import MergedCell
 from openpyxl.formula.translate import Translator, TranslatorError
-from openpyxl.utils.cell import get_column_letter, range_boundaries
+from openpyxl.utils.cell import coordinate_to_tuple, get_column_letter, range_boundaries
 from openpyxl.utils.indexed_list import IndexedList
 
 from tools.excel_output import load_workbook_for_editing
+from tools.excel_rows import iter_stored_rows
 
 
 MANIFEST_FORMAT = "qatools.excel-batches.v1"
@@ -94,6 +97,7 @@ class _Manifest:
 
 @dataclass(frozen=True)
 class _CellSnapshot:
+    column: int
     value: object
     data_type: str
     style_array: object | None
@@ -138,6 +142,7 @@ def _snapshot_read_only_row(row) -> tuple[_CellSnapshot, ...]:
             style_array.xfId = 0
         snapshots.append(
             _CellSnapshot(
+                column=cell.column,
                 value=getattr(cell, "value", None),
                 data_type=cell.data_type,
                 style_array=style_array,
@@ -150,19 +155,18 @@ def _scan_read_only_worksheet(
     worksheet,
     *,
     header_rows: int,
-    max_column: int,
-) -> tuple[int, tuple[tuple[_CellSnapshot, ...], ...]]:
+) -> tuple[int, int, dict[int, tuple[_CellSnapshot, ...]]]:
     last_value_row = 0
-    header_snapshots = []
-    for row_index, row in enumerate(
-        worksheet.iter_rows(max_col=max_column),
-        start=1,
-    ):
+    last_value_column = 1
+    header_snapshots = {}
+    for row_index, cells in iter_stored_rows(worksheet, include_empty=True):
         if row_index <= header_rows:
-            header_snapshots.append(_snapshot_read_only_row(row))
-        if any(getattr(cell, "value", None) is not None for cell in row):
+            header_snapshots[row_index] = _snapshot_read_only_row(cells.values())
+        value_columns = [column for column, cell in cells.items() if cell.value is not None]
+        if value_columns:
             last_value_row = row_index
-    return last_value_row, tuple(header_snapshots)
+            last_value_column = max(last_value_column, max(value_columns))
+    return last_value_row, last_value_column, header_snapshots
 
 
 def _copy_workbook_style_repositories(source_workbook, destination_workbook) -> None:
@@ -177,8 +181,11 @@ def _copy_workbook_style_repositories(source_workbook, destination_workbook) -> 
     destination_workbook.iso_dates = source_workbook.iso_dates
 
 
-def _write_snapshot_row(worksheet, row_index: int, snapshots) -> None:
-    for column_index, snapshot in enumerate(snapshots, start=1):
+def _write_snapshot_row(worksheet, row_index: int, snapshots, max_column: int) -> None:
+    for snapshot in snapshots:
+        column_index = snapshot.column
+        if column_index > max_column:
+            continue
         if snapshot.value is None and snapshot.style_array is None:
             continue
         cell = worksheet.cell(row_index, column_index)
@@ -189,7 +196,7 @@ def _write_snapshot_row(worksheet, row_index: int, snapshots) -> None:
 
 
 def _write_read_only_row(worksheet, row_index: int, source_row) -> None:
-    for column_index, source_cell in enumerate(source_row, start=1):
+    for column_index, source_cell in source_row.items():
         value = getattr(source_cell, "value", None)
         has_style = getattr(source_cell, "has_style", False)
         if value is None and not has_style:
@@ -210,15 +217,17 @@ def _new_slim_batch_workbook(
     *,
     worksheet_title: str,
     header_snapshots,
+    header_rows: int,
+    max_column: int,
 ) -> tuple[Workbook, object]:
     batch_workbook = Workbook()
     _copy_workbook_style_repositories(source_workbook, batch_workbook)
     batch_worksheet = batch_workbook.active
     batch_worksheet.title = worksheet_title
-    for row_index, snapshots in enumerate(header_snapshots, start=1):
-        _write_snapshot_row(batch_worksheet, row_index, snapshots)
-    if header_snapshots:
-        batch_worksheet.freeze_panes = f"A{len(header_snapshots) + 1}"
+    for row_index, snapshots in header_snapshots.items():
+        _write_snapshot_row(batch_worksheet, row_index, snapshots, max_column)
+    if header_rows:
+        batch_worksheet.freeze_panes = f"A{header_rows + 1}"
     return batch_workbook, batch_worksheet
 
 
@@ -233,32 +242,36 @@ def _write_streamed_batches(
     max_column: int,
     progress_callback: ProgressCallback | None,
 ) -> None:
-    source_rows = source_worksheet.iter_rows(
+    source_rows = iter_stored_rows(source_worksheet,
         min_row=header_rows + 1,
         max_row=batches[-1].source_end_row,
         max_col=max_column,
+        include_empty=True,
     )
     if progress_callback:
         progress_callback(0, len(batches))
 
-    for completed_count, batch in enumerate(batches, start=1):
-        batch_workbook, batch_worksheet = _new_slim_batch_workbook(
-            source_workbook,
-            worksheet_title=source_worksheet.title,
-            header_snapshots=header_snapshots,
-        )
-        try:
-            for local_row in range(header_rows + 1, header_rows + batch.row_count + 1):
-                try:
-                    source_row = next(source_rows)
-                except StopIteration as exc:
-                    raise ValueError("读取工作表时数据行提前结束。") from exc
-                _write_read_only_row(batch_worksheet, local_row, source_row)
-            batch_workbook.save(staging_dir / batch.file_name)
-        finally:
-            batch_workbook.close()
-        if progress_callback:
-            progress_callback(completed_count, len(batches))
+    with closing(source_rows):
+        current = next(source_rows, None)
+        for completed_count, batch in enumerate(batches, start=1):
+            batch_workbook, batch_worksheet = _new_slim_batch_workbook(
+                source_workbook,
+                worksheet_title=source_worksheet.title,
+                header_snapshots=header_snapshots,
+                header_rows=header_rows,
+                max_column=max_column,
+            )
+            try:
+                while current is not None and current[0] <= batch.source_end_row:
+                    source_row, cells = current
+                    local_row = header_rows + 1 + source_row - batch.source_start_row
+                    _write_read_only_row(batch_worksheet, local_row, cells)
+                    current = next(source_rows, None)
+                batch_workbook.save(staging_dir / batch.file_name)
+            finally:
+                batch_workbook.close()
+            if progress_callback:
+                progress_callback(completed_count, len(batches))
 
 
 def _sha256(path: Path) -> str:
@@ -297,22 +310,20 @@ def _translate_range(
     except ValueError:
         return None
 
-    included_rows = [
-        row
-        for row in range(min_row, max_row + 1)
-        if row <= header_rows or source_start_row <= row <= source_end_row
-    ]
-    if not included_rows:
+    intersections = [(max(min_row, first), min(max_row, last))
+                     for first, last in ((1, header_rows), (source_start_row, source_end_row))
+                     if max(min_row, first) <= min(max_row, last)]
+    if not intersections:
         return None
 
     mapped_min_row = _map_included_row(
-        included_rows[0],
+        intersections[0][0],
         header_rows=header_rows,
         source_start_row=source_start_row,
         source_end_row=source_end_row,
     )
     mapped_max_row = _map_included_row(
-        included_rows[-1],
+        intersections[-1][1],
         header_rows=header_rows,
         source_start_row=source_start_row,
         source_end_row=source_end_row,
@@ -332,7 +343,6 @@ def _trim_worksheet_to_batch(
     source_start_row: int,
     source_end_row: int,
 ) -> None:
-    original_max_row = worksheet.max_row
     merged_ranges = [str(cell_range) for cell_range in worksheet.merged_cells.ranges]
     for cell_range in merged_ranges:
         worksheet.unmerge_cells(cell_range)
@@ -355,14 +365,20 @@ def _trim_worksheet_to_batch(
     table_refs = dict(worksheet.tables.items())
     auto_filter_ref = worksheet.auto_filter.ref
 
-    if original_max_row > source_end_row:
-        worksheet.delete_rows(
-            source_end_row + 1,
-            original_max_row - source_end_row,
-        )
-    rows_before_batch = source_start_row - header_rows - 1
-    if rows_before_batch > 0:
-        worksheet.delete_rows(header_rows + 1, rows_before_batch)
+    # delete_rows() materializes the intervening rectangle. Move stored cells
+    # directly instead, with the same positional (not formula-translation) rule.
+    cells = {}
+    last_value_column = max((cell.column for cell in worksheet._cells.values()
+                             if cell.value is not None), default=1)
+    for (row, column), cell in worksheet._cells.items():
+        mapped_row = _map_included_row(row, header_rows=header_rows,
+                                      source_start_row=source_start_row,
+                                      source_end_row=source_end_row)
+        if mapped_row is not None and column <= last_value_column:
+            cell.row = mapped_row
+            cells[mapped_row, column] = cell
+    worksheet._cells = cells
+    worksheet._current_row = max((row for row, _ in cells), default=0)
 
     worksheet.row_dimensions.clear()
     for mapped_row, dimension in row_dimensions.items():
@@ -458,15 +474,15 @@ def split_workbook(
         else:
             worksheet = workbook.active
         worksheet_title = worksheet.title
-        original_max_column = worksheet.max_column
         if use_streaming_batches:
-            last_data_row, header_snapshots = _scan_read_only_worksheet(
+            last_data_row, original_max_column, header_snapshots = _scan_read_only_worksheet(
                 worksheet,
                 header_rows=header_rows,
-                max_column=original_max_column,
             )
         else:
             last_data_row = _last_value_row(worksheet)
+            original_max_column = max((cell.column for cell in worksheet._cells.values()
+                                       if cell.value is not None), default=1)
             header_snapshots = ()
 
         if last_data_row <= header_rows:
@@ -983,15 +999,10 @@ def _apply_batch_xml_row(
     namespace: str,
     shared_strings: tuple[str, ...],
 ) -> None:
-    row_element = _get_or_create_row_element(
-        sheet_data,
-        rows_by_index,
-        row_index=destination_row_index,
-        namespace=namespace,
-    )
+    row_element = rows_by_index.get(destination_row_index)
     destination_cells = {
         _cell_column_index(cell): cell
-        for cell in row_element
+        for cell in (() if row_element is None else row_element)
         if _xml_local_name(cell.tag) == "c"
     }
     source_cells = (
@@ -1003,12 +1014,17 @@ def _apply_batch_xml_row(
         if source_row is not None
         else {}
     )
-    for column_index in range(min_column, max_column + 1):
+    for column_index in sorted(source_cells.keys() | destination_cells.keys()):
+        if not min_column <= column_index <= max_column:
+            continue
         source_cell = source_cells.get(column_index)
         destination_cell = destination_cells.get(column_index)
         if destination_cell is None:
-            if source_cell is None:
+            if source_cell is None or not _cell_xml_has_value(source_cell):
                 continue
+            if row_element is None:
+                row_element = _get_or_create_row_element(
+                    sheet_data, rows_by_index, row_index=destination_row_index, namespace=namespace)
             destination_cell = ElementTree.Element(
                 _qualified_tag(namespace, "c"),
                 {
@@ -1026,12 +1042,19 @@ def _apply_batch_xml_row(
             namespace=namespace,
             shared_strings=shared_strings,
         )
+        if not len(destination_cell) and not (set(destination_cell.attrib) - {"r", "t"}):
+            row_element.remove(destination_cell)
+    if row_element is None:
+        return
     row_element[:] = sorted(
         row_element,
         key=lambda cell: _cell_column_index(cell)
         if _xml_local_name(cell.tag) == "c"
         else 10**9,
     )
+    if not len(row_element) and not (set(row_element.attrib) - {"r", "spans"}):
+        # Rebuild sheetData once at the end; repeated Element.remove is quadratic.
+        del rows_by_index[destination_row_index]
 
 
 def _cell_xml_has_value(cell) -> bool:
@@ -1041,27 +1064,15 @@ def _cell_xml_has_value(cell) -> bool:
     )
 
 
-def _sheet_xml_dimensions(root) -> tuple[int, int]:
-    namespace = _worksheet_namespace(root)
-    dimension = root.find(_qualified_tag(namespace, "dimension"))
-    if dimension is not None and dimension.attrib.get("ref"):
-        try:
-            _, _, max_column, max_row = range_boundaries(
-                dimension.attrib["ref"]
-            )
-            return max_row, max_column
-        except ValueError:
-            pass
-    max_row = 0
+def _sheet_xml_dimensions(root, *, include_empty=False) -> tuple[int, int]:
+    """Measure stored cells, never the worksheet's untrusted dimension."""
+    max_row = 1
     max_column = 1
     for node in root.iter():
-        if _xml_local_name(node.tag) == "row":
-            try:
-                max_row = max(max_row, int(node.attrib.get("r", "0")))
-            except ValueError:
-                pass
-        elif _xml_local_name(node.tag) == "c":
-            max_column = max(max_column, _cell_column_index(node))
+        if _xml_local_name(node.tag) == "c" and (include_empty or _cell_xml_has_value(node)):
+            row, column = coordinate_to_tuple(node.attrib["r"])
+            max_row = max(max_row, row)
+            max_column = max(max_column, column)
     return max_row, max_column
 
 
@@ -1125,8 +1136,15 @@ def _restore_batches_via_xml(
         for row in sheet_data
         if _xml_local_name(row.tag) == "row" and row.attrib.get("r", "").isdigit()
     }
+    # Batch ranges are disjoint. Index original rows once, including rows later
+    # deleted by an edited batch, instead of rescanning the whole sheet per batch.
+    original_rows = sorted(rows_by_index)
+    header_rows = {row for row in original_rows if 1 <= row <= manifest.header_rows}
 
-    max_column = manifest.original_max_column
+    # Older manifests may have recorded a style-only/declared ghost width.
+    # The original cells are authoritative for clearing values and new headers.
+    _, original_value_column = _sheet_xml_dimensions(root)
+    max_column = original_value_column
     if progress_callback:
         progress_callback(0, len(manifest.batches))
     for completed_count, (batch, batch_path) in enumerate(
@@ -1168,7 +1186,7 @@ def _restore_batches_via_xml(
                     f"batch {batch.index} 在预期范围之后包含额外数据行。"
                 )
         batch_max_column = max(
-            manifest.original_max_column,
+            original_value_column,
             detected_max_column,
         )
         if batch.index == 1:
@@ -1176,7 +1194,8 @@ def _restore_batches_via_xml(
         else:
             header_min_column = max_column + 1
         if header_min_column <= batch_max_column:
-            for header_row in range(1, manifest.header_rows + 1):
+            header_rows.update(row for row in batch_rows if 1 <= row <= manifest.header_rows)
+            for header_row in sorted(header_rows):
                 _apply_batch_xml_row(
                     sheet_data,
                     rows_by_index,
@@ -1187,10 +1206,15 @@ def _restore_batches_via_xml(
                     namespace=namespace,
                     shared_strings=shared_strings,
                 )
-        for local_row_index in range(
-            manifest.header_rows + 1,
-            expected_last_row + 1,
-        ):
+        # Include original rows whose contents were deleted from a batch, so
+        # clearing a value still works without manufacturing intermediate rows.
+        local_rows = {row for row in batch_rows
+                      if manifest.header_rows < row <= expected_last_row}
+        start = bisect_left(original_rows, batch.source_start_row)
+        stop = bisect_right(original_rows, batch.source_end_row)
+        local_rows.update(row - batch.source_start_row + manifest.header_rows + 1
+                          for row in original_rows[start:stop])
+        for local_row_index in sorted(local_rows):
             destination_row = (
                 batch.source_start_row
                 + local_row_index
@@ -1212,15 +1236,13 @@ def _restore_batches_via_xml(
             progress_callback(completed_count, len(manifest.batches))
 
     sheet_data[:] = sorted(
-        sheet_data,
+        rows_by_index.values(),
         key=lambda row: int(row.attrib.get("r", "0")),
     )
     dimension = root.find(qualified("dimension"))
     if dimension is not None:
-        dimension.attrib["ref"] = (
-            f"A1:{get_column_letter(max_column)}"
-            f"{manifest.header_rows + manifest.data_row_count}"
-        )
+        stored_max_row, stored_max_column = _sheet_xml_dimensions(root, include_empty=True)
+        dimension.attrib["ref"] = f"A1:{get_column_letter(stored_max_column)}{stored_max_row}"
     restored_xml = ElementTree.tostring(
         root,
         encoding="utf-8",

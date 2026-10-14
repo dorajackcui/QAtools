@@ -5,6 +5,8 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+from tools.excel_rows import iter_stored_rows, row_values, stored_row
+
 from .errors import ColumnNotFoundError
 from .models import RowItem
 from .tag_engine import extract_tags
@@ -32,22 +34,12 @@ def read_source_rows(
         )
 
         rows: list[RowItem] = []
-        seen_source = False
-        consecutive_blanks = 0
-        for row_number, values in enumerate(
-            worksheet.iter_rows(min_row=2, values_only=True),
-            start=2,
-        ):
+        for row_number, cells in iter_stored_rows(worksheet, min_row=2):
+            values = row_values(cells)
             source_value = _cell_value(values, source_index)
             if source_value is None or not str(source_value).strip():
-                if seen_source:
-                    consecutive_blanks += 1
-                    if consecutive_blanks >= 1000:
-                        break
                 continue
 
-            seen_source = True
-            consecutive_blanks = 0
             raw_source = str(source_value)
             target_value = _cell_value(values, target_index)
             raw_target = "" if target_value is None else str(target_value).strip()
@@ -101,7 +93,7 @@ def resolve_column(worksheet, column: str | int | None) -> int:
         return int(column)
 
     wanted = str(column).strip().lower()
-    for index, cell in enumerate(worksheet[1], start=1):
+    for index, cell in sorted(stored_row(worksheet).items()):
         value = "" if cell.value is None else str(cell.value).strip()
         if value.lower() == wanted:
             return getattr(cell, "column", index)
@@ -110,8 +102,8 @@ def resolve_column(worksheet, column: str | int | None) -> int:
 
 def header_values(worksheet, *, fallback: bool = False) -> list[str]:
     headers: list[str] = []
-    for index, cell in enumerate(worksheet[1], start=1):
-        value = "" if cell.value is None else str(cell.value).strip()
+    for index, raw_value in enumerate(row_values(stored_row(worksheet)), start=1):
+        value = "" if raw_value is None else str(raw_value).strip()
         headers.append(value or (f"column_{index}" if fallback else ""))
     return headers
 
@@ -123,9 +115,9 @@ def workbook_metadata(workbook) -> dict[str, object]:
         return {}
     worksheet = workbook[schema.METADATA_SHEET]
     return {
-        row[0]: row[1]
-        for row in worksheet.iter_rows(min_row=2, max_col=2, values_only=True)
-        if row and row[0] is not None
+        cells[1].value: cells[2].value if 2 in cells else None
+        for _, cells in iter_stored_rows(worksheet, min_row=2, max_col=2)
+        if 1 in cells
     }
 
 

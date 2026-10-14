@@ -10,6 +10,7 @@ from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
 
 from phraseloom import workbook_schema as schema
+from phraseloom.errors import WorkbookFormatError
 from phraseloom.string_cluster import SimilarStringCluster
 from phraseloom.strings_workflow import (
     export_strings_workbook,
@@ -406,7 +407,7 @@ class StringsWorkflowTests(unittest.TestCase):
             self.assertEqual(stats["duplicate_row_count"], 0)
             self.assertEqual(stats["duplicate_segment_count"], 0)
 
-    def test_restore_accepts_legacy_single_segment_mapping(self) -> None:
+    def test_restore_rejects_legacy_packages_before_writing_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             source_path = Path(tmp) / "legacy.xlsx"
             package_path = Path(tmp) / "legacy_strings.xlsx"
@@ -426,12 +427,7 @@ class StringsWorkflowTests(unittest.TestCase):
                 row=2,
                 column=string_headers.index(schema.TARGET_COLUMN) + 1,
             ).value = "Bonjour"
-            mapping = package[schema.STRINGS_MAP_SHEET]
-            mapping.delete_cols(
-                len(schema.LEGACY_STRINGS_MAP_COLUMNS) + 1,
-                len(schema.STRINGS_MAP_COLUMNS)
-                - len(schema.LEGACY_STRINGS_MAP_COLUMNS),
-            )
+            package.remove(package[schema.ORIGINAL_FILE_SHEET])
             metadata = package[schema.METADATA_SHEET]
             for row in metadata.iter_rows(min_row=2, max_col=2):
                 if row[0].value == schema.SCHEMA_VERSION_KEY:
@@ -440,18 +436,9 @@ class StringsWorkflowTests(unittest.TestCase):
             package.save(package_path)
             package.close()
 
-            stats = restore_strings_workbook(package_path, result_path)
-
-            self.assertEqual(stats["restored_row_count"], 1)
-            self.assertEqual(stats["issue_count"], 0)
-            restored = load_workbook(result_path, data_only=True)
-            try:
-                self.assertEqual(
-                    restored.active.cell(row=2, column=2).value,
-                    "Bonjour",
-                )
-            finally:
-                restored.close()
+            with self.assertRaisesRegex(WorkbookFormatError, "Unsupported Strings workbook schema"):
+                restore_strings_workbook(package_path, result_path)
+            self.assertFalse(result_path.exists())
 
     def test_numeric_variants_use_old_cleaning_before_grouping_and_restore(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -797,14 +784,14 @@ class StringsWorkflowTests(unittest.TestCase):
                 self.assertEqual(
                     wb.sheetnames,
                     [
-                        "GameStrings",
                         schema.STRINGS_SHEET,
                         schema.COMPLETED_STRINGS_SHEET,
                         schema.STRINGS_MAP_SHEET,
                         schema.METADATA_SHEET,
+                        schema.ORIGINAL_FILE_SHEET,
                     ],
                 )
-                self.assertEqual(wb["GameStrings"].sheet_state, "hidden")
+                self.assertEqual(wb[schema.ORIGINAL_FILE_SHEET].sheet_state, "hidden")
                 self.assertEqual(wb[schema.STRINGS_SHEET].sheet_state, "visible")
                 self.assertEqual(
                     wb[schema.COMPLETED_STRINGS_SHEET].sheet_state,

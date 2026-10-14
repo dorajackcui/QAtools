@@ -6,6 +6,8 @@ from typing import Iterable
 
 from openpyxl import load_workbook
 
+from tools.excel_rows import discard_empty_cells
+
 from . import workbook_schema as schema
 from .cleaning import build_clean_string_units
 from .errors import ColumnNotFoundError, ConfigError, WorkbookFormatError
@@ -21,11 +23,9 @@ from .strings_package import (
     load_strings_metadata,
     mapping_variables,
     metadata_column,
-    original_worksheet,
     read_mapping_rows,
     read_strings_rows,
     resolve_or_create_column,
-    restore_original_sheets,
     write_restore_issues,
     write_strings_package,
 )
@@ -42,6 +42,7 @@ from .template_engine import (
     is_non_translatable_segment,
 )
 from .workbook_io import read_headers, read_source_rows, resolve_column
+from .workbook_backup import read_original_file
 
 
 def default_strings_output_path(input_path: str | Path) -> Path:
@@ -228,13 +229,18 @@ def restore_strings_workbook(
         )
     tag_rules = embedded_tag_rules(metadata, package_path)
 
-    workbook = load_workbook(package_path)
+    package = load_workbook(package_path, read_only=True)
+    try:
+        string_rows = read_strings_rows(package[schema.STRINGS_SHEET])
+        mapping_rows = read_mapping_rows(package[schema.STRINGS_MAP_SHEET])
+        with read_original_file(package, metadata) as original_file:
+            workbook = load_workbook(original_file)
+    finally:
+        package.close()
     issues: list[dict[str, object]] = []
     restored_count = 0
     try:
-        string_rows = read_strings_rows(workbook[schema.STRINGS_SHEET])
-        mapping_rows = read_mapping_rows(workbook[schema.STRINGS_MAP_SHEET])
-        original = original_worksheet(workbook)
+        original = workbook.worksheets[0]
         source_index = resolve_column(original, source_column)
         target_index = resolve_or_create_column(original, target_column)
 
@@ -255,7 +261,8 @@ def restore_strings_workbook(
             )
             restored_count += int(restored)
 
-        restore_original_sheets(workbook, metadata)
+        for worksheet in workbook.worksheets:
+            discard_empty_cells(worksheet)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         workbook.save(output_path)
     finally:
@@ -373,43 +380,35 @@ def _restore_mapped_cell(
             f"Strings mapping is inconsistent at row {row_number}."
         )
 
-    segmented = all(
-        map_row.get(schema.SEGMENT_INDEX_COLUMN) not in (None, "")
-        for map_row in map_rows
-    )
-    if segmented:
+    try:
         map_rows = sorted(
             map_rows,
             key=lambda map_row: int(map_row[schema.SEGMENT_INDEX_COLUMN]),
         )
         segment_count = int(map_rows[0][schema.SEGMENT_COUNT_COLUMN])
-        expected_indexes = list(range(1, segment_count + 1))
         actual_indexes = [
             int(map_row[schema.SEGMENT_INDEX_COLUMN]) for map_row in map_rows
         ]
-        if (
-            len(map_rows) != segment_count
-            or actual_indexes != expected_indexes
-            or any(
-                int(map_row[schema.SEGMENT_COUNT_COLUMN]) != segment_count
-                for map_row in map_rows
-            )
-        ):
-            raise WorkbookFormatError(
-                f"Strings mapping has incomplete segments at row {row_number}."
-            )
-    elif len(map_rows) != 1:
+        matching_counts = all(
+            int(map_row[schema.SEGMENT_COUNT_COLUMN]) == segment_count
+            for map_row in map_rows
+        )
+    except (TypeError, ValueError) as exc:
         raise WorkbookFormatError(
-            f"Legacy Strings mapping has duplicate rows at row {row_number}."
+            f"Strings mapping has invalid segments at row {row_number}."
+        ) from exc
+    if (
+        segment_count != len(map_rows)
+        or actual_indexes != list(range(1, len(map_rows) + 1))
+        or not matching_counts
+    ):
+        raise WorkbookFormatError(
+            f"Strings mapping has incomplete segments at row {row_number}."
         )
 
     actual_source = worksheet.cell(row=row_number, column=source_index).value
     comparable_actual = "" if actual_source is None else str(actual_source)
-    if (
-        comparable_actual != raw_source
-        if segmented
-        else comparable_actual.strip() != raw_source
-    ):
+    if comparable_actual != raw_source:
         raise WorkbookFormatError(
             f"Original Source changed at row {row_number}: {raw_source!r}"
         )
@@ -420,9 +419,7 @@ def _restore_mapped_cell(
         restored_segment = _restore_mapped_segment(
             map_row=map_row,
             string_rows=string_rows,
-            tag_rules=tag_rules,
             issues=issues,
-            defer_tag_restore=segmented,
         )
         if restored_segment is None:
             complete = False
@@ -434,30 +431,26 @@ def _restore_mapped_cell(
     if not complete:
         return False
     restored_target = "".join(restored_segments)
-    if segmented:
-        restored_target, warnings = _restore_target_unit(
-            raw_source=raw_source,
-            source_unit="",
-            target_unit=restored_target,
-            unit_type="segment",
-            variables={},
-            tag_rules=tag_rules,
-        )
-        if warnings:
-            issues.append(
-                _issue(
-                    ",".join(
-                        dict.fromkeys(
-                            str(map_row[schema.STRING_ID_COLUMN])
-                            for map_row in map_rows
-                        )
-                    ),
-                    raw_source,
-                    restored_target,
-                    row_number,
-                    "; ".join(warnings),
-                )
+    restored_target, warnings = _restore_target_unit(
+        raw_source=raw_source,
+        source_unit="",
+        target_unit=restored_target,
+        unit_type="segment",
+        variables={},
+        tag_rules=tag_rules,
+    )
+    if warnings:
+        issues.append(
+            _issue(
+                ",".join(dict.fromkeys(
+                    str(map_row[schema.STRING_ID_COLUMN]) for map_row in map_rows
+                )),
+                raw_source,
+                restored_target,
+                row_number,
+                "; ".join(warnings),
             )
+        )
     worksheet.cell(row=row_number, column=target_index).value = restored_target
     return True
 
@@ -466,17 +459,11 @@ def _restore_mapped_segment(
     *,
     map_row: dict[str, object],
     string_rows: dict[str, dict[str, object]],
-    tag_rules: TagRules,
     issues: list[dict[str, object]],
-    defer_tag_restore: bool,
 ) -> str | None:
     string_id = str(map_row[schema.STRING_ID_COLUMN])
     row_number = int(map_row[schema.ROW_NUMBER_COLUMN])
-    raw_segment = str(
-        map_row.get(schema.RAW_SEGMENT_COLUMN)
-        if map_row.get(schema.RAW_SEGMENT_COLUMN) is not None
-        else map_row[schema.SOURCE_COLUMN]
-    )
+    raw_segment = str(map_row[schema.RAW_SEGMENT_COLUMN])
     unit_source = str(map_row[schema.SOURCE_UNIT_COLUMN])
     unit_type = str(map_row[schema.UNIT_TYPE_COLUMN])
 
@@ -513,22 +500,12 @@ def _restore_mapped_segment(
         )
         return None
 
-    if defer_tag_restore:
-        restored_target, warnings = _apply_target_variables(
-            source_unit=unit_source,
-            target_unit=target_unit,
-            unit_type=unit_type,
-            variables=mapping_variables(map_row),
-        )
-    else:
-        restored_target, warnings = _restore_target_unit(
-            raw_source=raw_segment,
-            source_unit=unit_source,
-            target_unit=target_unit,
-            unit_type=unit_type,
-            variables=mapping_variables(map_row),
-            tag_rules=tag_rules,
-        )
+    restored_target, warnings = _apply_target_variables(
+        source_unit=unit_source,
+        target_unit=target_unit,
+        unit_type=unit_type,
+        variables=mapping_variables(map_row),
+    )
     if warnings:
         issues.append(
             _issue(

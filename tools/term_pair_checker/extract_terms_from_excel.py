@@ -58,7 +58,7 @@ from tools.term_pair_checker.workbook_output import (
 
 PAIR_CHECK_MATCH_MODE = "hybrid-boundary"
 PAIR_CHECK_CASE_SENSITIVE = False
-HISTORY_EMPTY_ROW_STOP_THRESHOLD = 1000
+HISTORY_EMPTY_ROW_STOP_THRESHOLD = None
 TERM_SOURCE_HISTORY = "历史TB"
 TERM_SOURCE_BATCH = "本批次新增"
 

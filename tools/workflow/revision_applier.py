@@ -8,7 +8,8 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from tools.excel_output import (
-    find_last_value_row,
+    existing_cell_value,
+    value_row_numbers,
     load_workbook_for_editing,
 )
 from tools.workflow.review_sheet import (
@@ -101,22 +102,16 @@ def apply_workflow_revisions(
         ignored_count = 0
         unchanged_count = 0
         conflict_rows: list[int] = []
-        last_review_row = find_last_value_row(
-            review_sheet,
-            ("A",),
-            start_row=2,
-        )
-
-        for review_row in range(2, last_review_row + 1):
-            raw_row_number = review_sheet.cell(review_row, 1).value
+        for review_row in value_row_numbers(review_sheet, ("A",), start_row=2):
+            raw_row_number = existing_cell_value(review_sheet, review_row, 1)
             if raw_row_number is None:
                 continue
             try:
                 source_row = int(raw_row_number)
             except (TypeError, ValueError):
                 continue
-            original_source = review_sheet.cell(review_row, 2).value
-            revised_target = review_sheet.cell(review_row, 4).value
+            original_source = existing_cell_value(review_sheet, review_row, 2)
+            revised_target = existing_cell_value(review_sheet, review_row, 4)
 
             if revised_target is None or (
                 isinstance(revised_target, str) and not revised_target.strip()

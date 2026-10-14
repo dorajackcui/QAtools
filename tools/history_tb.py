@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,9 +12,11 @@ from typing import Any
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string, get_column_letter
 
+from tools.excel_rows import iter_stored_rows, stored_row
+
 
 DEFAULT_HISTORY_SHEET_NAME = "术语表"
-DEFAULT_EMPTY_ROW_STOP_THRESHOLD = 1000
+DEFAULT_EMPTY_ROW_STOP_THRESHOLD = None
 HISTORY_SOURCE_EXACT_HEADERS = {"source"}
 HISTORY_TARGET_EXACT_HEADERS = {"target"}
 HISTORY_SOURCE_NO_MARK_HEADERS = {
@@ -115,8 +118,8 @@ def _column_from_argument(worksheet: Any, column: str | None, header_row: int) -
         return column.strip().upper()
     except ValueError:
         expected_header = normalize_history_header(column)
-        for column_index in range(1, worksheet.max_column + 1):
-            if normalize_history_header(worksheet.cell(header_row, column_index).value) == expected_header:
+        for column_index, cell in sorted(stored_row(worksheet, header_row).items()):
+            if normalize_history_header(cell.value) == expected_header:
                 return get_column_letter(column_index)
         raise
 
@@ -144,8 +147,8 @@ def _find_header_column(
 
 def _non_empty_headers(worksheet: Any, header_row: int) -> list[tuple[str, str]]:
     headers: list[tuple[str, str]] = []
-    for column_index in range(1, worksheet.max_column + 1):
-        normalized_header = normalize_history_header(worksheet.cell(header_row, column_index).value)
+    for column_index, cell in sorted(stored_row(worksheet, header_row).items()):
+        normalized_header = normalize_history_header(cell.value)
         if normalized_header:
             headers.append((get_column_letter(column_index), normalized_header))
     return headers
@@ -275,38 +278,36 @@ def iter_history_rows(
         target_column_index = column_index_from_string(detected_target_column)
         first_column_index = min(source_column_index, target_column_index)
         last_column_index = max(source_column_index, target_column_index)
-        source_offset = source_column_index - first_column_index
-        target_offset = target_column_index - first_column_index
-
         rows: list[HistoryTbRow] = []
-        consecutive_empty_rows = 0
-        row_values = worksheet.iter_rows(
+        previous_nonempty_row = start_row - 1
+        row_values = iter_stored_rows(worksheet,
             min_row=start_row,
             min_col=first_column_index,
             max_col=last_column_index,
-            values_only=True,
         )
-        for row_index, values in enumerate(row_values, start=start_row):
-            source_text = cell_text(values[source_offset])
-            target_text = cell_text(values[target_offset])
-            if not source_text and not target_text:
-                consecutive_empty_rows += 1
-                if (
-                    empty_row_stop_threshold is not None
-                    and consecutive_empty_rows >= empty_row_stop_threshold
-                ):
+        with closing(row_values):
+            for row_index, cells in row_values:
+                # Retain the explicit opt-in threshold for API callers, but
+                # ordinary imports must read every stored row, however sparse.
+                if (empty_row_stop_threshold is not None
+                        and row_index - previous_nonempty_row - 1 >= empty_row_stop_threshold):
                     break
-                continue
-            consecutive_empty_rows = 0
-            if not source_text or not target_text:
-                continue
-            rows.append(
-                HistoryTbRow(
-                    row_index=row_index,
-                    source_text=source_text,
-                    target_text=target_text,
+                source_text = cell_text(cells[source_column_index].value
+                                        if source_column_index in cells else None)
+                target_text = cell_text(cells[target_column_index].value
+                                        if target_column_index in cells else None)
+                if not source_text and not target_text:
+                    continue
+                previous_nonempty_row = row_index
+                if not source_text or not target_text:
+                    continue
+                rows.append(
+                    HistoryTbRow(
+                        row_index=row_index,
+                        source_text=source_text,
+                        target_text=target_text,
+                    )
                 )
-            )
         return worksheet.title, detected_source_column, detected_target_column, tuple(rows)
     finally:
         workbook.close()

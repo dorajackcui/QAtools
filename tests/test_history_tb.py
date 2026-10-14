@@ -102,7 +102,7 @@ class HistoryTbTests(unittest.TestCase):
                 (5, "宝库", "Vault"),
             ])
 
-    def test_iter_history_rows_stops_after_default_empty_tail_threshold(self) -> None:
+    def test_iter_history_rows_reads_sparse_data_unless_threshold_is_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "history.xlsx"
             workbook = Workbook()
@@ -115,16 +115,17 @@ class HistoryTbTests(unittest.TestCase):
             worksheet["A1005"] = "Late"
             worksheet["B1005"] = "Tardif"
             workbook.save(path)
+            workbook.close()
 
             *_metadata, default_rows = iter_history_rows(path)
-            *_metadata, unlimited_rows = iter_history_rows(
+            *_metadata, limited_rows = iter_history_rows(
                 path,
-                empty_row_stop_threshold=None,
+                empty_row_stop_threshold=1000,
             )
 
-            self.assertEqual([row.source_text for row in default_rows], ["Early"])
+            self.assertEqual([row.source_text for row in limited_rows], ["Early"])
             self.assertEqual(
-                [row.source_text for row in unlimited_rows],
+                [row.source_text for row in default_rows],
                 ["Early", "Late"],
             )
 

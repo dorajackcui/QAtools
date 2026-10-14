@@ -11,6 +11,8 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.worksheet.hyperlink import Hyperlink
 
+from tools.excel_rows import discard_empty_cells
+
 
 ROW_PROBLEM_SEPARATOR = "；"
 PROBLEM_BASE_HEADERS = ("行号", "source原文", "target原文", "问题描述")
@@ -23,10 +25,13 @@ BODY_ALIGNMENT = Alignment(vertical="top", wrap_text=True)
 def load_workbook_for_editing(input_file: str | Path):
     """Load an editable workbook without dropping VBA from .xlsm files."""
     input_path = Path(input_file)
-    return load_workbook(
+    workbook = load_workbook(
         input_path,
         keep_vba=input_path.suffix.casefold() == ".xlsm",
     )
+    for worksheet in workbook.worksheets:
+        discard_empty_cells(worksheet)
+    return workbook
 
 
 def validate_distinct_source_target_columns(

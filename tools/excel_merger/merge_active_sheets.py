@@ -243,10 +243,12 @@ def read_sheet_rows(
             match = CELL_REF_RE.match(reference)
             if match:
                 column_index = column_letters_to_index(match.group(1))
-                current_row_values[column_index] = get_cell_value(
+                value = get_cell_value(
                     element,
                     shared_strings,
                 )
+                if value != "":
+                    current_row_values[column_index] = value
             element.clear()
             continue
         if event == "end" and tag == "row":
