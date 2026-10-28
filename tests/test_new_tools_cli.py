@@ -125,13 +125,16 @@ class NewToolsCliTests(unittest.TestCase):
 
     def test_statistics_mode_and_reserved_output(self):
         target = self.book(self.root / "small" / "a.xlsx", [["id", "s", "t"],
-                          [1, "don't re-use", "nan"], [2, "hello", "None"]])
+                          [1, "don't re-use", "nan"], [2, "hello", "None"], [3, "don't re-use", None]])
         original = target.read_bytes()
         for _ in range(2):
             code, output, errors = self.invoke("untranslated-stats", target.parent, "--mode", "english_words", "--quiet")
             self.assertEqual(code, 0, errors)
             self.assertIn("excel_report:", output)
-            self.assertEqual(self.values(target.parent / "未翻译统计.xlsx"), ["a.xlsx", 2, 1, 3, 2])
+            report = target.parent / "未翻译统计.xlsx"
+            self.assertEqual(self.values(report), ["a.xlsx", 4, 2, 5, 3, 2, 1, 3, 2])
+            self.assertEqual(self.values(report, row=1)[5:], ["未翻译词数（原文去重）", "未翻译行数（原文去重）",
+                                                            "总词数（原文去重）", "总行数（原文去重）"])
         self.assertEqual(target.read_bytes(), original)
 
     def test_column_actions_and_compatibility_forward_to_business(self):

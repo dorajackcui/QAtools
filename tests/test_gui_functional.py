@@ -267,7 +267,8 @@ class GuiFunctionalTests(unittest.TestCase):
         self.sync_roundtrip()
 
     def test_deep_replace_and_untranslated_statistics(self):
-        source = self.workbook("sources/a.xlsx", [["key", "source", "target"], ["a", "Hello world", None]])
+        source = self.workbook("sources/a.xlsx", [["key", "source", "target"],
+                                                 ["a", "Hello world", None], ["b", "Hello world", None]])
         self.workbook("targets/a.xlsx", [["key", "source", "target"], ["a", "Old", "Old"]])
         page = self.window.tool_frames["deep_replace"]
         page.source_picker.set_path(str(source.parent))
@@ -281,7 +282,7 @@ class GuiFunctionalTests(unittest.TestCase):
         stats.mode.setCurrentIndex(1)
         self.run_button(stats, stats.run_button)
         rows = self.read(self.root / "statistics/未翻译统计.xlsx", "未翻译统计")
-        self.assertEqual(rows[1][1:], (2, 1, 2, 1))
+        self.assertEqual(rows[1][1:], (4, 2, 4, 2, 2, 1, 2, 1))
 
     def test_failed_worker_can_be_retried_and_settings_are_saved(self):
         page = self.window.tool_frames["phraseloom"]

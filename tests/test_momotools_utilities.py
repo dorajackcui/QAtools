@@ -179,11 +179,13 @@ class StatsTests(UtilityFixtures):
         second = untranslated_stats(self.targets)
         self.assertEqual(first.output_dir, self.targets)
         self.assertEqual(second.details["totals"], [2, 1, 2, 1])
+        self.assertEqual(second.details["deduplicated_totals"], [2, 1, 2, 1])
         self.assertEqual(len(second.results), 1)
         self.assertEqual(path.read_bytes(), original)
         self.assertEqual({p.name for p in self.targets.iterdir()}, {"a.xlsx", "未翻译统计.xlsx"})
         copied = untranslated_stats(self.targets, output_dir=self.root / "statistics")
         self.assertEqual(copied.details["totals"], second.details["totals"])
+        self.assertEqual(copied.details["deduplicated_totals"], second.details["deduplicated_totals"])
 
     def test_counts_and_excel_report_with_failure_details(self):
         workbook(self.targets / "a.xlsx", [["id", "source", "target"], [1, "你好 world", None],
@@ -198,15 +200,74 @@ class StatsTests(UtilityFixtures):
         self.assertEqual([line for line in logs if "a.xlsx" in line],
                          ["[已读取] a.xlsx · 未翻译量: 4/6；未翻译行: 2/4"])
         self.assertEqual(summary.details["totals"], [4, 2, 6, 4])
+        self.assertEqual(summary.details["deduplicated_totals"], [4, 2, 6, 4])
         self.assertEqual(summary.failed_files, 1)
         self.assertEqual(summary.skipped_files, 1)
         book = load_workbook(summary.details["excel_report"])
         try:
             self.assertEqual(book.sheetnames, ["未翻译统计", "未统计文件"])
-            self.assertEqual(list(book.active.values)[-1], ("总计", 4, 2, 6, 4))
-            self.assertEqual(list(book.active.values)[0], ("文件名", "未翻译字数", "未翻译行数", "总字数", "总行数"))
+            self.assertEqual(list(book.active.values)[-1], ("总计", 4, 2, 6, 4, 4, 2, 6, 4))
+            self.assertEqual(list(book.active.values)[0], ("文件名", "未翻译字数", "未翻译行数", "总字数", "总行数",
+                "未翻译字数（原文去重）", "未翻译行数（原文去重）", "总字数（原文去重）", "总行数（原文去重）"))
         finally:
             book.close()
+
+    def test_deduplicates_full_sources_per_file_and_across_files(self):
+        first = self.targets / "a.xlsx"
+        second = self.targets / "sub" / "a.xlsx"
+        workbook(first, [["id", "source", "target"], [1, "你好", None], [2, "你好", "已译"],
+                         [3, "你好", " NaN "], [4, "世界", "已译"], [5, "世界", "另一个译文"],
+                         [6, "甲\n乙", None], [7, None, None]])
+        workbook(second, [["id", "source", "target"], [1, "你好", "已译"], [2, "你好", None],
+                          [3, "世界", None], [4, "新增", None], [5, "新增", None]])
+        originals = {path: path.read_bytes() for path in (first, second)}
+        summary = untranslated_stats(self.targets)
+        self.assertEqual(summary.details["totals"], [14, 7, 22, 11])
+        self.assertEqual(summary.details["deduplicated_totals"], [8, 4, 8, 4])
+        self.assertEqual([result.details["deduplicated_counts"] for result in summary.results],
+                         [[4, 2, 6, 3], [6, 3, 6, 3]])
+        book = load_workbook(summary.details["excel_report"])
+        try:
+            rows = list(book.active.values)
+            self.assertEqual(rows[1], ("a.xlsx", 6, 3, 12, 6, 4, 2, 6, 3))
+            self.assertEqual(rows[2], (str(second.relative_to(self.targets)), 8, 4, 10, 5, 6, 3, 6, 3))
+            self.assertEqual(rows[3], ("总计", 14, 7, 22, 11, 8, 4, 8, 4))
+        finally:
+            book.close()
+        for path, original in originals.items():
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_deduplication_is_exact_and_keeps_zero_unit_sources(self):
+        sources = ["don't re-use", "don't re-use", "Don't re-use", " don't re-use", "don't re-use ",
+                   "don't\nre-use", "don't\nre-use", "don't re-use!", "123", "123", 0, 0, False, None, " \t"]
+        workbook(self.targets / "a.xlsx", [["id", "source", "target"]]
+                 + [[index, source, None] for index, source in enumerate(sources, 1)])
+        summary = untranslated_stats(self.targets, mode="english_words")
+        self.assertEqual(summary.details["totals"], [17, 13, 17, 13])
+        self.assertEqual(summary.details["deduplicated_totals"], [13, 9, 13, 9])
+        self.assertEqual(summary.results[0].details["deduplicated_counts"], [13, 9, 13, 9])
+
+    def test_partial_read_failure_does_not_contribute_to_deduplicated_totals(self):
+        workbook(self.targets / "a.xlsx", [["id", "source", "target"], [1, "有效", None]])
+        workbook(self.targets / "broken.xlsx", [["id", "source", "target"]])
+        broken = Mock()
+        broken.active.max_column = 3
+
+        def partial_rows(**kwargs):
+            yield ("失败文件原文", None)
+            raise ValueError("read failed")
+
+        broken.active.iter_rows.side_effect = partial_rows
+
+        def open_book(path, **kwargs):
+            return broken if path.name == "broken.xlsx" else load_workbook(path, **kwargs)
+
+        with patch("tools.untranslated_stats.stats.load_workbook", side_effect=open_book):
+            summary = untranslated_stats(self.targets)
+        self.assertEqual(summary.failed_files, 1)
+        self.assertEqual(summary.details["totals"], [2, 1, 2, 1])
+        self.assertEqual(summary.details["deduplicated_totals"], [2, 1, 2, 1])
+        broken.close.assert_called_once()
 
     def test_english_units_follow_original_rule(self):
         self.assertEqual(count_units("don't re-use ABC 123 中文", "english_words"), 3)
@@ -218,6 +279,12 @@ class StatsTests(UtilityFixtures):
         workbook(self.targets / "a.xlsx", [["k", "s", "t"], ["k", "你好", None]])
         summary = untranslated_stats(self.targets, sheet="missing")
         self.assertEqual(summary.failed_files, 1)
+        self.assertEqual(summary.details["deduplicated_totals"], [0, 0, 0, 0])
+        book = load_workbook(summary.details["excel_report"])
+        try:
+            self.assertEqual(list(book.active.values)[-1], ("总计", 0, 0, 0, 0, 0, 0, 0, 0))
+        finally:
+            book.close()
         with self.assertRaises(ValueError):
             untranslated_stats(self.targets, source_column="C", target_column="C")
         with self.assertRaises(ValueError):

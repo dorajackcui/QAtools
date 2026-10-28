@@ -27,6 +27,10 @@ def translation_empty(value: object) -> bool:
     return value is None or str(value).strip().casefold() in {"", "nan"}
 
 
+def _deduplicated_counts(sources: dict[str, int], untranslated_sources: dict[str, int]) -> list[int]:
+    return [sum(untranslated_sources.values()), len(untranslated_sources), sum(sources.values()), len(sources)]
+
+
 def untranslated_stats(target_dir: str | Path, *, output_dir: str | Path | None = None,
                        source_column: str = "B", target_column: str = "C",
                        sheet: str | None = None, header_rows: int = 1,
@@ -50,6 +54,8 @@ def untranslated_stats(target_dir: str | Path, *, output_dir: str | Path | None 
                                                                  "target_column": target_column, "sheet": sheet,
                                                                  "header_rows": header_rows})
     totals = [0, 0, 0, 0]
+    all_sources: dict[str, int] = {}
+    all_untranslated_sources: dict[str, int] = {}
     for index, path in enumerate(files, 1):
         workbook = None
         try:
@@ -58,19 +64,28 @@ def untranslated_stats(target_dir: str | Path, *, output_dir: str | Path | None 
             if worksheet.max_column is not None and max(source_col, target_col) > worksheet.max_column:
                 raise ValueError("工作表缺少配置列。")
             counts = [0, 0, 0, 0]  # untranslated units/rows, all units/rows
+            sources: dict[str, int] = {}
+            untranslated_sources: dict[str, int] = {}
             start, end = min(source_col, target_col), max(source_col, target_col)
             for row in worksheet.iter_rows(min_row=header_rows + 1, min_col=start, max_col=end, values_only=True):
                 source, target = row[source_col - start], row[target_col - start]
                 if source is None or not str(source).strip() or isinstance(source, float) and math.isnan(source):
                     continue
                 units = count_units(source, mode)
+                source_text = str(source)  # Compare the entire cell, preserving whitespace and case.
+                sources[source_text] = units
                 counts[2] += units
                 counts[3] += 1
                 if translation_empty(target):
                     counts[0] += units
                     counts[1] += 1
+                    untranslated_sources[source_text] = units
             totals = [a + b for a, b in zip(totals, counts)]
-            summary.results.append(OperationResult(str(path.relative_to(folder)), "read", details={"counts": counts}))
+            # Merge only fully read files; partial reads must not affect the global totals.
+            all_sources.update(sources)
+            all_untranslated_sources.update(untranslated_sources)
+            summary.results.append(OperationResult(str(path.relative_to(folder)), "read", details={
+                "counts": counts, "deduplicated_counts": _deduplicated_counts(sources, untranslated_sources)}))
         except Exception as exc:
             summary.results.append(OperationResult(str(path.relative_to(folder)), "failed", message=str(exc)))
         finally:
@@ -83,6 +98,7 @@ def untranslated_stats(target_dir: str | Path, *, output_dir: str | Path | None 
     for result in summary.results:
         if result.status == "skipped":
             log_result(log_callback, result)
+    deduplicated_totals = _deduplicated_counts(all_sources, all_untranslated_sources)
     if not inplace:
         create_output_directory(output)
     report = Workbook()
@@ -90,17 +106,21 @@ def untranslated_stats(target_dir: str | Path, *, output_dir: str | Path | None 
         worksheet = report.active
         worksheet.title = "未翻译统计"
         unit = "词数" if mode == "english_words" else "字数"
-        worksheet.append(["文件名", f"未翻译{unit}", "未翻译行数", f"总{unit}", "总行数"])
+        worksheet.append(["文件名", f"未翻译{unit}", "未翻译行数", f"总{unit}", "总行数",
+                          f"未翻译{unit}（原文去重）", "未翻译行数（原文去重）",
+                          f"总{unit}（原文去重）", "总行数（原文去重）"])
         for result in summary.results:
             if result.status == "read":
-                worksheet.append([result.source, *result.details["counts"]])
+                worksheet.append([result.source, *result.details["counts"], *result.details["deduplicated_counts"]])
                 worksheet.cell(worksheet.max_row, 1).data_type = "s"
-        worksheet.append(["总计", *totals])
+        worksheet.append(["总计", *totals, *deduplicated_totals])
         for cell in worksheet[worksheet.max_row]:
             cell.font = Font(bold=True)
         worksheet.column_dimensions["A"].width = 45
         for col in "BCDE":
             worksheet.column_dimensions[col].width = 16
+        for col in "FGHI":
+            worksheet.column_dimensions[col].width = 28
         worksheet.freeze_panes = "A2"
         failures = [item for item in summary.results if item.status in {"failed", "skipped"}]
         if failures:
@@ -115,7 +135,8 @@ def untranslated_stats(target_dir: str | Path, *, output_dir: str | Path | None 
         _save_output(report, report_file, report_file, changed=True)
     finally:
         report.close()
-    summary.details.update({"totals": totals, "excel_report": str(report_file)})
+    summary.details.update({"totals": totals, "deduplicated_totals": deduplicated_totals,
+                            "excel_report": str(report_file)})
     emit_log(log_callback, f"统计表: {report_file}")
     log_summary(log_callback, summary, f"未翻译量 {totals[0]}/{totals[2]}，未翻译行 {totals[1]}/{totals[3]}")
     return summary
