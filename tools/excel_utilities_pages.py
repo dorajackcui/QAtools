@@ -231,7 +231,7 @@ class DeepReplacePage(UtilityPage):
 class UntranslatedStatsPage(UtilityPage):
     suffix = "stats"
     button_text = "生成统计表"
-    output_hint = "留空：统计表保存到所选文件目录"
+    output_hint = "留空：统计表保存到所选文件目录的父目录"
 
     def add_options(self):
         self.source_column = QLineEdit("B")

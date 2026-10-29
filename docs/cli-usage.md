@@ -363,7 +363,7 @@ qatools merge-sheets ./excel-files --keep-all-headers
 帮助命令不加载 Excel、Qt 或工作簿处理依赖。环境安装见[兼容性重存](../tools/excel_compatibility/README.md#环境)。
 
 共同参数：`-o/--output-dir` 为**可选的新目录**，必须尚不存在；不传或传空字符串时
-按工具默认规则在输入位置操作。统计工具仅写统计表；其他工具修改目标工作簿。
+按工具默认规则确定输出位置（见下方各命令说明）。统计工具仅写统计表；其他工具修改目标工作簿。
 逐文件简约日志写入 stderr，最终摘要写入 stdout；`--quiet` 关闭运行日志，保留摘要、任务异常和会话警告。
 不附加 JSON/report 文件；统计表和原位文件替换的备份仍按各工具规则生成。
 
@@ -433,7 +433,7 @@ qatools untranslated-stats excel_files --sheet Data --header-rows 2 --mode engli
 `deep-replace` 接收来源、目标两个目录；默认先备份再原位替换。参数和规则见[同名文件替换](../tools/deep_replace/README.md)。
 `untranslated-stats` 接收一个目录，`-c/--source-column` 默认 `B`，`-t/--target-column` 默认 `C`；
 `--sheet` 默认活动表，`--header-rows` 默认 `1`；`--mode` 为 `chinese_chars`（默认）或 `english_words`。
-输出为 `未翻译统计.xlsx`；统计中的文字 nan 口径与同步不同，见[统计规则](../tools/untranslated_stats/README.md)。
+输出为 `未翻译统计.xlsx`，默认保存到所选目录的父目录；统计中的文字 nan 口径与同步不同，见[统计规则](../tools/untranslated_stats/README.md)。
 
 ## 兼容入口
 

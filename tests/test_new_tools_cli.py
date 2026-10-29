@@ -131,7 +131,9 @@ class NewToolsCliTests(unittest.TestCase):
             code, output, errors = self.invoke("untranslated-stats", target.parent, "--mode", "english_words", "--quiet")
             self.assertEqual(code, 0, errors)
             self.assertIn("excel_report:", output)
-            report = target.parent / "未翻译统计.xlsx"
+            report = target.parent.parent / "未翻译统计.xlsx"
+            self.assertIn(str(report), output)
+            self.assertFalse((target.parent / "未翻译统计.xlsx").exists())
             self.assertEqual(self.values(report), ["a.xlsx", 4, 2, 5, 3, 2, 1, 3, 2])
             self.assertEqual(self.values(report, row=1)[5:], ["未翻译词数（原文去重）", "未翻译行数（原文去重）",
                                                             "总词数（原文去重）", "总行数（原文去重）"])

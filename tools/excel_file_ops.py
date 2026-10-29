@@ -129,7 +129,7 @@ def new_output_directory(output: str | Path, *, inputs: Iterable[Path]) -> Path:
 
 def optional_output_directory(output: str | Path | None, *, default: Path,
                               inputs: Iterable[Path]) -> tuple[Path, bool]:
-    """An omitted/blank output explicitly means operation at the input location."""
+    """Use the caller's default for omitted/blank output; explicit output must be a new directory."""
     if output is None or isinstance(output, str) and not output.strip():
         return default.resolve(), True
     return new_output_directory(output, inputs=inputs), False

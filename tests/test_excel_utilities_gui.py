@@ -136,7 +136,9 @@ class UtilitiesGuiTests(unittest.TestCase):
                 self.wait(stats)
             error.assert_not_called()
             self.assertEqual(stats.output_picker.path(), "")
-            self.assertTrue((targets / "未翻译统计.xlsx").is_file())
+            self.assertTrue((targets.parent / "未翻译统计.xlsx").is_file())
+            self.assertFalse((targets / "未翻译统计.xlsx").exists())
+            self.assertIn(str(targets.parent / "未翻译统计.xlsx"), stats.result.toPlainText())
             self.assertIn("统计表:", stats.result.toPlainText())
 
     def test_file_replacement_real_background_flow(self):

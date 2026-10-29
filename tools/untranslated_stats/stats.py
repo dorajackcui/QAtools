@@ -43,9 +43,9 @@ def untranslated_stats(target_dir: str | Path, *, output_dir: str | Path | None 
     if isinstance(header_rows, bool) or not isinstance(header_rows, int) or not 0 <= header_rows < 1048576:
         raise ValueError("表头行数必须是 0–1048575 的整数。")
     folder = Path(target_dir).expanduser().resolve()
-    output, inplace = optional_output_directory(output_dir, default=folder, inputs=(folder,))
+    output, use_default_output = optional_output_directory(output_dir, default=folder.parent, inputs=(folder,))
     report_file = output / "未翻译统计.xlsx"
-    files, skipped = excel_files(folder, extensions={".xlsx", ".xlsm"}, exclude=() if inplace else (output,))
+    files, skipped = excel_files(folder, extensions={".xlsx", ".xlsm"}, exclude=() if use_default_output else (output,))
     # The tool's reserved result name must never become its next source workbook.
     files = [path for path in files if path.name.casefold() != "未翻译统计.xlsx"]
     if not files:
@@ -99,7 +99,7 @@ def untranslated_stats(target_dir: str | Path, *, output_dir: str | Path | None 
         if result.status == "skipped":
             log_result(log_callback, result)
     deduplicated_totals = _deduplicated_counts(all_sources, all_untranslated_sources)
-    if not inplace:
+    if not use_default_output:
         create_output_directory(output)
     report = Workbook()
     try:

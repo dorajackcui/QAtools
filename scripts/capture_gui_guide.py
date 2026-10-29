@@ -55,10 +55,11 @@ def main(tool=None):
                 raise RuntimeError(f"Could not save {name}")
             print(name)
 
-        if tool == "file_grouping":
-            capture(window, "file-grouping.png")
-            window.tool_frames["file_grouping"].input_kind.setCurrentIndex(1)
-            capture(window, "file-grouping-merged.png")
+        if tool in {"file_grouping", "untranslated_stats"}:
+            capture(window, tool.replace("_", "-") + ".png")
+            if tool == "file_grouping":
+                window.tool_frames["file_grouping"].input_kind.setCurrentIndex(1)
+                capture(window, "file-grouping-merged.png")
             window.close()
             app.processEvents()
             return
@@ -147,5 +148,5 @@ def main(tool=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tool", choices=("file_grouping",), help="仅更新指定新增页面的截图")
+    parser.add_argument("--tool", choices=("file_grouping", "untranslated_stats"), help="仅更新指定页面的截图")
     main(parser.parse_args().tool)

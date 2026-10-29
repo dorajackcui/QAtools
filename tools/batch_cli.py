@@ -34,8 +34,8 @@ def column_count(value: str) -> int:
     return number
 
 
-def add_output_options(parser):
-    parser.add_argument("-o", "--output-dir", help="可选；省略或留空时在输入位置操作，填写时必须是尚不存在的新目录")
+def add_output_options(parser, *, default_action="在输入位置操作"):
+    parser.add_argument("-o", "--output-dir", help=f"可选；省略或留空时{default_action}，填写时必须是尚不存在的新目录")
     parser.add_argument("--quiet", action="store_true", help="仅输出最终摘要和异常，不输出逐文件运行日志")
 
 

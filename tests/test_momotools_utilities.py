@@ -171,19 +171,27 @@ class ReverseSyncTests(UtilityFixtures):
 
 
 class StatsTests(UtilityFixtures):
-    def test_default_saves_beside_inputs_and_repeated_run_excludes_own_result(self):
+    def test_default_saves_in_parent_and_repeated_run_excludes_legacy_report(self):
         path = self.targets / "a.xlsx"
         workbook(path, [["id", "s", "t"], [1, "你好", None]])
+        legacy = self.targets / "未翻译统计.xlsx"
+        workbook(legacy, [["id", "s", "t"], [1, "不应计入的旧结果", None]])
+        legacy_original = legacy.read_bytes()
         original = path.read_bytes()
         first = untranslated_stats(self.targets)
-        second = untranslated_stats(self.targets)
-        self.assertEqual(first.output_dir, self.targets)
+        second = untranslated_stats(self.targets, output_dir=" \t")
+        self.assertEqual(first.output_dir, self.targets.parent)
+        self.assertEqual(Path(first.details["excel_report"]), self.targets.parent / "未翻译统计.xlsx")
+        self.assertEqual(second.details["excel_report"], first.details["excel_report"])
         self.assertEqual(second.details["totals"], [2, 1, 2, 1])
         self.assertEqual(second.details["deduplicated_totals"], [2, 1, 2, 1])
         self.assertEqual(len(second.results), 1)
         self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(legacy.read_bytes(), legacy_original)
         self.assertEqual({p.name for p in self.targets.iterdir()}, {"a.xlsx", "未翻译统计.xlsx"})
         copied = untranslated_stats(self.targets, output_dir=self.root / "statistics")
+        self.assertEqual(Path(copied.details["excel_report"]), self.root / "statistics" / "未翻译统计.xlsx")
+        self.assertTrue(Path(copied.details["excel_report"]).is_file())
         self.assertEqual(copied.details["totals"], second.details["totals"])
         self.assertEqual(copied.details["deduplicated_totals"], second.details["deduplicated_totals"])
 
