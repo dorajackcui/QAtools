@@ -59,7 +59,7 @@ qatools phraseloom
 单独的回填页面。交互式终端仍按“导出 / 回填”两个动作运行。
 
 选择原始 Excel 后自动[预览表头及前 5 行并选择列](../docs/gui-conventions.md#选列预览)，
-预览第一张数据工作表，选定 Source / Target / Context 后按数字索引回填，对应导出时使用的表。
+预览第一张工作表，选定 Source / Target / Context 后按数字索引回填，对应导出时使用的表。
 
 ## 1. 导出 Strings
 

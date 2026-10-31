@@ -97,7 +97,7 @@ class FileGroupingPage(AsyncPage):
             form.labelForField(field).setMinimumWidth(112)
         inputs.addLayout(form)
         self.input_preview = ExcelColumnSelector(self, self.source_picker, folder=True,
-                                               browse_sheets=True, skip_links=True,
+                                               skip_links=True,
                                                choices=(ColumnChoice("文件名列", self.filename_column),
                                                         ColumnChoice("原文列", self.source_header, "header"),
                                                         ColumnChoice("译文列", self.target_header, "header")))

@@ -50,7 +50,8 @@ class PreviewModel(QAbstractTableModel):
         if index.isValid() and self.preview is not None and role in (
             Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.ToolTipRole,
         ):
-            return self.preview.cells.get((index.row(), index.column()), "")
+            from tools.excel_preview import TEXT_LIMIT
+            return self.preview.cells.get((index.row(), index.column()), "")[:TEXT_LIMIT]
         return None
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
@@ -65,20 +66,18 @@ class ExcelColumnSelector(QObject):
     """Choosers open this explicitly; restoring stored paths never performs I/O."""
 
     def __init__(self, owner, picker, sheet=None, *, title="预览并选择列", folder=False,
-                 first_sheet=False, browse_sheets=False, exclusions=None, exclude_names=(), skip_links=False,
+                 first_sheet=False, exclusions=None, exclude_names=(), skip_links=False,
                  choices=(), header_alias_store=None):
         super().__init__(owner)
         self.title = title
         # Qt owns the selector; avoid a Python owner -> selector -> owner cycle.
         self.owner, self.picker, self.sheet = weakref.proxy(owner), picker, sheet
         self.folder, self.first_sheet = folder, first_sheet
-        self.browse_sheets, self.exclusions = browse_sheets, exclusions
+        self.exclusions = exclusions
         self.exclude_names, self.skip_links = exclude_names, skip_links
         self.choices, self.header_alias_store = choices, header_alias_store
         self._generation = 0
-        self._loading = False
         self.dialog = None
-        self._pending_open = False
         picker.line_edit.textChanged.connect(self.invalidate)
         if sheet is not None:
             signal = sheet.currentTextChanged if isinstance(sheet, QComboBox) else sheet.textChanged
@@ -101,7 +100,7 @@ class ExcelColumnSelector(QObject):
         self.status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.status)
         self.sheet_choice = QComboBox()
-        if not self.first_sheet and (self.browse_sheets or self.sheet is not None):
+        if not self.first_sheet:
             row = QHBoxLayout()
             row.addWidget(QLabel("预览工作表"))
             row.addWidget(self.sheet_choice, 1)
@@ -143,18 +142,12 @@ class ExcelColumnSelector(QObject):
             self.choice_form.setRowVisible(combo, not choice.field.isHidden())
         self.dialog.show()
         self.dialog.raise_()
-        if self._loading:
-            self._generation += 1
-            self._pending_open = True
-            return
         self._load()
 
     def _sheet_changed(self, _index):
         self._load(self.sheet_choice.currentData(), use_sample=True)
 
     def _load(self, preview_sheet=None, *, use_sample=False):
-        if self._loading:
-            return
         from tools.excel_preview import read_excel_preview
 
         path = self.picker.path()
@@ -163,7 +156,6 @@ class ExcelColumnSelector(QObject):
             return
         self._generation += 1
         generation = self._generation
-        self._loading = True
         self.sheet_choice.setEnabled(False)
         self.apply_button.setEnabled(False)
         for combo in self.column_choices:
@@ -176,19 +168,14 @@ class ExcelColumnSelector(QObject):
         self._requested_sheet = (sheet if preview_sheet is None else preview_sheet).strip()
 
         def finish(result=None, error=""):
-            self._loading = False
-            self.sheet_choice.setEnabled(True)
             if generation != self._generation:
-                if self._pending_open and self.dialog.isVisible():
-                    self._pending_open = False
-                    self._load()
                 return
+            self.sheet_choice.setEnabled(True)
             if error:
                 self.status.setText(f"无法预览：{error}")
                 return
             self._sample = str(result.path)
-            self.model.set_preview(result)
-            if result.sheet_fallback:
+            if self._requested_sheet not in result.sheet_names:
                 self._requested_sheet = ""
             self.sheet_choice.blockSignals(True)
             self.sheet_choice.clear()
@@ -197,31 +184,29 @@ class ExcelColumnSelector(QObject):
                 self.sheet_choice.addItem(name, name)
             self.sheet_choice.setCurrentIndex(max(0, self.sheet_choice.findData(self._requested_sheet)))
             self.sheet_choice.blockSignals(False)
-            alias_warning = self._fill_columns(result)
+            try:
+                self._fill_columns(result)
+            except (OSError, ValueError) as exc:
+                self.status.setText(f"无法读取列配置：{exc}")
+                return
+            self.model.set_preview(result)
             self.apply_button.setEnabled(result.columns > 0)
-            notes = "\n".join(note for note in (result.note, alias_warning) if note)
             self.status.setText(f"{result.path}\n工作表：{result.sheet} · 第 1–6 行（首行为表头）" +
-                                (f"\n{notes}" if notes else ""))
+                                (f"\n{result.note}" if result.note else ""))
 
         self.owner.run_in_background(
             read_excel_preview, args=(sample or path, self._requested_sheet),
             kwargs={"folder": self.folder and not sample, "first_sheet": self.first_sheet,
                     "exclude": tuple(picker.path() for picker in self.exclusions) if self.exclusions else (),
-                    "exclude_names": self.exclude_names, "skip_links": self.skip_links,
-                    "allow_sheet_fallback": not use_sample},
+                    "exclude_names": self.exclude_names, "skip_links": self.skip_links},
             on_success=lambda result: finish(result), on_error=lambda error: finish(error=error),
         )
 
     def _fill_columns(self, preview):
         from tools.excel_preview import TEXT_LIMIT
-        headers = tuple(preview.headers.get(column, preview.cells.get((0, column), "")).strip()
+        headers = tuple(preview.cells.get((0, column), "").strip()
                         for column in range(preview.columns))
-        configured_aliases, alias_warning = None, ""
-        if self.header_alias_store is not None:
-            try:
-                configured_aliases = self.header_alias_store.load()
-            except (OSError, ValueError) as exc:
-                alias_warning = f"表头别名配置读取失败，可手动选择列：{exc}"
+        configured_aliases = self.header_alias_store.load() if self.header_alias_store else None
         for choice, combo in zip(self.choices, self.column_choices):
             combo.clear()
             combo.addItem("不指定" if choice.optional else "请选择", "" if choice.optional else None)
@@ -249,11 +234,10 @@ class ExcelColumnSelector(QObject):
                 selected = combo.count() - 1
             combo.setCurrentIndex(max(0, selected))
             combo.setEnabled(True)
-        return alias_warning
 
     def _apply_columns(self):
         preview = self.model.preview
-        if preview is None or self._loading:
+        if preview is None:
             return
         values = [combo.currentData() for combo in self.column_choices]
         missing = [choice.label for choice, value in zip(self.choices, values)

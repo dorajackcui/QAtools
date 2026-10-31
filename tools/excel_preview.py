@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 import posixpath
 import random
@@ -27,8 +27,6 @@ class ExcelPreview:
     cells: dict[tuple[int, int], str]
     columns: int
     note: str = ""
-    headers: dict[int, str] = field(default_factory=dict)
-    sheet_fallback: bool = False
 
 
 class _ReadLimit(Exception):
@@ -59,18 +57,6 @@ def _text(node):
             "".join(run.findtext(f"{MAIN}t", "") for run in node.findall(f"{MAIN}r")))
 
 
-def _header_text(value, kind, formula):
-    if not formula:
-        if kind == "b":
-            return "True" if value == "TRUE" else "False"
-        if kind in {None, "n"}:
-            try:
-                return str(float(value) if any(char in value for char in ".eE") else int(value))
-            except ValueError:
-                pass
-    return value
-
-
 def _column(reference):
     value = 0
     for char in reference.upper():
@@ -82,8 +68,7 @@ def _column(reference):
 
 def read_excel_preview(path: str, sheet: str = "", *, first_sheet: bool = False,
                        folder: bool = False, exclude: tuple[str, ...] = (),
-                       exclude_names: tuple[str, ...] = (), skip_links: bool = False,
-                       allow_sheet_fallback: bool = False) -> ExcelPreview:
+                       exclude_names: tuple[str, ...] = (), skip_links: bool = False) -> ExcelPreview:
     source = Path(path).expanduser().resolve()
     if folder:
         files, _ = excel_files(source, extensions={".xlsx", ".xlsm"},
@@ -95,26 +80,14 @@ def read_excel_preview(path: str, sheet: str = "", *, first_sheet: bool = False,
     if source.suffix.lower() not in {".xlsx", ".xlsm"}:
         raise ValueError("轻量预览支持 .xlsx/.xlsm 文件。")
 
-    cells, headers, shared, notes = {}, {}, {}, []
-    sheet_fallback = False
+    cells, shared, notes = {}, {}, []
     with ZipFile(source) as archive:
         workbook = ET.fromstring(archive.read("xl/workbook.xml"))
-        all_sheets = workbook.findall(f"{MAIN}sheets/{MAIN}sheet")
-        relations = {node.attrib["Id"]: node for node in
-                     ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))}
-        # Chartsheets are tabs too, but column selection requires a data sheet.
-        sheets = [node for node in all_sheets
-                  if node.attrib[f"{REL}id"] in relations and
-                  relations[node.attrib[f"{REL}id"]].attrib.get("Type", "").endswith("/worksheet")]
+        sheets = workbook.findall(f"{MAIN}sheets/{MAIN}sheet")
         names = tuple(node.attrib["name"] for node in sheets)
         if not sheets:
-            raise ValueError("工作簿没有数据工作表。")
-        if sheet and sheet not in names:
-            if not allow_sheet_fallback:
-                raise ValueError(f"工作表不存在：{sheet}")
-            notes.append(f"原配置工作表不存在：{sheet}。已显示活动数据表，请重新确认工作表和列。")
-            sheet, sheet_fallback = "", True
-        if sheet:
+            raise ValueError("工作簿没有工作表。")
+        if sheet in names:
             selected = sheets[names.index(sheet)]
         elif first_sheet:
             selected = sheets[0]
@@ -125,10 +98,11 @@ def read_excel_preview(path: str, sheet: str = "", *, first_sheet: bool = False,
             except ValueError:
                 active = 0
             visible = [node for node in sheets if node.attrib.get("state", "visible") == "visible"]
-            selected = all_sheets[active] if 0 <= active < len(all_sheets) else sheets[0]
+            selected = sheets[active] if 0 <= active < len(sheets) else sheets[0]
             if selected not in visible:
                 selected = next(iter(visible), sheets[0])
-        relationship = relations[selected.attrib[f"{REL}id"]]
+        relations = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+        relationship = next(node for node in relations if node.attrib["Id"] == selected.attrib[f"{REL}id"])
         target = relationship.attrib["Target"]
         part = target.lstrip("/") if target.startswith("/") else posixpath.normpath(posixpath.join("xl", target))
         row_number = 0
@@ -161,9 +135,7 @@ def read_excel_preview(path: str, sheet: str = "", *, first_sheet: bool = False,
                     elif kind == "b":
                         value = "TRUE" if value == "1" else "FALSE"
                     if value:
-                        cells[key] = value[:TEXT_LIMIT]
-                        if row_number == 1:
-                            headers[column - 1] = _header_text(value, kind, formula is not None)
+                        cells[key] = value
                 node.clear()
                 if row_number == PREVIEW_ROWS:
                     break
@@ -192,13 +164,9 @@ def read_excel_preview(path: str, sheet: str = "", *, first_sheet: bool = False,
             finally:
                 events.close()
             for key, index in shared.items():
-                value = strings.get(index, "[文本未展开]")
-                cells[key] = value[:TEXT_LIMIT]
-                if key[0] == 0 and index in strings:
-                    headers[key[1]] = value
+                cells[key] = strings.get(index, "[文本未展开]")
             if wanted:
                 notes.append("共享文本较大，部分文本未展开。")
 
     return ExcelPreview(source, selected.attrib["name"], names, cells,
-                        max((column + 1 for _, column in cells), default=0), " ".join(notes),
-                        headers, sheet_fallback)
+                        max((column + 1 for _, column in cells), default=0), " ".join(notes))

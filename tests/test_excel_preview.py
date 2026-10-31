@@ -59,8 +59,6 @@ class ExcelPreviewTests(unittest.TestCase):
         self.assertEqual(first.cells[(5, 1)], "Source 6")
         self.assertFalse(any(row > 5 for row, _ in first.cells))
         self.assertEqual(read_excel_preview(str(self.path), "First"), first)
-        with self.assertRaisesRegex(ValueError, "工作表不存在"):
-            read_excel_preview(str(self.path), "Missing")
         # All archive and partial XML stream handles are closed.
         self.path.rename(self.root / "renamed.xlsx")
 
@@ -106,30 +104,6 @@ class ExcelPreviewTests(unittest.TestCase):
         self.assertEqual(result.cells[(0, 1)], "原文")
         self.assertEqual(result.note, "")
 
-    def test_shared_headers_keep_full_identity_while_samples_are_clipped(self):
-        header, sample = "Source " + "x" * 1500, "sample " + "y" * 1500
-        sheet = (f'<worksheet xmlns="{MAIN[1:-1]}"><sheetData><row r="1">'
-                 '<c r="A1" t="s"><v>0</v></c></row><row r="2">'
-                 '<c r="A2" t="s"><v>1</v></c></row></sheetData></worksheet>')
-        strings = f'<sst xmlns="{MAIN[1:-1]}"><si><t>{header}</t></si><si><t>{sample}</t></si></sst>'
-        self.replace_parts(**{"xl/worksheets/sheet1.xml": sheet, "xl/sharedStrings.xml": strings})
-        result = read_excel_preview(str(self.path), "First")
-        self.assertEqual(result.headers[0], header)
-        self.assertEqual(result.cells[(0, 0)], header[:1000])
-        self.assertEqual(result.cells[(1, 0)], sample[:1000])
-
-    def test_oversized_rows_and_shared_strings_have_bounded_fallback(self):
-        sheet = (f'<worksheet xmlns="{MAIN[1:-1]}"><sheetData><row r="1">'
-                 '<c r="A1" t="s"><v>1</v></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>' +
-                 "x" * 100000 + '</t></is></c></row></sheetData></worksheet>')
-        strings = f'<sst xmlns="{MAIN[1:-1]}"><si><t>' + "x" * 100000 + '</t></si><si><t>late</t></si></sst>'
-        self.replace_parts(**{"xl/worksheets/sheet1.xml": sheet, "xl/sharedStrings.xml": strings})
-        with patch("tools.excel_preview.SHEET_BYTE_LIMIT", 16384), patch("tools.excel_preview.STRINGS_BYTE_LIMIT", 16384):
-            result = read_excel_preview(str(self.path), "First")
-        self.assertEqual(result.cells[(0, 0)], "[文本未展开]")
-        self.assertIn("部分", result.note)
-        self.assertIn("共享文本", result.note)
-
     def test_folder_chooses_one_eligible_file_and_excludes_backups_and_outputs(self):
         excluded = self.root / "excluded.xlsx"
         excluded.touch()
@@ -146,26 +120,6 @@ class ExcelPreviewTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "没有可预览"):
             read_excel_preview(str(backup), folder=True, exclude=(str(backup),))
 
-    def test_first_sheet_preview_uses_first_data_sheet_when_a_chart_is_first(self):
-        from openpyxl.chart import BarChart, Reference
-        workbook = Workbook()
-        try:
-            data = workbook.active
-            data.title = "Data"
-            data.append(["Source", "Target"])
-            data.append([1, 2])
-            chart = BarChart()
-            chart.add_data(Reference(data, min_col=1, min_row=1, max_row=2), titles_from_data=True)
-            chartsheet = workbook.create_chartsheet("Chart", index=0)
-            chartsheet.add_chart(chart)
-            workbook.active = 0
-            workbook.save(self.path)
-        finally:
-            workbook.close()
-        result = read_excel_preview(str(self.path), first_sheet=True)
-        self.assertEqual(result.sheet, "Data")
-        self.assertEqual(result.sheet_names, ("Data",))
-        self.assertEqual(result.cells[(0, 0)], "Source")
 
 
 class ExcelPreviewGuiTests(unittest.TestCase):
@@ -389,72 +343,6 @@ class ExcelPreviewGuiTests(unittest.TestCase):
             grouping.choose_source()
         self.wait_for_preview(grouping)
         self.assertTrue(grouping.input_preview.dialog.isVisible())
-
-    def test_missing_previous_sheet_can_be_reselected_in_folder_preview(self):
-        ExcelPreviewTests.setUp(self)
-        sheet, source = QLineEdit("PreviousSheet", self.page), QLineEdit("B", self.page)
-        selector = ExcelColumnSelector(self.page, self.picker, sheet, folder=True,
-                                       choices=(ColumnChoice("Source", source),))
-        self.picker.set_path(str(self.root))
-        selector.open_preview()
-        self.wait_for_preview(self.page)
-        self.assertIsNotNone(selector.model.preview, selector.status.text())
-        self.assertIn("PreviousSheet", selector.status.text())
-        self.assertEqual(sheet.text(), "PreviousSheet")
-        selector.sheet_choice.setCurrentText("First")
-        self.wait_for_preview(self.page)
-        selector.apply_button.click()
-        self.assertEqual(sheet.text(), "First")
-        self.assertEqual(source.text(), "B")
-
-    def test_invalid_alias_config_keeps_manual_column_selection_available(self):
-        from tools.header_aliases import HeaderAliasStore
-        ExcelPreviewTests.setUp(self)
-        aliases = self.root / "aliases.json"
-        aliases.write_text("invalid json", encoding="utf-8")
-        source = QLineEdit("", self.page)
-        selector = ExcelColumnSelector(self.page, self.picker, self.sheet,
-                                       choices=(ColumnChoice("Source", source, alias_role="source"),),
-                                       header_alias_store=HeaderAliasStore(aliases))
-        self.page.run_in_background = Mock()
-        self.picker.set_path(str(self.path))
-        selector.open_preview()
-        preview = ExcelPreview(self.path, "One", ("One",), {(0, 0): "Key", (0, 1): "Source"}, 2)
-        self.page.run_in_background.call_args.kwargs["on_success"](preview)
-        self.assertIn("别名", selector.status.text())
-        self.assertTrue(selector.apply_button.isEnabled())
-        selector.column_choices[0].setCurrentIndex(selector.column_choices[0].findData("B"))
-        selector.apply_button.click()
-        self.assertEqual(source.text(), "B")
-
-    def test_long_headers_are_display_limited_but_applied_in_full(self):
-        from tools.file_grouping.grouping import scan_file_groups
-        ExcelPreviewTests.setUp(self)
-        long_header = "Source " + "x" * 1500
-        workbook = Workbook()
-        try:
-            workbook.active.append([long_header, "Target"])
-            workbook.active.append(["待翻译", None])
-            workbook.save(self.path)
-        finally:
-            workbook.close()
-        source, target = QLineEdit("", self.page), QLineEdit("Target", self.page)
-        selector = ExcelColumnSelector(self.page, self.picker, first_sheet=True,
-                                       choices=(ColumnChoice("Source", source, "header"),
-                                                ColumnChoice("Target", target, "header")))
-        self.picker.set_path(str(self.path))
-        selector.open_preview()
-        self.wait_for_preview(self.page)
-        choice = selector.column_choices[0]
-        index = choice.findData(long_header)
-        self.assertGreater(index, 0)
-        self.assertLess(len(choice.itemText(index)), 1100)
-        self.assertEqual(len(selector.model.index(0, 0).data()), 1000)
-        choice.setCurrentIndex(index)
-        selector.apply_button.click()
-        self.assertEqual(source.text(), long_header)
-        result = scan_file_groups(self.root, source_header=source.text(), target_header=target.text())
-        self.assertTrue(result.can_export, result.issues)
 
 
 if __name__ == "__main__":
