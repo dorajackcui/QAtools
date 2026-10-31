@@ -34,6 +34,7 @@ qatools gui / toolshub_gui.py
 | Qt 页面布局与选择器 | [qt_page_helpers.py](../tools/qt_page_helpers.py) | GUI 回归 |
 | 表头别名编辑页 | [qt_settings_page.py](../tools/qt_settings_page.py) | `test_header_aliases.py`、GUI 回归 |
 | Excel 表头识别、别名 | [excel_metadata.py](../tools/excel_metadata.py)、[header_aliases.py](../tools/header_aliases.py) | 对应同名测试 |
+| 选列时按需预览表头与样本行 | [excel_preview.py](../tools/excel_preview.py)、[qt_excel_preview.py](../tools/qt_excel_preview.py) | `test_excel_preview.py` |
 | 旧 GUI 脚本转接与 Qt 表单行为 | 各工具 `*_gui.py` → `toolshub_gui.py` | `test_gui_entries.py`、`test_gui_excel_selection.py` |
 | GUI 按钮到实际文件输出、双向流程和失败重试 | Qt 页面 → 真实后台任务 → 工作簿校验 | `test_gui_functional.py`；真实 Excel 用例沿用[COM 验证开关](../tools/excel_compatibility/README.md#原生操作的共同规则) |
 | 工作簿编辑、保留 VBA | [excel_output.py](../tools/excel_output.py) | `test_excel_output_paths.py` |

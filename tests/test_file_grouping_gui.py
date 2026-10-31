@@ -180,12 +180,17 @@ class FileGroupingGuiTests(unittest.TestCase):
         self.assertEqual(self.page.source_picker.path(), "")
         self.errors.assert_not_called()
 
-    def test_merged_mode_uses_excel_picker_without_loading_on_selection(self):
+    def test_merged_mode_uses_excel_picker_and_opens_preview_on_selection(self):
         self.page.input_kind.setCurrentIndex(1)
         with patch("tools.file_grouping.qt_page.QFileDialog.getOpenFileName", return_value=("merged.xlsx", "")):
             self.page.choose_source()
         self.assertEqual(self.page.source_picker.path(), "merged.xlsx")
         self.assertIsNone(self.page.result)
+        deadline = time.monotonic() + 5
+        while self.page.has_running_tasks() and time.monotonic() < deadline:
+            QTest.qWait(10)
+        self.assertFalse(self.page.has_running_tasks())
+        self.assertTrue(self.page.input_preview.dialog.isVisible())
 
 
 if __name__ == "__main__":

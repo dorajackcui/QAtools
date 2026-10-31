@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 from tools.qt_gui_common import PathPicker, horizontal_rule
+from tools.qt_excel_preview import ColumnChoice, ExcelColumnSelector
 from tools.substring_consistency_checker.check_substring_consistency import (
     DEFAULT_MIN_CJK_CHARS, DEFAULT_MIN_OTHER_CHARS, MAX_MIN_CHARS,
 )
@@ -138,6 +139,11 @@ class WorkflowSettingsMixin:
             history_scope.addSpacing(8)
         history_scope.addStretch(1)
         layout.addLayout(history_scope)
+        self.history_preview = ExcelColumnSelector(self, self.history_picker, self.history_sheet,
+                                                 choices=(ColumnChoice("Source 列", self.history_source,
+                                                                       aliases=("source术语", "source")),
+                                                          ColumnChoice("Target 列", self.history_target,
+                                                                       aliases=("target术语", "target"))))
         self.refresh_tb_projects()
 
 

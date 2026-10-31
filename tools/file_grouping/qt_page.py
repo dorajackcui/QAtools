@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 
 from tools.qt_gui_common import AsyncPage, PathPicker, muted_label, primary_button, section, show_error
 from tools.qt_page_helpers import EXCEL_FILTER, _add_action_bar
+from tools.qt_excel_preview import ColumnChoice, ExcelColumnSelector
 
 
 class GroupModel(QAbstractTableModel):
@@ -95,6 +96,11 @@ class FileGroupingPage(AsyncPage):
         for field in (self.filename_column, self.source_header, self.target_header):
             form.labelForField(field).setMinimumWidth(112)
         inputs.addLayout(form)
+        self.input_preview = ExcelColumnSelector(self, self.source_picker, folder=True,
+                                               browse_sheets=True, skip_links=True,
+                                               choices=(ColumnChoice("文件名列", self.filename_column),
+                                                        ColumnChoice("原文列", self.source_header, "header"),
+                                                        ColumnChoice("译文列", self.target_header, "header")))
         outer.addWidget(self.inputs)
         for field in (self.source_picker.line_edit, self.filename_column, self.source_header, self.target_header):
             field.textChanged.connect(self._invalidate)
@@ -166,9 +172,11 @@ class FileGroupingPage(AsyncPage):
             path = QFileDialog.getExistingDirectory(self, "选择来源目录", self.source_picker.path())
         if path:
             self.source_picker.set_path(path)
+            self.input_preview.open_preview()
 
     def _kind_changed(self, *_):
         merged = self.input_kind.currentData() == "merged"
+        self.input_preview.folder = not merged
         self.input_form.setRowVisible(self.filename_column, merged)
         self.source_picker.choose_button.setText("选择表格" if merged else "选择目录")
         self.source_picker.line_edit.setPlaceholderText("选择 .xlsx / .xlsm 合并表" if merged else "递归扫描 .xlsx / .xlsm")

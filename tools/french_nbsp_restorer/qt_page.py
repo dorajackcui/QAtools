@@ -27,6 +27,7 @@ from tools.qt_gui_common import (
     show_info,
 )
 from tools.qt_page_helpers import _add_action_bar, _choose_excel, _set_combo_values
+from tools.qt_excel_preview import ColumnChoice, ExcelColumnSelector
 
 _show_error = show_error
 
@@ -79,6 +80,10 @@ class FrenchNbspPage(AsyncPage):
         row.addWidget(self.result_column)
         row.addStretch(1)
         output_layout.addLayout(row)
+        self.input_preview = ExcelColumnSelector(self, self.input_picker, self.sheet,
+                                               header_alias_store=self.header_alias_store,
+                                               choices=(ColumnChoice("Target 列", self.target_column, alias_role="target"),
+                                                        ColumnChoice("结果列", self.result_column, optional=True)))
         layout.addWidget(output_box)
         self.run_button = primary_button("开始恢复")
         self.run_button.clicked.connect(self.run_restore)
@@ -89,9 +94,10 @@ class FrenchNbspPage(AsyncPage):
 
     def choose_input(self) -> None:
         if path := _choose_excel(self, "选择 Excel 文件"):
-            self.load_input_file(path)
+            self.load_input_file(path, preview_columns=True)
 
-    def load_input_file(self, path: str, *, reset_options: bool = False, show_error: bool = True) -> bool:
+    def load_input_file(self, path: str, *, reset_options: bool = False, show_error: bool = True,
+                        preview_columns: bool = False) -> bool:
         if reset_options:
             self.result_column.clear()
             self.start_row.setValue(2)
@@ -107,6 +113,10 @@ class FrenchNbspPage(AsyncPage):
             return False
         chosen = choices.default_sheet or (choices.sheet_names[0] if choices.sheet_names else "")
         _set_combo_values(self.sheet, choices.sheet_names, chosen)
+        if preview_columns:
+            self.preview.setText(f"输出文件：{build_nbsp_output_path(path).name}")
+            self.input_preview.open_preview()
+            return False
         detected = self.detect_columns(chosen, show_error=show_error)
         self.preview.setText(f"输出文件：{build_nbsp_output_path(path).name}")
         if detected is False and reset_options and show_error and self.sheet.currentText():

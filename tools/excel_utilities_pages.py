@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 
 from tools.qt_gui_common import AsyncPage, PathPicker, muted_label, primary_button, section, show_error, show_warning
 from tools.qt_operation_logs import OperationLogDialog
+from tools.qt_excel_preview import ColumnChoice, ExcelColumnSelector
 
 
 class UtilityPage(AsyncPage):
@@ -107,10 +108,18 @@ class UtilityPage(AsyncPage):
         self.header_rows.setMaximumWidth(110)
         self.form.addRow("表头行数", self.header_rows)
 
+    def add_column_preview(self, *, exclude_names=(), choices=()):
+        self.input_preview = ExcelColumnSelector(self, self.input_picker, self.sheet, folder=True,
+                                               exclusions=(self.output_picker,),
+                                               exclude_names=exclude_names, choices=choices)
+        self.output_picker.line_edit.textChanged.connect(self.input_preview.invalidate)
+
     def choose_folder(self, picker):
         path = QFileDialog.getExistingDirectory(self, "选择目录", picker.path())
         if path:
             picker.set_path(path)
+            if picker is self.input_picker and hasattr(self, "input_preview"):
+                self.input_preview.open_preview()
 
     def choose_output(self):
         parent = QFileDialog.getExistingDirectory(self, "选择输出位置（将在其中新建结果目录）")
@@ -193,6 +202,7 @@ class ColumnToolsPage(UtilityPage):
         self.sheet_options()
         self.inserted_header = QLineEdit("Translation")
         self.form.addRow("插入列的首行标题", self.inserted_header)
+        self.add_column_preview(choices=(ColumnChoice("操作列", self.column),))
         self.action.currentIndexChanged.connect(self._action_changed)
         self._action_changed()
 
@@ -245,6 +255,9 @@ class UntranslatedStatsPage(UtilityPage):
         self.mode.addItem("英文词数", "english_words")
         self.form.addRow("计数口径", self.mode)
         self.sheet_options()
+        self.add_column_preview(exclude_names=("未翻译统计.xlsx",),
+                                choices=(ColumnChoice("原文列", self.source_column),
+                                         ColumnChoice("译文列", self.target_column)))
 
     def operation(self):
         from tools.untranslated_stats.stats import untranslated_stats

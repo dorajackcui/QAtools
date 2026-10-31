@@ -105,8 +105,10 @@ class ContentSyncGuiTests(unittest.TestCase):
         self.assertEqual(call["args"], ("targets",))
         self.assertEqual(call["kwargs"], {"master": "master.xlsx", "output": "", "reverse": False})
         self.assertFalse(self.page.run_button.isEnabled())
-        with patch("tools.content_sync.qt_page.show_info") as info:
+        with patch("tools.content_sync.qt_page.show_info") as info, \
+             patch.object(self.page.target_preview, "open_preview") as preview:
             call["on_success"](DirectoryCheck(32, 1, tuple(str(i) for i in range(5)), (), ()))
+            preview.assert_called_once()
         self.assertEqual(info.call_args.args[2], "可处理小表：32个")
         with patch("tools.content_sync.qt_page.show_warning") as warning:
             call["on_success"](DirectoryCheck(32, 1, ("private.xlsx",), ("private.xlsx",), ()))
@@ -120,8 +122,10 @@ class ContentSyncGuiTests(unittest.TestCase):
         with patch("tools.content_sync.qt_page.QFileDialog.getOpenFileName", return_value=("master.xlsx", "")):
             self.page.choose_master()
         callback = self.page.run_in_background.call_args.kwargs["on_success"]
-        with patch("tools.content_sync.qt_page.show_warning") as warning:
+        with patch("tools.content_sync.qt_page.show_warning") as warning, \
+             patch.object(self.page.master_preview, "open_preview") as preview:
             callback(MasterCheck(WorkbookSheetChoices(("Data",), "Data"), ("Master 被占用",)))
+            preview.assert_called_once()
         self.assertIn("占用", warning.call_args.args[2])
         self.assertEqual(self.page.master_sheet.currentText(), "Data")
         self.page.result.setPlainText("previous result")

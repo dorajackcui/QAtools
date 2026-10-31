@@ -14,6 +14,7 @@ from tools.qt_gui_common import (
     AsyncPage, PathPicker, muted_label, primary_button, section, show_error, show_warning, show_info,
 )
 from tools.qt_operation_logs import OperationLogDialog
+from tools.qt_excel_preview import ColumnChoice, ExcelColumnSelector
 
 
 def _master_sheets(path: str):
@@ -83,6 +84,19 @@ class MasterToTargetPage(AsyncPage):
             grid.addWidget(headers, row, 5)
         grid.setColumnStretch(4, 1)
         mapping_layout.addLayout(grid)
+        self.master_preview = ExcelColumnSelector(self, self.master_picker, self.master_sheet,
+                                                title="预览 Master 并选择列",
+                                                choices=tuple(ColumnChoice(label, field) for label, field in
+                                                              zip(("Key 列", "原文列", "译文列" if self.reverse else "内容开始列"),
+                                                                  self.master_columns)))
+        self.target_preview = ExcelColumnSelector(self, self.target_picker, self.target_sheet,
+                                                title="预览小表并选择列", folder=True,
+                                                exclusions=(self.master_picker, self.output_picker),
+                                                choices=tuple(ColumnChoice(label, field) for label, field in
+                                                              zip(("Key 列", "原文列", "译文列" if self.reverse else "内容开始列"),
+                                                                  self.target_columns)))
+        for picker in (self.master_picker, self.output_picker):
+            picker.line_edit.textChanged.connect(self.target_preview.invalidate)
         layout.addWidget(mapping_box)
 
         options, options_layout = section("写入选项")
@@ -185,6 +199,8 @@ class MasterToTargetPage(AsyncPage):
             messages.append(f"无法读取工作表：{check.error}")
         if messages:
             show_warning(self, "Master 文件检查", "\n\n".join(messages))
+        if check.choices is not None:
+            self.master_preview.open_preview()
 
     def choose_targets(self) -> None:
         if self.has_running_tasks():
@@ -202,6 +218,8 @@ class MasterToTargetPage(AsyncPage):
         self._set_busy(False)
         display = show_warning if check.readonly or check.errors or not check.total else show_info
         display(self, "小表目录检查", check.describe())
+        if check.total:
+            self.target_preview.open_preview()
 
     def _selection_failed(self, message: str) -> None:
         self._set_busy(False, "选择检查未完成")

@@ -57,6 +57,7 @@ from tools.qt_page_helpers import (
     EXCEL_FILTER,
 )
 from tools.workflow.qt_settings import WorkflowSettingsMixin
+from tools.qt_excel_preview import ColumnChoice, ExcelColumnSelector
 
 _show_error = show_error
 
@@ -147,6 +148,10 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
             scope.addSpacing(8)
         scope.addStretch(1)
         layout.addLayout(scope)
+        self.input_preview = ExcelColumnSelector(self, self.input_picker, self.sheet,
+                                               header_alias_store=self.header_alias_store,
+                                               choices=(ColumnChoice("Source 列", self.source_column, alias_role="source"),
+                                                        ColumnChoice("Target 列", self.target_column, alias_role="target")))
         self.content_layout.addWidget(box)
 
     def _task_row(
@@ -343,7 +348,7 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
 
     def choose_input_file(self) -> None:
         if path := _choose_excel(self, "选择 Excel 文件"):
-            self.load_input_file(path)
+            self.load_input_file(path, preview_columns=True)
 
     def _settings_parent(self, name: str) -> QWidget:
         dialogs = {
@@ -354,7 +359,7 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
         dialog = dialogs[name]
         return dialog if dialog.isVisible() else self
 
-    def load_input_file(self, path: str, *, show_error: bool = True) -> None:
+    def load_input_file(self, path: str, *, show_error: bool = True, preview_columns: bool = False) -> None:
         self.input_picker.set_path(path)
         self.output_preview.setText(f"输出文件：{build_workflow_output_path(path).name}")
         try:
@@ -366,7 +371,12 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
             return
         selected = choices.default_sheet or (choices.sheet_names[0] if choices.sheet_names else "")
         _set_combo_values(self.sheet, choices.sheet_names, selected)
-        self.detect_main_columns(selected, show_error=show_error)
+        if preview_columns:
+            self.source_column.clear()
+            self.target_column.clear()
+            self.input_preview.open_preview()
+        else:
+            self.detect_main_columns(selected, show_error=show_error)
 
     def detect_main_columns(self, _sheet: str = "", *, show_error: bool = False) -> None:
         if not self.input_picker.path() or not self.sheet.currentText():
@@ -390,7 +400,7 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
             "选择术语历史 TB Excel 文件",
         ):
             self.history_picker.set_path(path)
-            self.refresh_history_sheets()
+            self.refresh_history_sheets(preview_columns=True)
 
     def clear_history_fields(self) -> None:
         _set_combo_values(self.history_sheet, ())
@@ -398,7 +408,7 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
         self.history_target.clear()
         self.history_start_row.setValue(2)
 
-    def refresh_history_sheets(self, *, show_error: bool = True, selected: str = "") -> None:
+    def refresh_history_sheets(self, *, show_error: bool = True, selected: str = "", preview_columns: bool = False) -> None:
         if not self.history_picker.path():
             self.clear_history_fields()
             return
@@ -411,7 +421,12 @@ class WorkflowPage(WorkflowSettingsMixin, AsyncPage):
             return
         desired = selected or (TERM_SHEET_NAME if TERM_SHEET_NAME in choices.sheet_names else choices.default_sheet or "")
         chosen = _set_combo_values(self.history_sheet, choices.sheet_names, desired)
-        self.detect_history_columns(chosen, show_error=show_error)
+        if preview_columns:
+            self.history_source.clear()
+            self.history_target.clear()
+            self.history_preview.open_preview()
+        else:
+            self.detect_history_columns(chosen, show_error=show_error)
 
     def detect_history_columns(self, _sheet: str = "", *, show_error: bool = False) -> None:
         if not self.history_picker.path() or not self.history_sheet.currentText():

@@ -29,6 +29,7 @@ from tools.qt_gui_common import (
     show_info,
 )
 from tools.qt_page_helpers import _scroll_page, _add_action_bar, _choose_excel
+from tools.qt_excel_preview import ColumnChoice, ExcelColumnSelector
 
 
 def _result_text(stats: dict[str, int | str], *, restore: bool) -> str:
@@ -82,6 +83,10 @@ class PhraseLoomPage(AsyncPage):
             columns.addWidget(field)
         columns.addStretch(1)
         input_layout.addLayout(columns)
+        self.input_preview = ExcelColumnSelector(self, self.input_picker, first_sheet=True,
+                                               choices=(ColumnChoice("Source 列", self.source_column, "index"),
+                                                        ColumnChoice("Target 列", self.target_column, "index"),
+                                                        ColumnChoice("Context 列", self.context_column, "index", optional=True)))
         layout.addWidget(input_box)
 
         options_box, options_layout = section("导出选项")
@@ -116,6 +121,7 @@ class PhraseLoomPage(AsyncPage):
     def choose_input(self) -> None:
         if path := _choose_excel(self, "选择原始 Excel"):
             self.input_picker.set_path(path)
+            self.input_preview.open_preview()
 
     def choose_tag_config(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

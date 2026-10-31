@@ -47,6 +47,9 @@ GUI 将检查分为“术语与翻译一致性”“内容保真检查”和“T
 工作表首行的 Source / Target 列会自动识别；匹配优先级、冲突处理及自定义配置见
 [GUI 表头别名设置](../../README.md#自定义表头识别)。
 
+手动选择主表或术语设置中的历史 TB 后，自动[预览表头及前 5 行并选择列](../../docs/gui-conventions.md#选列预览)，
+在弹窗中选定 Source / Target 后直接回填列字母。
+
 Windows 文件右键“一键质量检查”会打开页面并载入所选工作簿，不自动运行检查。
 菜单安装方式见 [Windows 安装说明](../../packaging/README-Windows.txt)。
 
