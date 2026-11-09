@@ -45,7 +45,7 @@ qatools qa input.xlsx -s Sheet1 -c A -t B
 GUI 将检查分为“术语与翻译一致性”“内容保真检查”和“Target 文本质量”。术语、
 子串译文一致性、Tag 和 Target 文本规范的详细设置通过各自右侧入口打开。
 工作表首行的 Source / Target 列会自动识别；匹配优先级、冲突处理及自定义配置见
-[GUI 表头别名设置](../../README.md#自定义表头识别)。
+[GUI 表头别名设置](../../docs/gui-conventions.md#表头别名)。
 
 手动选择主表或术语设置中的历史 TB 后，自动[预览表头及前 5 行并选择列](../../docs/gui-conventions.md#选列预览)，
 在弹窗中选定 Source / Target 后直接回填列字母。

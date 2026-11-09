@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="352" viewBox="0 0 1280 352" role="img" aria-labelledby="title description">
+  <title id="title">QAtools</title>
+  <desc id="description">A gray wordmark with an orange period beside a soft gray spreadsheet grid.</desc>
+
+  <rect x="0.5" y="0.5" width="1279" height="351" rx="6" fill="#f7f8fa" stroke="#d4d7dc"/>
+
+  <text x="96" y="215" font-family="Helvetica Neue, Arial, sans-serif" font-size="116" font-weight="700" letter-spacing="-6" fill="#45494f">QAtools<tspan font-family="Georgia, serif" font-size="104" fill="#d97757">.</tspan></text>
+
+  <g transform="translate(796 72)">
+    <rect width="384" height="208" fill="#fafbfc"/>
+    <rect x="288" y="104" width="96" height="52" fill="#dce0e4"/>
+    <path d="M0 0h384v208H0zM96 0v208M192 0v208M288 0v208M0 52h384M0 104h384M0 156h384" fill="none" stroke="#b2b7be" stroke-width="1.5"/>
+    <path d="M20 78h35m63 0h46M20 130h50m48 0h28M20 182h28m70 0h39" fill="none" stroke="#b8bdc4" stroke-width="2"/>
+    <path d="m325 130 7 7 15-15" fill="none" stroke="#666b73" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

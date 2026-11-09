@@ -8,8 +8,8 @@
 `TOOL_GROUPS`、`SETTINGS_ITEM` 保持相同分组、名称和顺序；每项导航只对应一个
 带 `data-tool` 的正文区块。一键质量检查的小节目录放在正文内，日志与常见问题作为公共补充。
 
-维护前先读取对应工具 README（入口见[仓库地图](../repository-map.md)）、
-[GUI 约定](../gui-conventions.md)及[当前能力地图](../../README.md#能力地图)。
+维护前先读取对应工具 README（入口见[仓库地图](../repository-map.md)）和
+[GUI 约定](../gui-conventions.md)。
 参数、默认值和输出约束以业务文档及实际 GUI 为准；网页按选择输入、运行、查看结果组织，
 不添加 CLI 用法。工具增加或导航调整时，同时更新侧栏、正文、截图脚本和图片。
 

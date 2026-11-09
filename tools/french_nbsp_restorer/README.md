@@ -32,7 +32,7 @@ qatools gui
 ```
 
 统一 GUI 会自动识别工作表首行的 Target 列；匹配优先级、冲突处理及自定义配置见
-[GUI 表头别名设置](../../README.md#自定义表头识别)。
+[GUI 表头别名设置](../../docs/gui-conventions.md#表头别名)。
 
 手动选择文件后自动[预览表头及前 5 行](../../docs/gui-conventions.md#选列预览)，在弹窗中选择 Target 和可选结果列，确认后回填。
 

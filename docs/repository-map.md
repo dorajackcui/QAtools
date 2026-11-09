@@ -97,6 +97,11 @@ qatools gui / toolshub_gui.py
 - `docs/archive/`：仅保存来源与已完成决策；不保留待执行旧方案作为当前需求。
 - `build/`、`dist/`、`outputs/`、`testfiles/` 和生成的 Excel 均为本地产物，不纳入提交。
 
+### 构建安装包
+
+- Windows：从仓库根目录运行 `.\build.cmd`，也可双击 [build.cmd](../build.cmd)。该入口会运行回归测试，在 `dist/` 生成 GUI 安装包，并可透传[构建脚本](../scripts/build_windows_release.ps1)参数，例如 `.\build.cmd -Version 0.1.7`；不指定时使用项目当前版本。
+- macOS：依赖、构建命令、架构及签名验证见 [macOS 包说明](../packaging/README-macOS.txt)。
+
 ## 扩展一个工具
 
 1. 先定义并测试业务函数的输入、输出、空值、冲突和保存失败行为；更新工具 README。

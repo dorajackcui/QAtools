@@ -1,6 +1,6 @@
 # GUI 约定
 
-统一 GUI 使用 PySide6，入口为 `qatools gui`。工具排列见[产品能力地图](../README.md#能力地图)，实现位置见[仓库地图](repository-map.md)。
+统一 GUI 使用 PySide6，入口为 `qatools gui`。工具与导航顺序见[离线使用指南](qa-workflow-guide/index.html)，实现位置见[仓库地图](repository-map.md)。
 
 ## 视觉基础
 
